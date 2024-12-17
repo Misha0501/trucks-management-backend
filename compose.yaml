@@ -1,0 +1,6 @@
+﻿services:
+  truckmanagement:
+    image: truckmanagement
+    build:
+      context: .
+      dockerfile: TruckManagement/Dockerfile
