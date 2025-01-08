@@ -1,3 +1,5 @@
+using TruckManagement.Helpers;
+
 namespace TruckManagement.Endpoints;
 
 public static class WeatherForecastEndpoints
@@ -21,10 +23,10 @@ public static class WeatherForecastEndpoints
                         ))
                     .ToArray();
 
-                return forecast;
+                return ApiResponseFactory.Success(forecast);
             })
             .WithName("GetWeatherForecast")
-            .RequireAuthorization(); // Require valid JWT token
+            .RequireAuthorization();
 
         return app;
     }

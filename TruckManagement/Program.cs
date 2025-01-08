@@ -20,6 +20,8 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
+app.UseMiddleware<GlobalExceptionHandlingMiddleware>();
+
 // Apply migrations and seed data at startup
 using (var scope = app.Services.CreateScope())
 {
