@@ -4,6 +4,7 @@ using TruckManagement.Data;
 using TruckManagement.DTOs;
 using TruckManagement.Entities;
 using TruckManagement.Helpers;
+using TruckManagement.Services;
 
 namespace TruckManagement.Endpoints;
 
@@ -83,28 +84,45 @@ public static class AuthEndpoints
         
         app.MapPost("/forgotpassword", async (
             ForgotPasswordRequest req,
-            UserManager<ApplicationUser> userManager) =>
+            UserManager<ApplicationUser> userManager,
+            IEmailService emailService,
+            IConfiguration config) =>
         {
-            // Find user by email
             var user = await userManager.FindByEmailAsync(req.Email);
             if (user == null)
             {
-                // For security, return a generic success message so we don't leak which emails exist
+                // Return success message either way, so we don't reveal emails
                 return ApiResponseFactory.Success(
-                    data: "If that email exists, a reset token has been generated."
+                    "If that email exists, a reset link has been sent."
                 );
             }
 
-            // Generate the token
+            // Generate a password reset token
             var resetToken = await userManager.GeneratePasswordResetTokenAsync(user);
 
-            // In production: send this token via email, not in the response
-            var responseData = new 
-            {
-                Message = "Password reset token generated. Use it in /resetpassword endpoint.",
-                Token = resetToken
-            };
-            return ApiResponseFactory.Success(responseData);
+            // Build the reset URL for your front-end or a dedicated route
+            // e.g. https://my-frontend.com/reset-password?email=...&token=...
+            var frontEndUrl = config["FrontEnd:ResetPasswordUrl"] 
+                              ?? "https://my-frontend.com/reset-password";
+
+            // It's a good idea to URL-encode the token to avoid special character issues
+            var resetLink = $"{frontEndUrl}?email={Uri.EscapeDataString(user.Email)}" +
+                            $"&token={Uri.EscapeDataString(resetToken)}";
+
+            // Create the email content
+            var subject = "Password Reset Request";
+            var body = $@"
+                <p>You requested a password reset.</p>
+                <p>Please click the link below (or copy it into your browser) to reset your password:</p>
+                <a href=""{resetLink}"">{resetLink}</a>
+                <p>If you did not request a password reset, you can ignore this message.</p>
+            ";
+
+            // Send the email
+            await emailService.SendEmailAsync(user.Email, subject, body);
+
+            // Return a success response (don't expose the token)
+            return ApiResponseFactory.Success("If that email exists, a reset link has been sent.");
         });
 
         // 2) Reset Password Endpoint
