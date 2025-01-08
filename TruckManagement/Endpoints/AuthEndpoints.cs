@@ -80,6 +80,62 @@ public static class AuthEndpoints
 
             return ApiResponseFactory.Success(data, StatusCodes.Status200OK);
         });
+        
+        app.MapPost("/forgotpassword", async (
+            ForgotPasswordRequest req,
+            UserManager<ApplicationUser> userManager) =>
+        {
+            // Find user by email
+            var user = await userManager.FindByEmailAsync(req.Email);
+            if (user == null)
+            {
+                // For security, return a generic success message so we don't leak which emails exist
+                return ApiResponseFactory.Success(
+                    data: "If that email exists, a reset token has been generated."
+                );
+            }
+
+            // Generate the token
+            var resetToken = await userManager.GeneratePasswordResetTokenAsync(user);
+
+            // In production: send this token via email, not in the response
+            var responseData = new 
+            {
+                Message = "Password reset token generated. Use it in /resetpassword endpoint.",
+                Token = resetToken
+            };
+            return ApiResponseFactory.Success(responseData);
+        });
+
+        // 2) Reset Password Endpoint
+        app.MapPost("/resetpassword", async (
+            ResetPasswordRequest req,
+            UserManager<ApplicationUser> userManager) =>
+        {
+            // Check if new password matches the confirmation
+            if (req.NewPassword != req.ConfirmPassword)
+            {
+                return ApiResponseFactory.Error("New password and confirmation do not match.");
+            }
+
+            // Find user
+            var user = await userManager.FindByEmailAsync(req.Email);
+            if (user == null)
+            {
+                return ApiResponseFactory.Error("No user found with that email.");
+            }
+
+            // Reset the password
+            var result = await userManager.ResetPasswordAsync(user, req.Token, req.NewPassword);
+            if (!result.Succeeded)
+            {
+                // Gather all identity errors
+                var errorMessages = result.Errors.Select(e => e.Description).ToList();
+                return ApiResponseFactory.Error(errorMessages);
+            }
+
+            return ApiResponseFactory.Success("Password reset successful. You can now log in with your new password.");
+        });
 
         return app;
     }
