@@ -20,7 +20,21 @@ builder.Services.AddJwtAuthentication(builder.Configuration);
 builder.Services.AddAuthorization();
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowLocalhost3000", policy =>
+    {
+        policy.WithOrigins("http://localhost:3000")
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials();
+    });
+});
+
 var app = builder.Build();
+
+// Use cors
+app.UseCors("AllowLocalhost3000");
 
 // Global Exception Handling
 app.UseMiddleware<GlobalExceptionHandlingMiddleware>();
