@@ -81,5 +81,6 @@ app.UseAuthorization();
 // Register endpoints from separate modules
 app.MapAuthEndpoints();
 app.MapWeatherForecastEndpoints();
+app.MapUserEndpoints();
 
 app.Run();
