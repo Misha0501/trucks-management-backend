@@ -12,22 +12,22 @@ public static class AuthEndpoints
 {
     public static WebApplication MapAuthEndpoints(this WebApplication app)
     {
-      
         app.MapPost("/register", async (
             RegisterRequest req,
             UserManager<ApplicationUser> userManager,
+            RoleManager<ApplicationRole> roleManager,
             ApplicationDbContext dbContext) =>
         {
-            // 1) Validate if 'companyId' is a correct GUID (if your DTO uses a string).
+            // 1) Validate if 'companyId' is a correct GUID
             if (!Guid.TryParse(req.CompanyId, out var parsedCompanyId))
             {
                 return ApiResponseFactory.Error(
-                    "The provided Company ID is not a valid GUID.", 
+                    "The provided Company ID is not a valid GUID.",
                     StatusCodes.Status400BadRequest
                 );
             }
 
-            // 2) Check if the company exists in the database
+            // 2) Check if the company exists
             var companyExists = await dbContext.Companies.AnyAsync(c => c.Id == parsedCompanyId);
             if (!companyExists)
             {
@@ -37,7 +37,16 @@ public static class AuthEndpoints
                 );
             }
 
-            // 3) Create the user
+            // 3) Check if password + confirm match
+            if (req.Password != req.ConfirmPassword)
+            {
+                return ApiResponseFactory.Error(
+                    "Password and confirmation do not match.",
+                    StatusCodes.Status400BadRequest
+                );
+            }
+
+            // 4) Create the user
             var user = new ApplicationUser
             {
                 UserName = req.Email,
@@ -47,17 +56,49 @@ public static class AuthEndpoints
                 CompanyId = parsedCompanyId
             };
 
+            // 5) Actually create the user in Identity
             var result = await userManager.CreateAsync(user, req.Password);
-            if (!result.Succeeded) 
+            if (!result.Succeeded)
             {
-                // Consolidate Identity errors into a single string or multiple
                 var errorMessages = result.Errors.Select(e => e.Description).ToList();
                 return ApiResponseFactory.Error(errorMessages, StatusCodes.Status400BadRequest);
             }
 
-            // Return a success response
-            return ApiResponseFactory.Success("User registered successfully.", StatusCodes.Status200OK);
+            // 6) If a role is provided, verify it's valid and assign
+            if (!string.IsNullOrWhiteSpace(req.Role))
+            {
+                // Check if the role actually exists
+                var roleExists = await roleManager.RoleExistsAsync(req.Role);
+                if (!roleExists)
+                {
+                    // If role doesn't exist, delete the created user (rollback) or leave the user unassigned
+                    // Usually, you'd handle this carefully. For simplicity, let's remove the user and return error.
+                    await userManager.DeleteAsync(user);
+
+                    return ApiResponseFactory.Error(
+                        $"The specified role '{req.Role}' does not exist. User was not created.",
+                        StatusCodes.Status400BadRequest
+                    );
+                }
+
+                // If it is valid, assign the role to the user
+                var roleResult = await userManager.AddToRoleAsync(user, req.Role);
+                if (!roleResult.Succeeded)
+                {
+                    // If for some reason role assignment fails, we can also remove the user or handle accordingly.
+                    await userManager.DeleteAsync(user);
+                    var errMsgs = roleResult.Errors.Select(e => e.Description).ToList();
+                    return ApiResponseFactory.Error(errMsgs, StatusCodes.Status400BadRequest);
+                }
+            }
+
+            // 7) Success
+            return ApiResponseFactory.Success(
+                "User registered successfully.",
+                StatusCodes.Status200OK
+            );
         });
+
 
         app.MapPost("/login", async (
             LoginRequest req,
@@ -71,7 +112,7 @@ public static class AuthEndpoints
             }
 
             var isCorrectPassword = await userManager.CheckPasswordAsync(user, req.Password);
-            if (!isCorrectPassword) 
+            if (!isCorrectPassword)
             {
                 return ApiResponseFactory.Error("Invalid credentials.", StatusCodes.Status400BadRequest);
             }
@@ -81,7 +122,7 @@ public static class AuthEndpoints
 
             return ApiResponseFactory.Success(data, StatusCodes.Status200OK);
         });
-        
+
         app.MapPost("/forgotpassword", async (
             ForgotPasswordRequest req,
             UserManager<ApplicationUser> userManager,
@@ -102,7 +143,7 @@ public static class AuthEndpoints
 
             // Build the reset URL for your front-end or a dedicated route
             // e.g. https://my-frontend.com/reset-password?email=...&token=...
-            var frontEndUrl = config["FrontEnd:ResetPasswordUrl"] 
+            var frontEndUrl = config["FrontEnd:ResetPasswordUrl"]
                               ?? "https://my-frontend.com/reset-password";
 
             // It's a good idea to URL-encode the token to avoid special character issues

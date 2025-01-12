@@ -10,5 +10,8 @@ namespace TruckManagement.DTOs
         public string LastName { get; set; } = string.Empty;
         
         public string CompanyId { get; set; } = string.Empty;
+        
+        // Optional: role
+        public string? Role { get; set; }  // if null or empty => no role assigned
     }
 }
