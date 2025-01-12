@@ -17,7 +17,45 @@ builder.Services.AddOpenApi();
 builder.Services.AddPostgresDatabase(builder.Configuration);
 builder.Services.AddAppIdentity();
 builder.Services.AddJwtAuthentication(builder.Configuration);
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    // Employee
+    options.AddPolicy("EmployeeOnly", policy =>
+    {
+        policy.RequireRole("employee");
+    });
+    
+    // Employer
+    options.AddPolicy("EmployerOnly", policy =>
+    {
+        policy.RequireRole("employer");
+    });
+
+    // Customer
+    options.AddPolicy("CustomerOnly", policy =>
+    {
+        policy.RequireRole("customer");
+    });
+    
+    // CustomerAdmin
+    options.AddPolicy("CustomerAdminOnly", policy =>
+    {
+        policy.RequireRole("customerAdmin");
+    });
+
+    // customerBookhourder
+    options.AddPolicy("CustomerBookhourderOnly", policy =>
+    {
+        policy.RequireRole("customerBookhourder");
+    });
+
+    // globalAdmin
+    options.AddPolicy("GlobalAdminOnly", policy =>
+    {
+        policy.RequireRole("globalAdmin");
+    });
+});
+
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 
 builder.Services.AddCors(options =>
@@ -66,6 +104,31 @@ using (var scope = app.Services.CreateScope())
         });
         await dbContext.SaveChangesAsync();
     }
+    
+    // Additional companies to seed (example)
+    var companiesToSeed = new List<Company>
+    {
+        new Company
+        {
+            Id = Guid.Parse("22222222-2222-2222-2222-222222222222"),
+            Name = "SecondCompany"
+        },
+        new Company
+        {
+            Id = Guid.Parse("33333333-3333-3333-3333-333333333333"),
+            Name = "ThirdCompany"
+        }
+    };
+
+    foreach (var comp in companiesToSeed)
+    {
+        if (!dbContext.Companies.Any(c => c.Id == comp.Id))
+        {
+            dbContext.Companies.Add(comp);
+        }
+    }
+
+    await dbContext.SaveChangesAsync();
 }
 
 // Configure the HTTP request pipeline.
@@ -82,5 +145,6 @@ app.UseAuthorization();
 app.MapAuthEndpoints();
 app.MapWeatherForecastEndpoints();
 app.MapUserEndpoints();
+app.MapCompanyEndpoints();
 
 app.Run();
