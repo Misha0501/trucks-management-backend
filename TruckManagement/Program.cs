@@ -84,7 +84,7 @@ using (var scope = app.Services.CreateScope())
     dbContext.Database.Migrate();
     
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
-    var roles = new [] { "employee", "employer", "customer", "customerAdmin", "customerBookhourder", "globalAdmin" };
+    var roles = new [] { "employee", "employer", "customer", "customerAdmin", "customerAccountant", "globalAdmin" };
     foreach (var role in roles)
     {
         if (!await roleManager.RoleExistsAsync(role))
@@ -146,5 +146,6 @@ app.MapAuthEndpoints();
 app.MapWeatherForecastEndpoints();
 app.MapUserEndpoints();
 app.MapCompanyEndpoints();
+app.MapRoleEndpoints();
 
 app.Run();
