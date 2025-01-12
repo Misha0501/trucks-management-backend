@@ -10,25 +10,65 @@ public static class CompanyEndpoints
 {
     public static WebApplication MapCompanyEndpoints(this WebApplication app)
     {
-        // 1) GET /companies -> List all (any authenticated user can read, or you can remove RequireAuthorization if you want public)
+        // 1) GET /companies -> List all companies, including their users
         app.MapGet("/companies", async (ApplicationDbContext db) =>
         {
-            var companies = await db.Companies.AsNoTracking().ToListAsync();
-            return ApiResponseFactory.Success(companies);
-        });
+            // Eagerly load Users for each company
+            var companies = await db.Companies
+                .AsNoTracking()
+                .Include(c => c.Users)
+                .Select(c => new 
+                {
+                    c.Id,
+                    c.Name,
+                    // For each user, select only the fields you want to expose
+                    Users = c.Users.Select(u => new
+                    {
+                        u.Id,
+                        u.Email,
+                        u.FirstName,
+                        u.LastName,
+                        // If you also want roles, you could join or load them from AspNetUserRoles
+                        // or let the front-end call a separate endpoint for user roles
+                    }).ToList()
+                })
+                .ToListAsync();
 
-        // 2) GET /companies/{id:guid} -> Get single (any authenticated user)
+            return ApiResponseFactory.Success(companies);
+        })
+        .RequireAuthorization(); // optional
+
+        // 2) GET /companies/{id:guid} -> Single company, including its users
         app.MapGet("/companies/{id:guid}", async (Guid id, ApplicationDbContext db) =>
         {
-            var company = await db.Companies.FindAsync(id);
+            // Eagerly load the Users for the specific company
+            var company = await db.Companies
+                .AsNoTracking()
+                .Include(c => c.Users)
+                .Where(c => c.Id == id)
+                .Select(c => new
+                {
+                    c.Id,
+                    c.Name,
+                    Users = c.Users.Select(u => new
+                    {
+                        u.Id,
+                        u.Email,
+                        u.FirstName,
+                        u.LastName
+                    }).ToList()
+                })
+                .FirstOrDefaultAsync();
+
             if (company == null)
             {
                 return ApiResponseFactory.Error("Company not found.", StatusCodes.Status404NotFound);
             }
 
             return ApiResponseFactory.Success(company);
-        });
-        
+        })
+        .RequireAuthorization(); // optional
+
         // 3) POST /companies -> Create a new company (Require globalAdmin)
         app.MapPost("/companies", async (
             [FromBody] Company newCompany,
