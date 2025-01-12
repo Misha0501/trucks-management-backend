@@ -97,7 +97,7 @@ public static class AuthEndpoints
                 "User registered successfully.",
                 StatusCodes.Status200OK
             );
-        });
+        }).RequireAuthorization("GlobalAdminOnly");
 
 
         app.MapPost("/login", async (
@@ -117,11 +117,16 @@ public static class AuthEndpoints
                 return ApiResponseFactory.Error("Invalid credentials.", StatusCodes.Status400BadRequest);
             }
 
-            var token = JwtTokenHelper.GenerateJwtToken(user, config);
+            // 1) Get the roles for this user
+            var roles = await userManager.GetRolesAsync(user);
+
+            // 2) Pass the roles to GenerateJwtToken
+            var token = JwtTokenHelper.GenerateJwtToken(user, roles, config);
             var data = new { token };
 
             return ApiResponseFactory.Success(data, StatusCodes.Status200OK);
         });
+
 
         app.MapPost("/forgotpassword", async (
             ForgotPasswordRequest req,

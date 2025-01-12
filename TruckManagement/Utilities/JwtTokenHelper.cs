@@ -9,21 +9,26 @@ namespace TruckManagement;
 
 public static class JwtTokenHelper
 {
-    public static string GenerateJwtToken(ApplicationUser user, IConfiguration config)
+    public static string GenerateJwtToken(ApplicationUser user, IList<string> roles, IConfiguration config)
     {
         var jwtSettings = config.GetSection("JwtSettings");
         var key = jwtSettings.GetValue<string>("SecretKey") ?? throw new Exception("SecretKey not configured");
         var issuer = jwtSettings.GetValue<string>("Issuer");
         var audience = jwtSettings.GetValue<string>("Audience");
 
+        // Create base claims
         var claims = new List<Claim>
         {
             new Claim(JwtRegisteredClaimNames.Sub, user.Id),
             new Claim(JwtRegisteredClaimNames.Email, user.Email!),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
-            // Add role claims if needed, e.g.:
-            // new Claim(ClaimTypes.Role, "employee")
         };
+
+        // Add a claim for each user role
+        foreach (var role in roles)
+        {
+            claims.Add(new Claim(ClaimTypes.Role, role));
+        }
 
         var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));
         var credentials = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256);
