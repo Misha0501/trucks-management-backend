@@ -216,6 +216,128 @@ public static class UserEndpoints
             }
         );
 
+        app.MapPut("/users/{id}",
+            [Authorize(Roles = "globalAdmin, customerAdmin")]
+            async (
+                string id,
+                [FromBody] UpdateUserRequest req,
+                ApplicationDbContext db,
+                UserManager<ApplicationUser> userManager,
+                RoleManager<ApplicationRole> roleManager
+            ) =>
+            {
+                // Parse user ID
+                if (!Guid.TryParse(id, out Guid userGuid))
+                {
+                    return ApiResponseFactory.Error("Invalid user ID format.", StatusCodes.Status400BadRequest);
+                }
+
+                // Find user by ID
+                var user = await userManager.FindByIdAsync(userGuid.ToString());
+                if (user == null)
+                {
+                    return ApiResponseFactory.Error("User not found.", StatusCodes.Status404NotFound);
+                }
+
+                // Check if new email is provided and different from current
+                if (!string.IsNullOrWhiteSpace(req.Email) && req.Email != user.Email)
+                {
+                    // Check if another user already has this email
+                    var existingUserWithEmail = await userManager.FindByEmailAsync(req.Email);
+                    if (existingUserWithEmail != null && existingUserWithEmail.Id != user.Id)
+                    {
+                        return ApiResponseFactory.Error("The email address is already in use.",
+                            StatusCodes.Status400BadRequest);
+                    }
+                }
+
+                // Update basic fields if provided and valid
+                if (!string.IsNullOrWhiteSpace(req.Email)) user.Email = req.Email;
+                if (!string.IsNullOrWhiteSpace(req.FirstName)) user.FirstName = req.FirstName;
+                if (!string.IsNullOrWhiteSpace(req.LastName)) user.LastName = req.LastName;
+
+                // Update company if provided
+                if (!string.IsNullOrWhiteSpace(req.CompanyId))
+                {
+                    if (!Guid.TryParse(req.CompanyId, out var newCompanyId))
+                    {
+                        return ApiResponseFactory.Error("Invalid Company ID format.", StatusCodes.Status400BadRequest);
+                    }
+
+                    var companyExists = await db.Companies.AnyAsync(c => c.Id == newCompanyId);
+                    if (!companyExists)
+                    {
+                        return ApiResponseFactory.Error("Company not found.", StatusCodes.Status400BadRequest);
+                    }
+
+                    user.CompanyId = newCompanyId;
+                }
+
+                // Update user roles if provided
+                if (req.Roles != null && req.Roles.Count > 0)
+                {
+                    // Validate each role exists
+                    foreach (var role in req.Roles)
+                    {
+                        if (!await roleManager.RoleExistsAsync(role))
+                        {
+                            return ApiResponseFactory.Error($"Role '{role}' does not exist.",
+                                StatusCodes.Status400BadRequest);
+                        }
+                    }
+
+                    // Get current roles and compute differences
+                    var currentRoles = await userManager.GetRolesAsync(user);
+                    var rolesToAdd = req.Roles.Except(currentRoles).ToList();
+                    var rolesToRemove = currentRoles.Except(req.Roles).ToList();
+
+                    if (rolesToRemove.Count > 0)
+                    {
+                        var removeResult = await userManager.RemoveFromRolesAsync(user, rolesToRemove);
+                        if (!removeResult.Succeeded)
+                        {
+                            var errors = removeResult.Errors.Select(e => e.Description).ToList();
+                            return ApiResponseFactory.Error(errors, StatusCodes.Status400BadRequest);
+                        }
+                    }
+
+                    if (rolesToAdd.Count > 0)
+                    {
+                        var addResult = await userManager.AddToRolesAsync(user, rolesToAdd);
+                        if (!addResult.Succeeded)
+                        {
+                            var errors = addResult.Errors.Select(e => e.Description).ToList();
+                            return ApiResponseFactory.Error(errors, StatusCodes.Status400BadRequest);
+                        }
+                    }
+                }
+
+                // Save user updates
+                var updateResult = await userManager.UpdateAsync(user);
+                if (!updateResult.Succeeded)
+                {
+                    var errors = updateResult.Errors.Select(e => e.Description).ToList();
+                    return ApiResponseFactory.Error(errors, StatusCodes.Status400BadRequest);
+                }
+
+                // Retrieve updated company name and roles for the response
+                var company = await db.Companies.FindAsync(user.CompanyId);
+                var updatedRoles = await userManager.GetRolesAsync(user);
+
+                var updatedUserData = new
+                {
+                    user.Id,
+                    user.Email,
+                    user.FirstName,
+                    user.LastName,
+                    user.CompanyId,
+                    CompanyName = company?.Name,
+                    Roles = updatedRoles
+                };
+
+                return ApiResponseFactory.Success(updatedUserData, StatusCodes.Status200OK);
+            });
+
         return app;
     }
 }
