@@ -1,6 +1,10 @@
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.AspNetCore.Identity;
 using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using TruckManagement.Data;
 using TruckManagement.DTOs;
 using TruckManagement.Entities;
 using TruckManagement.Helpers;  
@@ -97,6 +101,61 @@ public static class UserEndpoints
                 return ApiResponseFactory.Success("Password changed successfully.", StatusCodes.Status200OK);
             })
             .RequireAuthorization(); // Must be logged in to change password
+        
+        // GET /users (Paginated)
+        // GET /users => Paginated list of users (with roles)
+        app.MapGet("/users",
+            [Authorize(Roles = "globalAdmin, customerAdmin")]
+            async (
+                // Required parameter first
+                ApplicationDbContext db,
+                // Optional parameters after
+                [FromQuery] int pageNumber = 1,
+                [FromQuery] int pageSize   = 10
+            ) =>
+            {
+                // 1) Count total users for pagination
+                var totalUsers = await db.Users.CountAsync();
+                var totalPages = (int)Math.Ceiling((double)totalUsers / pageSize);
+
+                // 2) Query for users (paged, with roles)
+                var pagedUsers = await db.Users
+                    .AsNoTracking()
+                    .OrderBy(u => u.Email)
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .Select(u => new 
+                    {
+                        u.Id,
+                        u.Email,
+                        u.FirstName,
+                        u.LastName,
+                        u.CompanyId,
+                        Roles = (from ur in db.UserRoles
+                            join r in db.Roles on ur.RoleId equals r.Id
+                            where ur.UserId == u.Id
+                            select r.Name).ToList()
+                    })
+                    .ToListAsync();
+
+                // 3) Build a paginated response object
+                var responseData = new
+                {
+                    totalUsers,
+                    totalPages,
+                    pageNumber,
+                    pageSize,
+                    data = pagedUsers
+                };
+
+                // 4) Return via your custom ApiResponseFactory
+                return ApiResponseFactory.Success(
+                    responseData,
+                    StatusCodes.Status200OK
+                );
+            }
+        );
+
 
         return app;
     }
