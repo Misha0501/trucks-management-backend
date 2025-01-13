@@ -107,38 +107,46 @@ public static class UserEndpoints
         app.MapGet("/users",
             [Authorize(Roles = "globalAdmin, customerAdmin")]
             async (
-                // Required parameter first
+                // Required parameters first
                 ApplicationDbContext db,
-                // Optional parameters after
+                // Optional query parameters second
                 [FromQuery] int pageNumber = 1,
                 [FromQuery] int pageSize   = 10
             ) =>
             {
-                // 1) Count total users for pagination
+                // 1) Total user count (for pagination metadata)
                 var totalUsers = await db.Users.CountAsync();
                 var totalPages = (int)Math.Ceiling((double)totalUsers / pageSize);
 
-                // 2) Query for users (paged, with roles)
+                // 2) Query the users with EF Core
+                //    a) Include the Company so we can map `CompanyName`.
+                //    b) Apply pagination via Skip/Take.
+                //    c) For roles, do a join on AspNetUserRoles / AspNetRoles.
                 var pagedUsers = await db.Users
                     .AsNoTracking()
+                    .Include(u => u.Company)  // Load the related Company
                     .OrderBy(u => u.Email)
                     .Skip((pageNumber - 1) * pageSize)
                     .Take(pageSize)
-                    .Select(u => new 
+                    .Select(u => new
                     {
                         u.Id,
                         u.Email,
                         u.FirstName,
                         u.LastName,
-                        u.CompanyId,
+
+                        // Return both CompanyId & CompanyName
+                        CompanyId   = u.CompanyId,
+                        CompanyName = u.Company.Name,
+
                         Roles = (from ur in db.UserRoles
-                            join r in db.Roles on ur.RoleId equals r.Id
-                            where ur.UserId == u.Id
-                            select r.Name).ToList()
+                                 join r in db.Roles on ur.RoleId equals r.Id
+                                 where ur.UserId == u.Id
+                                 select r.Name).ToList()
                     })
                     .ToListAsync();
 
-                // 3) Build a paginated response object
+                // 3) Build a response object with pagination info
                 var responseData = new
                 {
                     totalUsers,
@@ -148,7 +156,7 @@ public static class UserEndpoints
                     data = pagedUsers
                 };
 
-                // 4) Return via your custom ApiResponseFactory
+                // 4) Return using your custom API response
                 return ApiResponseFactory.Success(
                     responseData,
                     StatusCodes.Status200OK
