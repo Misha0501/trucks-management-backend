@@ -172,7 +172,7 @@ public static class AuthEndpoints
         });
 
         // 2) Reset Password Endpoint
-        app.MapPost("/resetpassword", async (
+        app.MapPost("/reset-password-token", async (
             ResetPasswordRequest req,
             UserManager<ApplicationUser> userManager) =>
         {
