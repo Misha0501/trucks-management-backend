@@ -18,7 +18,6 @@ namespace TruckManagement.Seeding
             // 3) Seed roles
             var roleManager = serviceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
             var roles = new[] { "employee", "employer", "customer", "customerAdmin", "customerAccountant", "globalAdmin" };
-
             foreach (var role in roles)
             {
                 if (!await roleManager.RoleExistsAsync(role))
@@ -68,6 +67,78 @@ namespace TruckManagement.Seeding
             }
 
             await dbContext.SaveChangesAsync();
+
+            // 6) Seed sample users
+            var userManager = serviceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+
+            // Example #1: A globalAdmin user
+            const string adminEmail = "admin@admin.com";
+            var adminUser = await userManager.FindByEmailAsync(adminEmail);
+            if (adminUser == null)
+            {
+                adminUser = new ApplicationUser
+                {
+                    UserName = adminEmail,
+                    Email = adminEmail,
+                    FirstName = "Admin",
+                    LastName = "User",
+                    CompanyId = defaultCompanyId // Link the admin to DefaultCompany, if desired
+                };
+
+                // Create user with a sample password
+                var result = await userManager.CreateAsync(adminUser, "Admin@123");
+                if (result.Succeeded)
+                {
+                    // Assign the globalAdmin role
+                    await userManager.AddToRoleAsync(adminUser, "globalAdmin");
+                }
+            }
+
+            // Example #2: A customer user
+            const string customerEmail = "customer@example.com";
+            var customerUser = await userManager.FindByEmailAsync(customerEmail);
+            if (customerUser == null)
+            {
+                customerUser = new ApplicationUser
+                {
+                    UserName = customerEmail,
+                    Email = customerEmail,
+                    FirstName = "John",
+                    LastName = "Customer",
+                    // Suppose we link this user to "SecondCompany" for demonstration
+                    CompanyId = Guid.Parse("22222222-2222-2222-2222-222222222222")
+                };
+
+                var result = await userManager.CreateAsync(customerUser, "Customer@123");
+                if (result.Succeeded)
+                {
+                    await userManager.AddToRoleAsync(customerUser, "customer");
+                }
+            }
+
+            // Example #3: An employee user
+            const string employeeEmail = "employee@example.com";
+            var employeeUser = await userManager.FindByEmailAsync(employeeEmail);
+            if (employeeUser == null)
+            {
+                employeeUser = new ApplicationUser
+                {
+                    UserName = employeeEmail,
+                    Email = employeeEmail,
+                    FirstName = "Emily",
+                    LastName = "Employee",
+                    // Maybe link to "ThirdCompany"
+                    CompanyId = Guid.Parse("33333333-3333-3333-3333-333333333333")
+                };
+
+                var result = await userManager.CreateAsync(employeeUser, "Employee@123");
+                if (result.Succeeded)
+                {
+                    await userManager.AddToRoleAsync(employeeUser, "employee");
+                }
+            }
+
+            // You can add more users with different roles as needed
         }
     }
 }
