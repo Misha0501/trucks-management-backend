@@ -44,9 +44,9 @@ builder.Services.AddAuthorization(options =>
     });
 
     // customerBookhourder
-    options.AddPolicy("CustomerBookhourderOnly", policy =>
+    options.AddPolicy("CustomerAccountantOnly", policy =>
     {
-        policy.RequireRole("customerBookhourder");
+        policy.RequireRole("customerAccountant");
     });
 
     // globalAdmin
