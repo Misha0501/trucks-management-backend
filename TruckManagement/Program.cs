@@ -4,6 +4,7 @@ using TruckManagement.Extensions;
 using TruckManagement.Endpoints;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using TruckManagement.Seeding;
 using TruckManagement.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -43,55 +44,7 @@ app.UseMiddleware<GlobalExceptionHandlingMiddleware>();
 // Apply migrations and seed data at startup
 using (var scope = app.Services.CreateScope())
 {
-    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    dbContext.Database.Migrate();
-    
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
-    var roles = new [] { "employee", "employer", "customer", "customerAdmin", "customerAccountant", "globalAdmin" };
-    foreach (var role in roles)
-    {
-        if (!await roleManager.RoleExistsAsync(role))
-        {
-            await roleManager.CreateAsync(new ApplicationRole { Name = role });
-        }
-    }
-
-    // Seed a default company
-    var defaultCompanyId = Guid.Parse("11111111-1111-1111-1111-111111111111");
-    if (!dbContext.Companies.Any(c => c.Id == defaultCompanyId))
-    {
-        dbContext.Companies.Add(new Company
-        {
-            Id = defaultCompanyId,
-            Name = "DefaultCompany"
-        });
-        await dbContext.SaveChangesAsync();
-    }
-    
-    // Additional companies to seed (example)
-    var companiesToSeed = new List<Company>
-    {
-        new Company
-        {
-            Id = Guid.Parse("22222222-2222-2222-2222-222222222222"),
-            Name = "SecondCompany"
-        },
-        new Company
-        {
-            Id = Guid.Parse("33333333-3333-3333-3333-333333333333"),
-            Name = "ThirdCompany"
-        }
-    };
-
-    foreach (var comp in companiesToSeed)
-    {
-        if (!dbContext.Companies.Any(c => c.Id == comp.Id))
-        {
-            dbContext.Companies.Add(comp);
-        }
-    }
-
-    await dbContext.SaveChangesAsync();
+    await DatabaseSeeder.SeedAsync(scope.ServiceProvider);
 }
 
 // Configure the HTTP request pipeline.
