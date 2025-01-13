@@ -17,44 +17,7 @@ builder.Services.AddOpenApi();
 builder.Services.AddPostgresDatabase(builder.Configuration);
 builder.Services.AddAppIdentity();
 builder.Services.AddJwtAuthentication(builder.Configuration);
-builder.Services.AddAuthorization(options =>
-{
-    // Employee
-    options.AddPolicy("EmployeeOnly", policy =>
-    {
-        policy.RequireRole("employee");
-    });
-    
-    // Employer
-    options.AddPolicy("EmployerOnly", policy =>
-    {
-        policy.RequireRole("employer");
-    });
-
-    // Customer
-    options.AddPolicy("CustomerOnly", policy =>
-    {
-        policy.RequireRole("customer");
-    });
-    
-    // CustomerAdmin
-    options.AddPolicy("CustomerAdminOnly", policy =>
-    {
-        policy.RequireRole("customerAdmin");
-    });
-
-    // customerBookhourder
-    options.AddPolicy("CustomerAccountantOnly", policy =>
-    {
-        policy.RequireRole("customerAccountant");
-    });
-
-    // globalAdmin
-    options.AddPolicy("GlobalAdminOnly", policy =>
-    {
-        policy.RequireRole("globalAdmin");
-    });
-});
+builder.Services.AddAuthorizationPolicies();
 
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 
