@@ -13,91 +13,93 @@ public static class AuthEndpoints
     public static WebApplication MapAuthEndpoints(this WebApplication app)
     {
         app.MapPost("/register", async (
-            RegisterRequest req,
-            UserManager<ApplicationUser> userManager,
-            RoleManager<ApplicationRole> roleManager,
-            ApplicationDbContext dbContext) =>
-        {
-            // 1) Validate if 'companyId' is a correct GUID
-            if (!Guid.TryParse(req.CompanyId, out var parsedCompanyId))
+                RegisterRequest req,
+                UserManager<ApplicationUser> userManager,
+                RoleManager<ApplicationRole> roleManager,
+                ApplicationDbContext dbContext) =>
             {
-                return ApiResponseFactory.Error(
-                    "The provided Company ID is not a valid GUID.",
-                    StatusCodes.Status400BadRequest
-                );
-            }
-
-            // 2) Check if the company exists
-            var companyExists = await dbContext.Companies.AnyAsync(c => c.Id == parsedCompanyId);
-            if (!companyExists)
-            {
-                return ApiResponseFactory.Error(
-                    "The specified company does not exist. Please provide a valid Company ID.",
-                    StatusCodes.Status400BadRequest
-                );
-            }
-
-            // 3) Check if password + confirm match
-            if (req.Password != req.ConfirmPassword)
-            {
-                return ApiResponseFactory.Error(
-                    "Password and confirmation do not match.",
-                    StatusCodes.Status400BadRequest
-                );
-            }
-
-            // 4) Create the user
-            var user = new ApplicationUser
-            {
-                UserName = req.Email,
-                Email = req.Email,
-                FirstName = req.FirstName,
-                LastName = req.LastName,
-                CompanyId = parsedCompanyId
-            };
-
-            // 5) Actually create the user in Identity
-            var result = await userManager.CreateAsync(user, req.Password);
-            if (!result.Succeeded)
-            {
-                var errorMessages = result.Errors.Select(e => e.Description).ToList();
-                return ApiResponseFactory.Error(errorMessages, StatusCodes.Status400BadRequest);
-            }
-
-            // 6) If a role is provided, verify it's valid and assign
-            if (!string.IsNullOrWhiteSpace(req.Role))
-            {
-                // Check if the role actually exists
-                var roleExists = await roleManager.RoleExistsAsync(req.Role);
-                if (!roleExists)
+                // 1) Validate if 'companyId' is a correct GUID
+                if (!Guid.TryParse(req.CompanyId, out var parsedCompanyId))
                 {
-                    // If role doesn't exist, delete the created user (rollback) or leave the user unassigned
-                    // Usually, you'd handle this carefully. For simplicity, let's remove the user and return error.
-                    await userManager.DeleteAsync(user);
-
                     return ApiResponseFactory.Error(
-                        $"The specified role '{req.Role}' does not exist. User was not created.",
+                        "The provided Company ID is not a valid GUID.",
                         StatusCodes.Status400BadRequest
                     );
                 }
 
-                // If it is valid, assign the role to the user
-                var roleResult = await userManager.AddToRoleAsync(user, req.Role);
-                if (!roleResult.Succeeded)
+                // 2) Check if the company exists
+                var companyExists = await dbContext.Companies.AnyAsync(c => c.Id == parsedCompanyId);
+                if (!companyExists)
                 {
-                    // If for some reason role assignment fails, we can also remove the user or handle accordingly.
-                    await userManager.DeleteAsync(user);
-                    var errMsgs = roleResult.Errors.Select(e => e.Description).ToList();
-                    return ApiResponseFactory.Error(errMsgs, StatusCodes.Status400BadRequest);
+                    return ApiResponseFactory.Error(
+                        "The specified company does not exist. Please provide a valid Company ID.",
+                        StatusCodes.Status400BadRequest
+                    );
                 }
-            }
 
-            // 7) Success
-            return ApiResponseFactory.Success(
-                "User registered successfully.",
-                StatusCodes.Status200OK
-            );
-        }).RequireAuthorization("GlobalAdminOnly");
+                // 3) Check if password + confirm match
+                if (req.Password != req.ConfirmPassword)
+                {
+                    return ApiResponseFactory.Error(
+                        "Password and confirmation do not match.",
+                        StatusCodes.Status400BadRequest
+                    );
+                }
+
+                // 4) Create the user
+                var user = new ApplicationUser
+                {
+                    UserName = req.Email,
+                    Email = req.Email,
+                    FirstName = req.FirstName,
+                    LastName = req.LastName,
+                    CompanyId = parsedCompanyId
+                };
+
+                // 5) Actually create the user in Identity
+                var result = await userManager.CreateAsync(user, req.Password);
+                if (!result.Succeeded)
+                {
+                    var errorMessages = result.Errors.Select(e => e.Description).ToList();
+                    return ApiResponseFactory.Error(errorMessages, StatusCodes.Status400BadRequest);
+                }
+
+                // 6) If roles are provided, verify they're valid and assign them
+                if (req.Roles != null && req.Roles.Count > 0)
+                {
+                    // Validate each role exists
+                    foreach (var role in req.Roles)
+                    {
+                        if (!await roleManager.RoleExistsAsync(role))
+                        {
+                            // Rollback: delete the created user if role is invalid
+                            await userManager.DeleteAsync(user);
+                            return ApiResponseFactory.Error(
+                                $"The specified role '{role}' does not exist. User was not created.",
+                                StatusCodes.Status400BadRequest
+                            );
+                        }
+                    }
+
+                    // Assign roles to the new user
+                    var roleResult = await userManager.AddToRolesAsync(user, req.Roles);
+                    if (!roleResult.Succeeded)
+                    {
+                        // Rollback: remove user if role assignment fails
+                        await userManager.DeleteAsync(user);
+                        var errMsgs = roleResult.Errors.Select(e => e.Description).ToList();
+                        return ApiResponseFactory.Error(errMsgs, StatusCodes.Status400BadRequest);
+                    }
+                }
+                // If roles array is null or empty, no roles will be assigned, which is acceptable.
+
+                // 7) Success
+                return ApiResponseFactory.Success(
+                    "User registered successfully.",
+                    StatusCodes.Status200OK
+                );
+            })
+            .RequireAuthorization("GlobalAdminOnly");
 
 
         app.MapPost("/login", async (

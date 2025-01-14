@@ -12,6 +12,6 @@ namespace TruckManagement.DTOs
         public string CompanyId { get; set; } = string.Empty;
         
         // Optional: role
-        public string? Role { get; set; }  // if null or empty => no role assigned
+        public List<string>? Roles { get; set; }
     }
 }
