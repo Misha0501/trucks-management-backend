@@ -53,7 +53,13 @@ public static class AuthEndpoints
                     Email = req.Email,
                     FirstName = req.FirstName,
                     LastName = req.LastName,
-                    CompanyId = parsedCompanyId
+                    CompanyId = parsedCompanyId,
+                    Address = req.Address,
+                    PhoneNumber = req.PhoneNumber,
+                    Postcode = req.Postcode,
+                    City = req.City,
+                    Country = req.Country,
+                    Remark = req.Remark
                 };
 
                 // 5) Actually create the user in Identity

@@ -50,10 +50,15 @@ public static class UserEndpoints
                     Email = user.Email,
                     FirstName = user.FirstName,
                     LastName = user.LastName,
+                    Address = user.Address,
+                    PhoneNumber = user.PhoneNumber,
+                    Postcode = user.Postcode,
+                    City = user.City,
+                    Country = user.Country,
+                    Remark = user.Remark,
                     Roles = roles,
                     CompanyId = user.CompanyId
                 };
-
                 // 5) Return a standardized success response
                 return ApiResponseFactory.Success(
                     data: data,
@@ -184,6 +189,12 @@ public static class UserEndpoints
                         u.Email,
                         u.FirstName,
                         u.LastName,
+                        u.Address,
+                        u.PhoneNumber,
+                        u.Postcode,
+                        u.City,
+                        u.Country,
+                        u.Remark,
                         CompanyId = u.CompanyId,
                         CompanyName = u.Company.Name,
                         // Roles: fetch each role's ID and name
@@ -255,6 +266,12 @@ public static class UserEndpoints
                 if (!string.IsNullOrWhiteSpace(req.Email)) user.Email = req.Email;
                 if (!string.IsNullOrWhiteSpace(req.FirstName)) user.FirstName = req.FirstName;
                 if (!string.IsNullOrWhiteSpace(req.LastName)) user.LastName = req.LastName;
+                if (!string.IsNullOrWhiteSpace(req.Address)) user.Address = req.Address;
+                if (!string.IsNullOrWhiteSpace(req.PhoneNumber)) user.PhoneNumber = req.PhoneNumber;
+                if (!string.IsNullOrWhiteSpace(req.Postcode)) user.Postcode = req.Postcode;
+                if (!string.IsNullOrWhiteSpace(req.City)) user.City = req.City;
+                if (!string.IsNullOrWhiteSpace(req.Country)) user.Country = req.Country;
+                if (!string.IsNullOrWhiteSpace(req.Remark)) user.Remark = req.Remark;
 
                 // Update company if provided
                 if (!string.IsNullOrWhiteSpace(req.CompanyId))
@@ -348,6 +365,12 @@ public static class UserEndpoints
                     user.Email,
                     user.FirstName,
                     user.LastName,
+                    user.Address,
+                    user.PhoneNumber,
+                    user.Postcode,
+                    user.City,
+                    user.Country,
+                    user.Remark,
                     user.CompanyId,
                     CompanyName = company?.Name,
                     Roles = updatedRoles
