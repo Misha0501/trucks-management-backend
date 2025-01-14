@@ -274,40 +274,58 @@ public static class UserEndpoints
                 }
 
                 // Update user roles if provided
-                if (req.Roles != null && req.Roles.Count > 0)
+                if (req.Roles != null)
                 {
-                    // Validate each role exists
-                    foreach (var role in req.Roles)
+                    // If the roles array is empty, remove all roles from the user.
+                    if (req.Roles.Count == 0)
                     {
-                        if (!await roleManager.RoleExistsAsync(role))
+                        var currentRoles = await userManager.GetRolesAsync(user);
+                        if (currentRoles.Count > 0)
                         {
-                            return ApiResponseFactory.Error($"Role '{role}' does not exist.",
-                                StatusCodes.Status400BadRequest);
+                            var removeAllResult = await userManager.RemoveFromRolesAsync(user, currentRoles);
+                            if (!removeAllResult.Succeeded)
+                            {
+                                var errors = removeAllResult.Errors.Select(e => e.Description).ToList();
+                                return ApiResponseFactory.Error(errors, StatusCodes.Status400BadRequest);
+                            }
                         }
                     }
-
-                    // Get current roles and compute differences
-                    var currentRoles = await userManager.GetRolesAsync(user);
-                    var rolesToAdd = req.Roles.Except(currentRoles).ToList();
-                    var rolesToRemove = currentRoles.Except(req.Roles).ToList();
-
-                    if (rolesToRemove.Count > 0)
+                    // If roles array has items, update roles accordingly.
+                    else
                     {
-                        var removeResult = await userManager.RemoveFromRolesAsync(user, rolesToRemove);
-                        if (!removeResult.Succeeded)
+                        // Validate each role exists
+                        foreach (var role in req.Roles)
                         {
-                            var errors = removeResult.Errors.Select(e => e.Description).ToList();
-                            return ApiResponseFactory.Error(errors, StatusCodes.Status400BadRequest);
+                            if (!await roleManager.RoleExistsAsync(role))
+                            {
+                                return ApiResponseFactory.Error($"Role '{role}' does not exist.",
+                                    StatusCodes.Status400BadRequest);
+                            }
                         }
-                    }
 
-                    if (rolesToAdd.Count > 0)
-                    {
-                        var addResult = await userManager.AddToRolesAsync(user, rolesToAdd);
-                        if (!addResult.Succeeded)
+                        // Get current roles and compute differences
+                        var currentRoles = await userManager.GetRolesAsync(user);
+                        var rolesToAdd = req.Roles.Except(currentRoles).ToList();
+                        var rolesToRemove = currentRoles.Except(req.Roles).ToList();
+
+                        if (rolesToRemove.Count > 0)
                         {
-                            var errors = addResult.Errors.Select(e => e.Description).ToList();
-                            return ApiResponseFactory.Error(errors, StatusCodes.Status400BadRequest);
+                            var removeResult = await userManager.RemoveFromRolesAsync(user, rolesToRemove);
+                            if (!removeResult.Succeeded)
+                            {
+                                var errors = removeResult.Errors.Select(e => e.Description).ToList();
+                                return ApiResponseFactory.Error(errors, StatusCodes.Status400BadRequest);
+                            }
+                        }
+
+                        if (rolesToAdd.Count > 0)
+                        {
+                            var addResult = await userManager.AddToRolesAsync(user, rolesToAdd);
+                            if (!addResult.Succeeded)
+                            {
+                                var errors = addResult.Errors.Select(e => e.Description).ToList();
+                                return ApiResponseFactory.Error(errors, StatusCodes.Status400BadRequest);
+                            }
                         }
                     }
                 }
