@@ -27,10 +27,11 @@ jobs:
             --exclude=".idea" \
             . ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:/var/www/vhosts/${{ secrets.SERVER_DOMAIN }}/httpdocs/
 
-      - name: Restart Docker Containers Without Rebuilding
+      - name: Rebuild and Restart Docker Containers
         run: |
           ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "
           cd /var/www/vhosts/${{ secrets.SERVER_DOMAIN }}/httpdocs && \
           docker compose down && \
+          docker compose build && \
           docker compose up -d
           "
