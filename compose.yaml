@@ -11,6 +11,12 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ConnectionStrings__DefaultConnection=${CONNECTION_STRING}
+      - Smtp__Host=${SMTP_HOST}
+      - Smtp__Port=${SMTP_PORT}
+      - Smtp__Username=${SMTP_USERNAME}
+      - Smtp__Password=${SMTP_PASSWORD}
+      - Smtp__FromAddress=${SMTP_FROM_ADDRESS}
+      - FrontEnd__ResetPasswordUrl=${FRONTEND_RESET_PASSWORD_URL}
     ports:
       - "9090:8080"
       - "9091:8081"
