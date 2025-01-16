@@ -1,4 +1,4 @@
-name: Deploy Backend to Plesk Server
+name: Deploy Backend to Plesk Server with Docker Compose
 
 on:
   push:
@@ -20,9 +20,18 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
 
-      - name: Deploy with rsync
+      - name: Deploy Files with rsync
         run: |
           rsync -av --progress \
             --exclude=".git" \
             --exclude=".idea" \
             . ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:/var/www/vhosts/vigilant-franklin.85-214-92-159.plesk.page/httpdocs/
+
+      - name: Restart Docker Containers
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "
+          cd /var/www/vhosts/vigilant-franklin.85-214-92-159.plesk.page/httpdocs && \
+          docker-compose down && \
+          docker-compose build && \
+          docker-compose up -d
+          "
