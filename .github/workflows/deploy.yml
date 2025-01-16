@@ -27,11 +27,10 @@ jobs:
             --exclude=".idea" \
             . ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:/var/www/vhosts/vigilant-franklin.85-214-92-159.plesk.page/httpdocs/
 
-      - name: Restart Docker Containers
+      - name: Restart Docker Containers Without Rebuilding
         run: |
           ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "
           cd /var/www/vhosts/vigilant-franklin.85-214-92-159.plesk.page/httpdocs && \
-          docker-compose down && \
-          docker-compose build && \
-          docker-compose up -d
+          docker compose down && \
+          docker compose up -d
           "
