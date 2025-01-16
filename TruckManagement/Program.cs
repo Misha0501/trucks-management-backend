@@ -24,19 +24,18 @@ builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowLocalhost3000", policy =>
+    options.AddPolicy("AllowAll", policy =>
     {
-        policy.WithOrigins("http://localhost:3000")
+        policy.AllowAnyOrigin()
             .AllowAnyMethod()
-            .AllowAnyHeader()
-            .AllowCredentials();
+            .AllowAnyHeader();
     });
 });
 
 var app = builder.Build();
 
 // Use cors
-app.UseCors("AllowLocalhost3000");
+app.UseCors("AllowAll");
 
 // Global Exception Handling
 app.UseMiddleware<GlobalExceptionHandlingMiddleware>();
