@@ -24,9 +24,9 @@ builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
+    options.AddPolicy("AllowedOrigins", policy =>
     {
-        policy.AllowAnyOrigin()
+        policy.WithOrigins("https://peaceful-liskov.85-214-92-159.plesk.page", "http://localhost:4000","https://localhost:4000", "http://localhost:3000")
             .AllowAnyMethod()
             .AllowAnyHeader();
     });
@@ -35,7 +35,7 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 // Use cors
-app.UseCors("AllowAll");
+app.UseCors("AllowedOrigins");
 
 // Global Exception Handling
 app.UseMiddleware<GlobalExceptionHandlingMiddleware>();
