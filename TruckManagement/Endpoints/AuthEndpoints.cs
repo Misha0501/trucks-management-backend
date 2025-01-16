@@ -130,7 +130,7 @@ public static class AuthEndpoints
 
             // 2) Pass the roles to GenerateJwtToken
             var token = JwtTokenHelper.GenerateJwtToken(user, roles, config);
-            var data = new { token, testProperty = "TestValue" };
+            var data = new { token };
 
             return ApiResponseFactory.Success(data, StatusCodes.Status200OK);
         });
