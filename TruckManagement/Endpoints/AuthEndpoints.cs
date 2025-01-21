@@ -49,37 +49,44 @@ public static class AuthEndpoints
                     var errors = createUserResult.Errors.Select(e => e.Description).ToList();
                     return ApiResponseFactory.Error(errors, StatusCodes.Status400BadRequest);
                 }
-
-                // 3) If roles are provided, verify and assign
-                if (req.Roles != null && req.Roles.Any())
+                
+                // 3) If no roles specified, rollback and return error
+                if (req.Roles == null || !req.Roles.Any())
                 {
-                    foreach (var role in req.Roles)
-                    {
-                        if (!await roleManager.RoleExistsAsync(role))
-                        {
-                            // Rollback user creation
-                            await userManager.DeleteAsync(user);
-                            return ApiResponseFactory.Error(
-                                $"Specified role '{role}' does not exist. User was not created.",
-                                StatusCodes.Status400BadRequest
-                            );
-                        }
-                    }
+                    await userManager.DeleteAsync(user);
+                    return ApiResponseFactory.Error(
+                        "No roles specified. User was not created.",
+                        StatusCodes.Status400BadRequest
+                    );
+                }
 
-                    var assignRolesResult = await userManager.AddToRolesAsync(user, req.Roles);
-                    if (!assignRolesResult.Succeeded)
+                // 4) If roles are provided, verify and assign
+                foreach (var role in req.Roles)
+                {
+                    if (!await roleManager.RoleExistsAsync(role))
                     {
+                        // Rollback user creation
                         await userManager.DeleteAsync(user);
-                        var roleErrors = assignRolesResult.Errors.Select(e => e.Description).ToList();
-                        return ApiResponseFactory.Error(roleErrors, StatusCodes.Status400BadRequest);
+                        return ApiResponseFactory.Error(
+                            $"Specified role '{role}' does not exist. User was not created.",
+                            StatusCodes.Status400BadRequest
+                        );
                     }
                 }
 
-                // 4) Determine if user is driver or contact person
+                var assignRolesResult = await userManager.AddToRolesAsync(user, req.Roles);
+                if (!assignRolesResult.Succeeded)
+                {
+                    await userManager.DeleteAsync(user);
+                    var roleErrors = assignRolesResult.Errors.Select(e => e.Description).ToList();
+                    return ApiResponseFactory.Error(roleErrors, StatusCodes.Status400BadRequest);
+                }
+
+                // 5) Determine if user is driver or contact person
                 bool isDriver = req.Roles != null && req.Roles.Contains("driver");
                 bool isContactPerson = !isDriver; // If not driver => contact person
 
-                // 5) If user is driver => single company from the first CompanyIds (if any).
+                // 6) If user is driver => single company from the first CompanyIds (if any).
                 if (isDriver)
                 {
                     Guid? driverCompanyGuid = null;
@@ -123,7 +130,7 @@ public static class AuthEndpoints
                     dbContext.Drivers.Add(driverEntity);
                 }
 
-                // 6) If user is contact person => multiple companies + multiple clients
+                // 7) If user is contact person => multiple companies + multiple clients
                 if (isContactPerson)
                 {
                     // Create contact person entity
@@ -211,10 +218,10 @@ public static class AuthEndpoints
                     }
                 }
 
-                // 7) Save domain-level changes
+                // 8) Save domain-level changes
                 await dbContext.SaveChangesAsync();
 
-                // 8) Return success
+                // 9) Return success
                 return ApiResponseFactory.Success(
                     "User registered successfully.",
                     StatusCodes.Status200OK
