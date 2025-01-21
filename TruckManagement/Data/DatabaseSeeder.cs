@@ -17,7 +17,7 @@ namespace TruckManagement.Seeding
 
             // 3) Seed roles
             var roleManager = serviceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
-            var roles = new[] { "employee", "employer", "customer", "customerAdmin", "customerAccountant", "globalAdmin" };
+            var roles = new[] { "driver", "employer", "customer", "customerAdmin", "customerAccountant", "globalAdmin" };
             foreach (var role in roles)
             {
                 if (!await roleManager.RoleExistsAsync(role))
@@ -104,7 +104,6 @@ namespace TruckManagement.Seeding
                     Email = customerEmail,
                     FirstName = "John",
                     LastName = "Customer",
-                    // Suppose we link this user to "SecondCompany" for demonstration
                 };
 
                 var result = await userManager.CreateAsync(customerUser, "Customer@123");
@@ -125,17 +124,235 @@ namespace TruckManagement.Seeding
                     Email = employeeEmail,
                     FirstName = "Emily",
                     LastName = "Employee",
-                    // Maybe link to "ThirdCompany"
                 };
 
                 var result = await userManager.CreateAsync(employeeUser, "Employee@123");
                 if (result.Succeeded)
                 {
-                    await userManager.AddToRoleAsync(employeeUser, "employee");
+                    await userManager.AddToRoleAsync(employeeUser, "employer"); // or "employee" if you prefer
                 }
             }
 
-            // You can add more users with different roles as needed
+            await dbContext.SaveChangesAsync();
+
+            // Now add domain-level seeds:
+
+            // 1) Seed Driver
+            if (!dbContext.Drivers.Any())
+            {
+                var user = await userManager.FindByEmailAsync("employee@example.com");
+                if (user != null)
+                {
+                    var driver = new Driver
+                    {
+                        Id = Guid.NewGuid(),
+                        AspNetUserId = user.Id, // link to the "employee"
+                        CompanyId = defaultCompanyId,
+                    };
+                    dbContext.Drivers.Add(driver);
+                }
+            }
+
+            // 2) Seed ContactPerson
+            if (!dbContext.ContactPersons.Any())
+            {
+                var user = await userManager.FindByEmailAsync("customer@example.com");
+                if (user != null)
+                {
+                    var contactPerson = new ContactPerson
+                    {
+                        Id = Guid.NewGuid(),
+                        AspNetUserId = user.Id
+                    };
+                    dbContext.ContactPersons.Add(contactPerson);
+                }
+            }
+
+            // 3) Seed Client
+            if (!dbContext.Clients.Any())
+            {
+                var client = new Client
+                {
+                    Id = Guid.NewGuid(),
+                    Name = "SampleClient",
+                    Tav = "Tav Sample",
+                    Address = "123 Some Street",
+                    Postcode = "12345",
+                    City = "SampleCity",
+                    Country = "SampleCountry",
+                    PhoneNumber = "555-1234",
+                    Email = "client@example.com",
+                    Remark = "Important client",
+                    CompanyId = defaultCompanyId
+                };
+                dbContext.Clients.Add(client);
+            }
+
+            await dbContext.SaveChangesAsync();
+
+            // We need references from newly seeded entities, so re-fetch them:
+            var seededClient = dbContext.Clients.FirstOrDefault();
+            var seededContact = dbContext.ContactPersons.FirstOrDefault();
+            var seededCompany = dbContext.Companies.FirstOrDefault(c => c.Id == defaultCompanyId);
+
+            // 4) Seed ContactPersonClientCompany
+            if (!dbContext.ContactPersonClientCompanies.Any() && 
+                seededContact != null && seededClient != null && seededCompany != null)
+            {
+                var cpc = new ContactPersonClientCompany
+                {
+                    Id = Guid.NewGuid(),
+                    ContactPersonId = seededContact.Id,
+                    CompanyId = seededCompany.Id,
+                    ClientId = seededClient.Id
+                };
+                dbContext.ContactPersonClientCompanies.Add(cpc);
+            }
+
+            // 5) Seed Rate
+            if (!dbContext.Rates.Any() && seededClient != null && seededCompany != null)
+            {
+                var rate = new Rate
+                {
+                    Id = Guid.NewGuid(),
+                    Name = "SampleRate",
+                    Value = 100.0m,
+                    ClientId = seededClient.Id,
+                    CompanyId = seededCompany.Id
+                };
+                dbContext.Rates.Add(rate);
+            }
+
+            // 6) Seed Surcharge
+            if (!dbContext.Surcharges.Any() && seededClient != null && seededCompany != null)
+            {
+                var surcharge = new Surcharge
+                {
+                    Id = Guid.NewGuid(),
+                    Value = 10.5m,
+                    ClientId = seededClient.Id,
+                    CompanyId = seededCompany.Id
+                };
+                dbContext.Surcharges.Add(surcharge);
+            }
+
+            // 7) Seed Unit
+            if (!dbContext.Units.Any())
+            {
+                var unit = new Unit
+                {
+                    Id = Guid.NewGuid(),
+                    Value = "Hours"
+                };
+                dbContext.Units.Add(unit);
+            }
+
+            await dbContext.SaveChangesAsync();
+
+            // Re-fetch references for next seeds
+            var seededUnit = dbContext.Units.FirstOrDefault();
+            var seededRate = dbContext.Rates.FirstOrDefault();
+            var seededSurcharge = dbContext.Surcharges.FirstOrDefault();
+
+            // 8) Seed Car
+            if (!dbContext.Cars.Any() && seededCompany != null)
+            {
+                var car = new Car
+                {
+                    Id = Guid.NewGuid(),
+                    LicensePlate = "ABC-123",
+                    Remark = "Test Car",
+                    CompanyId = seededCompany.Id
+                };
+                dbContext.Cars.Add(car);
+            }
+
+            await dbContext.SaveChangesAsync();
+
+            var seededCar = dbContext.Cars.FirstOrDefault();
+            var seededDriver = dbContext.Drivers.FirstOrDefault();
+
+            // 9) Seed CarDriver
+            if (!dbContext.CarDrivers.Any() && seededCar != null && seededDriver != null)
+            {
+                var carDriver = new CarDriver
+                {
+                    Id = Guid.NewGuid(),
+                    CarId = seededCar.Id,
+                    DriverId = seededDriver.Id
+                };
+                dbContext.CarDrivers.Add(carDriver);
+            }
+
+            // 10) Seed Ride
+            if (!dbContext.Rides.Any())
+            {
+                var ride = new Ride
+                {
+                    Id = Guid.NewGuid(),
+                    Name = "SampleRide",
+                    Remark = "First ride"
+                };
+                dbContext.Rides.Add(ride);
+            }
+
+            // 11) Seed Charter
+            if (!dbContext.Charters.Any() && seededClient != null && seededCompany != null)
+            {
+                var charter = new Charter
+                {
+                    Id = Guid.NewGuid(),
+                    Name = "TestCharter",
+                    ClientId = seededClient.Id,
+                    CompanyId = seededCompany.Id,
+                    Remark = "Charter remark"
+                };
+                dbContext.Charters.Add(charter);
+            }
+
+            await dbContext.SaveChangesAsync();
+
+            var seededRide = dbContext.Rides.FirstOrDefault();
+            var seededCharter = dbContext.Charters.FirstOrDefault();
+
+            // 12) Seed PartRide
+            if (!dbContext.PartRides.Any() && seededRide != null && 
+                seededCar != null && seededDriver != null &&
+                seededClient != null && seededUnit != null &&
+                seededRate != null && seededSurcharge != null && seededCompany != null &&
+                seededCharter != null)
+            {
+                var partRide = new PartRide
+                {
+                    Id = Guid.NewGuid(),
+                    RideId = seededRide.Id,
+                    Date = DateTime.UtcNow.Date,
+                    Start = new TimeSpan(8, 0, 0),
+                    End = new TimeSpan(16, 30, 0),
+                    Rest = new TimeSpan(0, 30, 0),
+                    Kilometers = 150,
+                    CarId = seededCar.Id,
+                    DriverId = seededDriver.Id,
+                    Costs = 300m,
+                    Employer = "EmployerName",
+                    ClientId = seededClient.Id,
+                    Day = DateTime.Now.Day,
+                    WeekNumber = 1,
+                    Hours = 8f,
+                    DecimalHours = 8.0f,
+                    UnitId = seededUnit.Id,
+                    RateId = seededRate.Id,
+                    CostsDescription = "Test cost desc",
+                    SurchargeId = seededSurcharge.Id,
+                    Turnover = 500m,
+                    Remark = "Part ride remark",
+                    CompanyId = seededCompany.Id,
+                    CharterId = seededCharter.Id
+                };
+                dbContext.PartRides.Add(partRide);
+            }
+
+            await dbContext.SaveChangesAsync();
         }
     }
 }
