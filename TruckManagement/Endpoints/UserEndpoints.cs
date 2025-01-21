@@ -19,7 +19,8 @@ public static class UserEndpoints
         // GET /users/me -> return info about the current authenticated user
         app.MapGet("/users/me", async (
                 HttpContext httpContext,
-                UserManager<ApplicationUser> userManager) =>
+                UserManager<ApplicationUser> userManager,
+                ApplicationDbContext dbContext) =>
             {
                 // 1) Retrieve user's email claim from the JWT
                 var userEmail = httpContext.User.FindFirstValue(ClaimTypes.Email);
@@ -44,7 +45,56 @@ public static class UserEndpoints
                 // 3) Retrieve user roles
                 var roles = await userManager.GetRolesAsync(user);
 
-                // 4) Prepare the returned data
+                // 4) Determine role type and load additional properties
+                bool isDriver = roles.Contains("driver");
+                bool isContactPerson = !isDriver;
+
+                object? additionalData = null;
+
+                if (isDriver)
+                {
+                    var driver = await dbContext.Drivers
+                        .Include(d => d.Company)
+                        .FirstOrDefaultAsync(d => d.AspNetUserId == user.Id);
+
+                    if (driver != null)
+                    {
+                        additionalData = new
+                        {
+                            DriverId = driver.Id,
+                            CompanyId = driver.CompanyId,
+                            CompanyName = driver.Company?.Name
+                        };
+                    }
+                }
+                else if (isContactPerson)
+                {
+                    var contactPerson = await dbContext.ContactPersons
+                        .FirstOrDefaultAsync(cp => cp.AspNetUserId == user.Id);
+
+                    if (contactPerson != null)
+                    {
+                        // Load associated companies and clients from the bridging table
+                        var companiesAndClients = await dbContext.ContactPersonClientCompanies
+                            .Where(cpc => cpc.ContactPersonId == contactPerson.Id)
+                            .Select(cpc => new
+                            {
+                                CompanyId = cpc.CompanyId,
+                                CompanyName = cpc.Company.Name,
+                                ClientId = cpc.ClientId,
+                                ClientName = cpc.Client.Name
+                            })
+                            .ToListAsync();
+
+                        additionalData = new
+                        {
+                            ContactPersonId = contactPerson.Id,
+                            Associations = companiesAndClients
+                        };
+                    }
+                }
+
+                // 5) Prepare the returned data including additional properties
                 var data = new
                 {
                     Email = user.Email,
@@ -57,14 +107,16 @@ public static class UserEndpoints
                     Country = user.Country,
                     Remark = user.Remark,
                     Roles = roles,
+                    Additional = additionalData
                 };
-                // 5) Return a standardized success response
+
+                // 6) Return a standardized success response
                 return ApiResponseFactory.Success(
                     data: data,
                     statusCode: StatusCodes.Status200OK
                 );
             })
-            .RequireAuthorization(); // Only authenticated users
+            .RequireAuthorization();
 
         app.MapPost("/users/change-password", async (
                 ChangePasswordRequest req,
