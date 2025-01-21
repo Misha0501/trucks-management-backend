@@ -82,7 +82,6 @@ namespace TruckManagement.Seeding
                     Email = adminEmail,
                     FirstName = "Admin",
                     LastName = "User",
-                    CompanyId = defaultCompanyId // Link the admin to DefaultCompany, if desired
                 };
 
                 // Create user with a sample password
@@ -106,7 +105,6 @@ namespace TruckManagement.Seeding
                     FirstName = "John",
                     LastName = "Customer",
                     // Suppose we link this user to "SecondCompany" for demonstration
-                    CompanyId = Guid.Parse("22222222-2222-2222-2222-222222222222")
                 };
 
                 var result = await userManager.CreateAsync(customerUser, "Customer@123");
@@ -128,7 +126,6 @@ namespace TruckManagement.Seeding
                     FirstName = "Emily",
                     LastName = "Employee",
                     // Maybe link to "ThirdCompany"
-                    CompanyId = Guid.Parse("33333333-3333-3333-3333-333333333333")
                 };
 
                 var result = await userManager.CreateAsync(employeeUser, "Employee@123");

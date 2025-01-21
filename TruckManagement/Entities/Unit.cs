@@ -1,8 +1,8 @@
 namespace TruckManagement.Entities
 {
-    public class Company
+    public class Unit
     {
         public Guid Id { get; set; }
-        public string Name { get; set; } = default!;
+        public string Value { get; set; } = default!;
     }
 }

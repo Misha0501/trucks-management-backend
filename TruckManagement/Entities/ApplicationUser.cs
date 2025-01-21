@@ -6,8 +6,6 @@ namespace TruckManagement.Entities
     {
         public string FirstName { get; set; } = default!;
         public string LastName { get; set; } = default!;
-        public Guid CompanyId { get; set; }
-        public Company Company { get; set; } = default!;
         public string? Address { get; set; }
         public string? Postcode { get; set; }
         public string? City { get; set; }
