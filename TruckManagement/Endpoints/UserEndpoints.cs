@@ -47,9 +47,10 @@ public static class UserEndpoints
 
                 // 4) Determine role type and load additional properties
                 bool isDriver = roles.Contains("driver");
-                bool isContactPerson = !isDriver;
+                bool isContactPerson = !isDriver; // Assumes binary role: if not driver, then contact person
 
-                object? additionalData = null;
+                object? driverInfo = null;
+                object? contactPersonInfo = null;
 
                 if (isDriver)
                 {
@@ -59,7 +60,7 @@ public static class UserEndpoints
 
                     if (driver != null)
                     {
-                        additionalData = new
+                        driverInfo = new
                         {
                             DriverId = driver.Id,
                             CompanyId = driver.CompanyId,
@@ -67,14 +68,14 @@ public static class UserEndpoints
                         };
                     }
                 }
-                else if (isContactPerson)
+
+                if (isContactPerson)
                 {
                     var contactPerson = await dbContext.ContactPersons
                         .FirstOrDefaultAsync(cp => cp.AspNetUserId == user.Id);
 
                     if (contactPerson != null)
                     {
-                        // Load associated companies and clients from the bridging table
                         var companiesAndClients = await dbContext.ContactPersonClientCompanies
                             .Where(cpc => cpc.ContactPersonId == contactPerson.Id)
                             .Select(cpc => new
@@ -86,15 +87,15 @@ public static class UserEndpoints
                             })
                             .ToListAsync();
 
-                        additionalData = new
+                        contactPersonInfo = new
                         {
                             ContactPersonId = contactPerson.Id,
-                            CompaniesAndClients = companiesAndClients
+                            clientsCompanies = companiesAndClients
                         };
                     }
                 }
 
-                // 5) Prepare the returned data including additional properties
+                // 5) Prepare the returned data including separate driver and contact person info
                 var data = new
                 {
                     Email = user.Email,
@@ -107,7 +108,8 @@ public static class UserEndpoints
                     Country = user.Country,
                     Remark = user.Remark,
                     Roles = roles,
-                    Additional = additionalData
+                    DriverInfo = driverInfo,
+                    ContactPersonInfo = contactPersonInfo
                 };
 
                 // 6) Return a standardized success response
@@ -117,6 +119,7 @@ public static class UserEndpoints
                 );
             })
             .RequireAuthorization();
+
 
         app.MapPost("/users/change-password", async (
                 ChangePasswordRequest req,
@@ -162,65 +165,82 @@ public static class UserEndpoints
 
         // GET /users (Paginated)
         // GET /users => Paginated list of users (with roles)
-        // app.MapGet("/users",
-        //     [Authorize(Roles = "globalAdmin, customerAdmin")]
-        //     async (
-        //         // Required parameters first
-        //         ApplicationDbContext db,
-        //         // Optional query parameters second
-        //         [FromQuery] int pageNumber = 1,
-        //         [FromQuery] int pageSize = 10
-        //     ) =>
-        //     {
-        //         // 1) Total user count (for pagination metadata)
-        //         var totalUsers = await db.Users.CountAsync();
-        //         var totalPages = (int)Math.Ceiling((double)totalUsers / pageSize);
-        //
-        //         // 2) Query the users with EF Core
-        //         //    a) Include the Company so we can map `CompanyName`.
-        //         //    b) Apply pagination via Skip/Take.
-        //         //    c) For roles, do a join on AspNetUserRoles / AspNetRoles.
-        //         var pagedUsers = await db.Users
-        //             .AsNoTracking()
-        //             .Include(u => u.Company) // Load the related Company
-        //             .OrderBy(u => u.Email)
-        //             .Skip((pageNumber - 1) * pageSize)
-        //             .Take(pageSize)
-        //             .Select(u => new
-        //             {
-        //                 u.Id,
-        //                 u.Email,
-        //                 u.FirstName,
-        //                 u.LastName,
-        //
-        //                 // Return both CompanyId & CompanyName
-        //                 CompanyId = u.CompanyId,
-        //                 CompanyName = u.Company.Name,
-        //
-        //                 Roles = (from ur in db.UserRoles
-        //                     join r in db.Roles on ur.RoleId equals r.Id
-        //                     where ur.UserId == u.Id
-        //                     select r.Name).ToList()
-        //             })
-        //             .ToListAsync();
-        //
-        //         // 3) Build a response object with pagination info
-        //         var responseData = new
-        //         {
-        //             totalUsers,
-        //             totalPages,
-        //             pageNumber,
-        //             pageSize,
-        //             data = pagedUsers
-        //         };
-        //
-        //         // 4) Return using your custom API response
-        //         return ApiResponseFactory.Success(
-        //             responseData,
-        //             StatusCodes.Status200OK
-        //         );
-        //     }
-        // );
+        app.MapGet("/users",
+            [Authorize(Roles = "globalAdmin, customerAdmin")]
+            async (
+                ApplicationDbContext db,
+                [FromQuery] int pageNumber = 1,
+                [FromQuery] int pageSize = 10
+            ) =>
+            {
+                // 1) Total user count for pagination
+                var totalUsers = await db.Users.CountAsync();
+                var totalPages = (int)Math.Ceiling((double)totalUsers / pageSize);
+
+                // 2) Query users with additional driver/contact person info
+                var pagedUsers = await db.Users
+                    .AsNoTracking()
+                    .OrderBy(u => u.Email)
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .Select(u => new
+                    {
+                        u.Id,
+                        u.Email,
+                        u.FirstName,
+                        u.LastName,
+                        Roles = (from ur in db.UserRoles
+                            join r in db.Roles on ur.RoleId equals r.Id
+                            where ur.UserId == u.Id
+                            select r.Name).ToList(),
+
+                        DriverInfo = (from d in db.Drivers
+                            join c in db.Companies on d.CompanyId equals c.Id into compJoin
+                            from comp in compJoin.DefaultIfEmpty()
+                            where d.AspNetUserId == u.Id
+                            select new
+                            {
+                                DriverId = d.Id,
+                                CompanyId = d.CompanyId,
+                                CompanyName = comp != null ? comp.Name : null
+                            }).FirstOrDefault(),
+
+                        ContactPersonInfo = (from cp in db.ContactPersons
+                            where cp.AspNetUserId == u.Id
+                            select new
+                            {
+                                ContactPersonId = cp.Id,
+                                ClientsCompanies = (from cpc in db.ContactPersonClientCompanies
+                                    where cpc.ContactPersonId == cp.Id
+                                    select new
+                                    {
+                                        cpc.CompanyId,
+                                        CompanyName = cpc.Company.Name,
+                                        cpc.ClientId,
+                                        ClientName = cpc.Client.Name
+                                    }).ToList()
+                            }).FirstOrDefault()
+                    })
+                    .ToListAsync();
+
+                // 3) Build the response object with pagination info
+                var responseData = new
+                {
+                    totalUsers,
+                    totalPages,
+                    pageNumber,
+                    pageSize,
+                    data = pagedUsers
+                };
+
+                // 4) Return success response
+                return ApiResponseFactory.Success(
+                    responseData,
+                    StatusCodes.Status200OK
+                );
+            }
+        );
+
 
         // app.MapGet("/users/{id}",
         //     [Authorize(Roles = "globalAdmin, customerAdmin")]
