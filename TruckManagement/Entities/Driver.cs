@@ -6,8 +6,8 @@ namespace TruckManagement.Entities
     {
         public Guid Id { get; set; }
 
-        public Guid CompanyId { get; set; }
-        public Company Company { get; set; } = default!;
+        public Guid? CompanyId { get; set; }
+        public Company? Company { get; set; } = default!;
 
         public string AspNetUserId { get; set; } = default!;
         [ForeignKey(nameof(AspNetUserId))]

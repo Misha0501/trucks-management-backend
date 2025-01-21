@@ -16,28 +16,10 @@ public static class AuthEndpoints
                 RegisterRequest req,
                 UserManager<ApplicationUser> userManager,
                 RoleManager<ApplicationRole> roleManager,
-                ApplicationDbContext dbContext) =>
+                ApplicationDbContext dbContext
+            ) =>
             {
-                // 1) Validate if 'companyId' is a correct GUID
-                if (!Guid.TryParse(req.CompanyId, out var parsedCompanyId))
-                {
-                    return ApiResponseFactory.Error(
-                        "The provided Company ID is not a valid GUID.",
-                        StatusCodes.Status400BadRequest
-                    );
-                }
-
-                // 2) Check if the company exists
-                var companyExists = await dbContext.Companies.AnyAsync(c => c.Id == parsedCompanyId);
-                if (!companyExists)
-                {
-                    return ApiResponseFactory.Error(
-                        "The specified company does not exist. Please provide a valid Company ID.",
-                        StatusCodes.Status400BadRequest
-                    );
-                }
-
-                // 3) Check if password + confirm match
+                // 1) Check password vs. confirmation
                 if (req.Password != req.ConfirmPassword)
                 {
                     return ApiResponseFactory.Error(
@@ -46,7 +28,7 @@ public static class AuthEndpoints
                     );
                 }
 
-                // 4) Create the user
+                // 2) Create the base ApplicationUser
                 var user = new ApplicationUser
                 {
                     UserName = req.Email,
@@ -61,44 +43,178 @@ public static class AuthEndpoints
                     Remark = req.Remark
                 };
 
-                // 5) Actually create the user in Identity
-                var result = await userManager.CreateAsync(user, req.Password);
-                if (!result.Succeeded)
+                var createUserResult = await userManager.CreateAsync(user, req.Password);
+                if (!createUserResult.Succeeded)
                 {
-                    var errorMessages = result.Errors.Select(e => e.Description).ToList();
-                    return ApiResponseFactory.Error(errorMessages, StatusCodes.Status400BadRequest);
+                    var errors = createUserResult.Errors.Select(e => e.Description).ToList();
+                    return ApiResponseFactory.Error(errors, StatusCodes.Status400BadRequest);
                 }
 
-                // 6) If roles are provided, verify they're valid and assign them
-                if (req.Roles != null && req.Roles.Count > 0)
+                // 3) If roles are provided, verify and assign
+                if (req.Roles != null && req.Roles.Any())
                 {
-                    // Validate each role exists
                     foreach (var role in req.Roles)
                     {
                         if (!await roleManager.RoleExistsAsync(role))
                         {
-                            // Rollback: delete the created user if role is invalid
+                            // Rollback user creation
                             await userManager.DeleteAsync(user);
                             return ApiResponseFactory.Error(
-                                $"The specified role '{role}' does not exist. User was not created.",
+                                $"Specified role '{role}' does not exist. User was not created.",
                                 StatusCodes.Status400BadRequest
                             );
                         }
                     }
 
-                    // Assign roles to the new user
-                    var roleResult = await userManager.AddToRolesAsync(user, req.Roles);
-                    if (!roleResult.Succeeded)
+                    var assignRolesResult = await userManager.AddToRolesAsync(user, req.Roles);
+                    if (!assignRolesResult.Succeeded)
                     {
-                        // Rollback: remove user if role assignment fails
                         await userManager.DeleteAsync(user);
-                        var errMsgs = roleResult.Errors.Select(e => e.Description).ToList();
-                        return ApiResponseFactory.Error(errMsgs, StatusCodes.Status400BadRequest);
+                        var roleErrors = assignRolesResult.Errors.Select(e => e.Description).ToList();
+                        return ApiResponseFactory.Error(roleErrors, StatusCodes.Status400BadRequest);
                     }
                 }
-                // If roles array is null or empty, no roles will be assigned, which is acceptable.
 
-                // 7) Success
+                // 4) Determine if user is driver or contact person
+                bool isDriver = req.Roles != null && req.Roles.Contains("driver");
+                bool isContactPerson = !isDriver; // If not driver => contact person
+
+                // 5) If user is driver => single company from the first CompanyIds (if any).
+                if (isDriver)
+                {
+                    Guid? driverCompanyGuid = null;
+
+                    if (req.CompanyIds != null && req.CompanyIds.Any())
+                    {
+                        // Take the first company in the list
+                        var firstCompanyIdStr = req.CompanyIds.First();
+                        if (!Guid.TryParse(firstCompanyIdStr, out var parsedGuid))
+                        {
+                            // Invalid GUID -> delete user & abort
+                            await userManager.DeleteAsync(user);
+                            return ApiResponseFactory.Error(
+                                $"Invalid company ID '{firstCompanyIdStr}'. User was not created.",
+                                StatusCodes.Status400BadRequest
+                            );
+                        }
+
+                        // Check existence
+                        bool companyExists = await dbContext.Companies.AnyAsync(c => c.Id == parsedGuid);
+                        if (!companyExists)
+                        {
+                            // Not found -> delete user & abort
+                            await userManager.DeleteAsync(user);
+                            return ApiResponseFactory.Error(
+                                $"Company ID '{parsedGuid}' does not exist. User was not created.",
+                                StatusCodes.Status400BadRequest
+                            );
+                        }
+
+                        driverCompanyGuid = parsedGuid; // valid
+                    }
+
+                    // Create the Driver (null if no company was provided or parse failed)
+                    var driverEntity = new Driver
+                    {
+                        Id = Guid.NewGuid(),
+                        AspNetUserId = user.Id,
+                        CompanyId = driverCompanyGuid
+                    };
+                    dbContext.Drivers.Add(driverEntity);
+                }
+
+                // 6) If user is contact person => multiple companies + multiple clients
+                if (isContactPerson)
+                {
+                    // Create contact person entity
+                    var contactPerson = new ContactPerson
+                    {
+                        Id = Guid.NewGuid(),
+                        AspNetUserId = user.Id
+                    };
+                    dbContext.ContactPersons.Add(contactPerson);
+
+                    // A) Link contact person to multiple companies
+                    if (req.CompanyIds != null && req.CompanyIds.Any())
+                    {
+                        foreach (var compStr in req.CompanyIds)
+                        {
+                            if (!Guid.TryParse(compStr, out var compGuid))
+                            {
+                                // parse fail -> delete user & abort
+                                await userManager.DeleteAsync(user);
+                                return ApiResponseFactory.Error(
+                                    $"Invalid company ID '{compStr}'. User was not created.",
+                                    StatusCodes.Status400BadRequest
+                                );
+                            }
+
+                            var companyExists = await dbContext.Companies.AnyAsync(c => c.Id == compGuid);
+                            if (!companyExists)
+                            {
+                                // not found -> delete user & abort
+                                await userManager.DeleteAsync(user);
+                                return ApiResponseFactory.Error(
+                                    $"Company ID '{compGuid}' does not exist. User was not created.",
+                                    StatusCodes.Status400BadRequest
+                                );
+                            }
+
+                            // Create bridging row with only CompanyId
+                            var cpcForCompany = new ContactPersonClientCompany
+                            {
+                                Id = Guid.NewGuid(),
+                                ContactPersonId = contactPerson.Id,
+                                CompanyId = compGuid,
+                                ClientId = null // no client in this row
+                            };
+                            dbContext.ContactPersonClientCompanies.Add(cpcForCompany);
+                        }
+                    }
+
+                    // B) Link contact person to multiple clients
+                    if (req.ClientIds != null && req.ClientIds.Any())
+                    {
+                        foreach (var clientStr in req.ClientIds)
+                        {
+                            if (!Guid.TryParse(clientStr, out var clientGuid))
+                            {
+                                // parse fail -> delete user & abort
+                                await userManager.DeleteAsync(user);
+                                return ApiResponseFactory.Error(
+                                    $"Invalid client ID '{clientStr}'. User was not created.",
+                                    StatusCodes.Status400BadRequest
+                                );
+                            }
+
+                            var clientExists = await dbContext.Clients.AnyAsync(cl => cl.Id == clientGuid);
+                            if (!clientExists)
+                            {
+                                // not found -> delete user & abort
+                                await userManager.DeleteAsync(user);
+                                return ApiResponseFactory.Error(
+                                    $"Client ID '{clientGuid}' does not exist. User was not created.",
+                                    StatusCodes.Status400BadRequest
+                                );
+                            }
+
+                            // Create bridging row with only ClientId
+                            var cpcForClient = new ContactPersonClientCompany
+                            {
+                                Id = Guid.NewGuid(),
+                                ContactPersonId = contactPerson.Id,
+                                CompanyId = null, // no company in this row
+                                ClientId = clientGuid
+                            };
+                            dbContext.ContactPersonClientCompanies.Add(cpcForClient);
+                        }
+                    }
+                }
+
+                // 7) Save domain-level changes
+                await dbContext.SaveChangesAsync();
+
+                // 8) Return success
                 return ApiResponseFactory.Success(
                     "User registered successfully.",
                     StatusCodes.Status200OK
