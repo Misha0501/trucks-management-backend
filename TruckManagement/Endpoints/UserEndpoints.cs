@@ -242,61 +242,103 @@ public static class UserEndpoints
         );
 
 
-        // app.MapGet("/users/{id}",
-        //     [Authorize(Roles = "globalAdmin, customerAdmin")]
-        //     async (
-        //         String id,
-        //         ApplicationDbContext db
-        //     ) =>
-        //     {
-        //         // 1) Find the user by ID, include the Company, exclude sensitive fields
-        //         var user = await db.Users
-        //             .AsNoTracking()
-        //             .Include(u => u.Company)
-        //             .Where(u => u.Id == id)
-        //             .Select(u => new
-        //             {
-        //                 u.Id,
-        //                 u.Email,
-        //                 u.FirstName,
-        //                 u.LastName,
-        //                 u.Address,
-        //                 u.PhoneNumber,
-        //                 u.Postcode,
-        //                 u.City,
-        //                 u.Country,
-        //                 u.Remark,
-        //                 CompanyId = u.CompanyId,
-        //                 CompanyName = u.Company.Name,
-        //                 // Roles: fetch each role's ID and name
-        //                 Roles = (from ur in db.UserRoles
-        //                         join r in db.Roles on ur.RoleId equals r.Id
-        //                         where ur.UserId == u.Id
-        //                         select new
-        //                         {
-        //                             roleId = r.Id,
-        //                             roleName = r.Name
-        //                         })
-        //                     .ToList()
-        //             })
-        //             .FirstOrDefaultAsync();
-        //
-        //         // 2) If user not found, return 404
-        //         if (user == null)
-        //         {
-        //             return ApiResponseFactory.Error(
-        //                 "User not found.",
-        //                 StatusCodes.Status404NotFound
-        //             );
-        //         }
-        //
-        //         // 3) Return the user data, excluding passwords
-        //         return ApiResponseFactory.Success(
-        //             user,
-        //             StatusCodes.Status200OK
-        //         );
-        //     }
-        // );
+        app.MapGet("/users/{id}",
+            [Authorize(Roles = "globalAdmin, customerAdmin")]
+            async (
+                string id,
+                ApplicationDbContext db,
+                UserManager<ApplicationUser> userManager
+            ) =>
+            {
+                // 1) Retrieve user by ID
+                var user = await db.Users
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(u => u.Id == id);
+
+                if (user == null)
+                {
+                    return ApiResponseFactory.Error(
+                        "User not found.",
+                        StatusCodes.Status404NotFound
+                    );
+                }
+
+                // 2) Retrieve user roles
+                var roles = await userManager.GetRolesAsync(user);
+
+                // 3) Determine role type
+                bool isDriver = roles.Contains("driver");
+                bool isContactPerson = !isDriver; // Binary assumption: if not driver, then contact person
+
+                object? driverInfo = null;
+                object? contactPersonInfo = null;
+
+                // 4) Load driver information if applicable
+                if (isDriver)
+                {
+                    driverInfo = await db.Drivers
+                        .AsNoTracking()
+                        .Where(d => d.AspNetUserId == user.Id)
+                        .Include(d => d.Company)
+                        .Select(d => new
+                        {
+                            DriverId = d.Id,
+                            CompanyId = d.CompanyId,
+                            CompanyName = d.Company != null ? d.Company.Name : null
+                        })
+                        .FirstOrDefaultAsync();
+                }
+
+                // 5) Load contact person information if applicable
+                if (isContactPerson)
+                {
+                    var contactPerson = await db.ContactPersons
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(cp => cp.AspNetUserId == user.Id);
+
+                    if (contactPerson != null)
+                    {
+                        var companiesAndClients = await db.ContactPersonClientCompanies
+                            .Where(cpc => cpc.ContactPersonId == contactPerson.Id)
+                            .Select(cpc => new
+                            {
+                                CompanyId = cpc.CompanyId,
+                                CompanyName = cpc.Company.Name,
+                                ClientId = cpc.ClientId,
+                                ClientName = cpc.Client.Name
+                            })
+                            .ToListAsync();
+
+                        contactPersonInfo = new
+                        {
+                            ContactPersonId = contactPerson.Id,
+                            clientsCompanies = companiesAndClients
+                        };
+                    }
+                }
+
+                // 6) Prepare response data
+                var data = new
+                {
+                    user.Id,
+                    user.Email,
+                    user.FirstName,
+                    user.LastName,
+                    user.Address,
+                    user.PhoneNumber,
+                    user.Postcode,
+                    user.City,
+                    user.Country,
+                    user.Remark,
+                    Roles = roles,
+                    DriverInfo = driverInfo,
+                    ContactPersonInfo = contactPersonInfo
+                };
+
+                // 7) Return standardized success response
+                return ApiResponseFactory.Success(data, StatusCodes.Status200OK);
+            }
+        );
 
         // app.MapPut("/users/{id}",
         //     [Authorize(Roles = "globalAdmin, customerAdmin")]
