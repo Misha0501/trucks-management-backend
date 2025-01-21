@@ -89,7 +89,7 @@ public static class UserEndpoints
                         additionalData = new
                         {
                             ContactPersonId = contactPerson.Id,
-                            Associations = companiesAndClients
+                            CompaniesAndClients = companiesAndClients
                         };
                     }
                 }
