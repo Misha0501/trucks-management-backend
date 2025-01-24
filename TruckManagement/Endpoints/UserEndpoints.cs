@@ -516,7 +516,6 @@ public static class UserEndpoints
             });
 
         app.MapPut("/users/{id}/contact",
-            [Authorize(Roles = "globalAdmin, customerAdmin")]
             async (
                 string id,
                 [FromBody] UpdateContactPersonRequest req,
