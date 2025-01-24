@@ -348,113 +348,220 @@ public static class UserEndpoints
                 [FromBody] UpdateUserBasicRequest req,
                 ApplicationDbContext db,
                 UserManager<ApplicationUser> userManager,
-                RoleManager<ApplicationRole> roleManager
+                RoleManager<ApplicationRole> roleManager,
+                ClaimsPrincipal currentUser
             ) =>
             {
-                // Validate and parse user ID
+                // 1. Validate and parse the user ID from the route
                 if (!Guid.TryParse(id, out Guid userGuid))
                     return ApiResponseFactory.Error("Invalid user ID format.", StatusCodes.Status400BadRequest);
 
-                // Find user by ID
-                var user = await userManager.FindByIdAsync(userGuid.ToString());
-                if (user == null)
+                // 2. Retrieve the target user by ID
+                var targetUser = await userManager.FindByIdAsync(userGuid.ToString());
+                if (targetUser == null)
                     return ApiResponseFactory.Error("User not found.", StatusCodes.Status404NotFound);
 
-                // Update basic fields
-                if (!string.IsNullOrWhiteSpace(req.Email) && req.Email != user.Email)
-                {
-                    var existing = await userManager.FindByEmailAsync(req.Email);
-                    if (existing != null && existing.Id != user.Id)
-                        return ApiResponseFactory.Error("Email already in use.", StatusCodes.Status400BadRequest);
-                    user.Email = req.Email;
-                }
+                // 3. Retrieve the current user's ID
+                var currentUserId = userManager.GetUserId(currentUser);
 
-                if (!string.IsNullOrWhiteSpace(req.FirstName)) user.FirstName = req.FirstName;
-                if (!string.IsNullOrWhiteSpace(req.LastName)) user.LastName = req.LastName;
-                if (!string.IsNullOrWhiteSpace(req.Address)) user.Address = req.Address;
-                if (!string.IsNullOrWhiteSpace(req.PhoneNumber)) user.PhoneNumber = req.PhoneNumber;
-                if (!string.IsNullOrWhiteSpace(req.Postcode)) user.Postcode = req.Postcode;
-                if (!string.IsNullOrWhiteSpace(req.City)) user.City = req.City;
-                if (!string.IsNullOrWhiteSpace(req.Country)) user.Country = req.Country;
-                if (!string.IsNullOrWhiteSpace(req.Remark)) user.Remark = req.Remark;
+                // 4. Determine the roles of the current user
+                bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
 
-                // Handle roles update logic
-                if (req.Roles != null)
+                // 5. Authorization Check
+                if (!isGlobalAdmin && !isCustomerAdmin)
+                    return ApiResponseFactory.Error("Unauthorized to update this user.",
+                        StatusCodes.Status403Forbidden);
+
+                // 6. If the current user is a "customerAdmin", retrieve their associated company IDs
+                List<Guid> customerAdminCompanyIds = new List<Guid>();
+                if (isCustomerAdmin)
                 {
-                    if (req.Roles.Count == 0)
+                    // Retrieve the ContactPerson entity associated with the current user
+                    var currentContactPerson = await db.ContactPersons
+                        .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
+
+                    if (currentContactPerson != null)
                     {
-                        var currentRoles = await userManager.GetRolesAsync(user);
-                        if (currentRoles.Count > 0)
-                        {
-                            var removeAllResult = await userManager.RemoveFromRolesAsync(user, currentRoles);
-                            if (!removeAllResult.Succeeded)
-                            {
-                                var errors = removeAllResult.Errors.Select(e => e.Description).ToList();
-                                return ApiResponseFactory.Error(errors, StatusCodes.Status400BadRequest);
-                            }
-                        }
+                        // Retrieve associated CompanyIds from ContactPersonClientCompany
+                        customerAdminCompanyIds = await db.ContactPersonClientCompanies
+                            .Where(cpc => cpc.ContactPersonId == currentContactPerson.Id && cpc.CompanyId.HasValue)
+                            .Select(cpc => cpc.CompanyId.Value)
+                            .ToListAsync();
                     }
                     else
                     {
-                        // Validate each role exists
-                        foreach (var role in req.Roles)
-                        {
-                            if (!await roleManager.RoleExistsAsync(role))
-                                return ApiResponseFactory.Error($"Role '{role}' does not exist.",
-                                    StatusCodes.Status400BadRequest);
-                        }
-
-                        var currentRoles = await userManager.GetRolesAsync(user);
-                        var rolesToAdd = req.Roles.Except(currentRoles).ToList();
-                        var rolesToRemove = currentRoles.Except(req.Roles).ToList();
-
-                        if (rolesToRemove.Count > 0)
-                        {
-                            var removeResult = await userManager.RemoveFromRolesAsync(user, rolesToRemove);
-                            if (!removeResult.Succeeded)
-                            {
-                                var errors = removeResult.Errors.Select(e => e.Description).ToList();
-                                return ApiResponseFactory.Error(errors, StatusCodes.Status400BadRequest);
-                            }
-                        }
-
-                        if (rolesToAdd.Count > 0)
-                        {
-                            var addResult = await userManager.AddToRolesAsync(user, rolesToAdd);
-                            if (!addResult.Succeeded)
-                            {
-                                var errors = addResult.Errors.Select(e => e.Description).ToList();
-                                return ApiResponseFactory.Error(errors, StatusCodes.Status400BadRequest);
-                            }
-                        }
+                        // If the current user is a CustomerAdmin but has no associated ContactPerson record
+                        return ApiResponseFactory.Error("CustomerAdmin's ContactPerson profile not found.",
+                            StatusCodes.Status403Forbidden);
                     }
                 }
 
-                var updateResult = await userManager.UpdateAsync(user);
-                if (!updateResult.Succeeded)
+                // 7. Determine the target user's role and associated companies
+                List<Guid> targetUserCompanyIds = new List<Guid>();
+
+                // Check if the target user is a Driver
+                var driver = await db.Drivers.FirstOrDefaultAsync(d => d.AspNetUserId == targetUser.Id);
+                if (driver != null && driver.CompanyId.HasValue)
                 {
-                    var errors = updateResult.Errors.Select(e => e.Description).ToList();
-                    return ApiResponseFactory.Error(errors, StatusCodes.Status400BadRequest);
+                    targetUserCompanyIds.Add(driver.CompanyId.Value);
                 }
 
-                var updatedRoles = await userManager.GetRolesAsync(user);
-
-                var updatedUserData = new
+                // Check if the target user is a ContactPerson
+                var targetContactPerson =
+                    await db.ContactPersons.FirstOrDefaultAsync(cp => cp.AspNetUserId == targetUser.Id);
+                if (targetContactPerson != null)
                 {
-                    user.Id,
-                    user.Email,
-                    user.FirstName,
-                    user.LastName,
-                    user.Address,
-                    user.PhoneNumber,
-                    user.Postcode,
-                    user.City,
-                    user.Country,
-                    user.Remark,
-                    Roles = updatedRoles
-                };
+                    var contactPersonCompanyIds = await db.ContactPersonClientCompanies
+                        .Where(cpc => cpc.ContactPersonId == targetContactPerson.Id && cpc.CompanyId.HasValue)
+                        .Select(cpc => cpc.CompanyId.Value)
+                        .ToListAsync();
 
-                return ApiResponseFactory.Success(updatedUserData, StatusCodes.Status200OK);
+                    targetUserCompanyIds.AddRange(contactPersonCompanyIds);
+                }
+
+                // If the target user is neither a Driver nor a ContactPerson, restrict modification
+                if (driver == null && targetContactPerson == null)
+                    return ApiResponseFactory.Error(
+                        "Only Drivers or Contact Persons can be modified through this endpoint.",
+                        StatusCodes.Status403Forbidden);
+
+                // 8. If the current user is a "customerAdmin", verify the overlap in companies
+                if (isCustomerAdmin)
+                {
+                    bool hasOverlap = targetUserCompanyIds.Any(cId => customerAdminCompanyIds.Contains(cId));
+
+                    if (!hasOverlap)
+                        return ApiResponseFactory.Error("You are not authorized to modify this user.",
+                            StatusCodes.Status403Forbidden);
+                }
+
+                // 9. Begin a database transaction to ensure atomicity
+                using var transaction = await db.Database.BeginTransactionAsync();
+                try
+                {
+                    // 10. Handle role updates only if the requester is a GlobalAdmin
+                    if (req.Roles != null && isGlobalAdmin)
+                    {
+                        if (req.Roles.Count == 0)
+                        {
+                            // Remove all roles
+                            var currentRoles = await userManager.GetRolesAsync(targetUser);
+                            if (currentRoles.Count > 0)
+                            {
+                                var removeAllResult = await userManager.RemoveFromRolesAsync(targetUser, currentRoles);
+                                if (!removeAllResult.Succeeded)
+                                {
+                                    var errors = removeAllResult.Errors.Select(e => e.Description).ToList();
+                                    return ApiResponseFactory.Error(errors, StatusCodes.Status400BadRequest);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // Validate each role exists
+                            foreach (var role in req.Roles)
+                            {
+                                if (!await roleManager.RoleExistsAsync(role))
+                                    return ApiResponseFactory.Error($"Role '{role}' does not exist.",
+                                        StatusCodes.Status400BadRequest);
+                            }
+
+                            var currentRoles = await userManager.GetRolesAsync(targetUser);
+                            var rolesToAdd = req.Roles.Except(currentRoles).ToList();
+                            var rolesToRemove = currentRoles.Except(req.Roles).ToList();
+
+                            if (rolesToRemove.Count > 0)
+                            {
+                                var removeResult = await userManager.RemoveFromRolesAsync(targetUser, rolesToRemove);
+                                if (!removeResult.Succeeded)
+                                {
+                                    var errors = removeResult.Errors.Select(e => e.Description).ToList();
+                                    return ApiResponseFactory.Error(errors, StatusCodes.Status400BadRequest);
+                                }
+                            }
+
+                            if (rolesToAdd.Count > 0)
+                            {
+                                var addResult = await userManager.AddToRolesAsync(targetUser, rolesToAdd);
+                                if (!addResult.Succeeded)
+                                {
+                                    var errors = addResult.Errors.Select(e => e.Description).ToList();
+                                    return ApiResponseFactory.Error(errors, StatusCodes.Status400BadRequest);
+                                }
+                            }
+                        }
+                    }
+
+                    // 11. Update basic fields
+                    if (!string.IsNullOrWhiteSpace(req.Email) && req.Email != targetUser.Email)
+                    {
+                        var existingEmailUser = await userManager.FindByEmailAsync(req.Email);
+                        if (existingEmailUser != null && existingEmailUser.Id != targetUser.Id)
+                            return ApiResponseFactory.Error("Email already in use.", StatusCodes.Status400BadRequest);
+                        targetUser.Email = req.Email;
+                        targetUser.UserName = req.Email; // Assuming UserName is same as Email
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(req.FirstName)) targetUser.FirstName = req.FirstName;
+                    if (!string.IsNullOrWhiteSpace(req.LastName)) targetUser.LastName = req.LastName;
+                    if (!string.IsNullOrWhiteSpace(req.Address)) targetUser.Address = req.Address;
+                    if (!string.IsNullOrWhiteSpace(req.PhoneNumber)) targetUser.PhoneNumber = req.PhoneNumber;
+                    if (!string.IsNullOrWhiteSpace(req.Postcode)) targetUser.Postcode = req.Postcode;
+                    if (!string.IsNullOrWhiteSpace(req.City)) targetUser.City = req.City;
+                    if (!string.IsNullOrWhiteSpace(req.Country)) targetUser.Country = req.Country;
+                    if (!string.IsNullOrWhiteSpace(req.Remark)) targetUser.Remark = req.Remark;
+
+                    // 12. Save changes to the database
+                    var updateResult = await userManager.UpdateAsync(targetUser);
+                    if (!updateResult.Succeeded)
+                    {
+                        var errors = updateResult.Errors.Select(e => e.Description).ToList();
+                        return ApiResponseFactory.Error(errors, StatusCodes.Status400BadRequest);
+                    }
+
+                    // 13. Commit the transaction
+                    await transaction.CommitAsync();
+
+                    // 14. Retrieve updated roles
+                    var updatedRoles = await userManager.GetRolesAsync(targetUser);
+
+                    // 15. Prepare the response payload
+                    var updatedUserData = new
+                    {
+                        targetUser.Id,
+                        targetUser.Email,
+                        targetUser.FirstName,
+                        targetUser.LastName,
+                        targetUser.Address,
+                        targetUser.PhoneNumber,
+                        targetUser.Postcode,
+                        targetUser.City,
+                        targetUser.Country,
+                        targetUser.Remark,
+                        Roles = updatedRoles
+                    };
+
+                    // 16. Return success response
+                    return ApiResponseFactory.Success(updatedUserData, StatusCodes.Status200OK);
+                }
+                catch (Exception ex)
+                {
+                    // 17. Rollback the transaction on error
+                    await transaction.RollbackAsync();
+
+                    // 18. Log the exception details to the console
+                    Console.WriteLine($"[Error] An exception occurred while updating the user.");
+                    Console.WriteLine($"[Error] TargetUserId: {targetUser.Id}");
+                    Console.WriteLine($"[Error] Exception Message: {ex.Message}");
+                    Console.WriteLine($"[Error] Stack Trace: {ex.StackTrace}");
+
+                    // 19. Return a generic error response to the client
+                    return ApiResponseFactory.Error(
+                        "An error occurred while updating the user.",
+                        StatusCodes.Status500InternalServerError
+                    );
+                }
             });
 
         app.MapPut("/users/{id}/driver",
