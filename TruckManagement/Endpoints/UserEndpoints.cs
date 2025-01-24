@@ -457,63 +457,150 @@ public static class UserEndpoints
                 return ApiResponseFactory.Success(updatedUserData, StatusCodes.Status200OK);
             });
 
-
         app.MapPut("/users/{id}/driver",
-            [Authorize(Roles = "globalAdmin, customerAdmin, driver")]
+            [Authorize(Roles = "globalAdmin, customerAdmin")]
             async (
                 string id,
                 [FromBody] UpdateDriverRequest req,
                 ApplicationDbContext db,
-                UserManager<ApplicationUser> userManager
+                UserManager<ApplicationUser> userManager,
+                ClaimsPrincipal currentUser
             ) =>
             {
+                // 1. Validate and parse the user ID from the route
                 if (!Guid.TryParse(id, out Guid userGuid))
                     return ApiResponseFactory.Error("Invalid user ID format.", StatusCodes.Status400BadRequest);
 
-                var user = await userManager.FindByIdAsync(userGuid.ToString());
-                if (user == null)
+                // 2. Retrieve the target user by ID
+                var targetUser = await userManager.FindByIdAsync(userGuid.ToString());
+                if (targetUser == null)
                     return ApiResponseFactory.Error("User not found.", StatusCodes.Status404NotFound);
 
-                if (!string.IsNullOrWhiteSpace(req.CompanyId))
+                // 3. Retrieve the current user's ID
+                var currentUserId = userManager.GetUserId(currentUser);
+
+                // 4. Prevent drivers from modifying their own information
+                if (currentUserId == targetUser.Id)
+                    return ApiResponseFactory.Error("Drivers cannot modify their own information.",
+                        StatusCodes.Status403Forbidden);
+
+                // 5. Determine the roles of the current user
+                bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+
+                // 6. If the current user is a "customerAdmin", retrieve their associated company IDs
+                List<Guid> customerAdminCompanyIds = new List<Guid>();
+                if (isCustomerAdmin)
                 {
-                    if (!Guid.TryParse(req.CompanyId, out var newCompanyId))
-                        return ApiResponseFactory.Error("Invalid Company ID format.", StatusCodes.Status400BadRequest);
+                    // Retrieve the ContactPerson entity associated with the current user
+                    var currentContactPerson = await db.ContactPersons
+                        .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
 
-                    var companyExists = await db.Companies.AnyAsync(c => c.Id == newCompanyId);
-                    if (!companyExists)
-                        return ApiResponseFactory.Error("Company not found.", StatusCodes.Status400BadRequest);
-
-                    var driver = await db.Drivers.FirstOrDefaultAsync(d => d.AspNetUserId == user.Id)
-                                 ?? new Driver { Id = Guid.NewGuid(), AspNetUserId = user.Id };
-
-                    driver.CompanyId = newCompanyId;
-                    if (driver.Id == Guid.Empty) db.Drivers.Add(driver);
-                }
-                else
-                {
-                    var existingDriver = await db.Drivers.FirstOrDefaultAsync(d => d.AspNetUserId == user.Id);
-                    if (existingDriver != null)
-                        existingDriver.CompanyId = null;
-                }
-
-                await db.SaveChangesAsync();
-
-                var updatedDriver = await db.Drivers
-                    .Include(d => d.Company)
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(d => d.AspNetUserId == user.Id);
-
-                var driverInfo = updatedDriver == null
-                    ? null
-                    : new
+                    if (currentContactPerson != null)
                     {
-                        DriverId = updatedDriver.Id,
-                        CompanyId = updatedDriver.CompanyId,
-                        CompanyName = updatedDriver.Company?.Name
-                    };
+                        // Retrieve associated CompanyIds from ContactPersonClientCompany
+                        customerAdminCompanyIds = await db.ContactPersonClientCompanies
+                            .Where(cpc => cpc.ContactPersonId == currentContactPerson.Id && cpc.CompanyId.HasValue)
+                            .Select(cpc => cpc.CompanyId.Value)
+                            .ToListAsync();
+                    }
+                }
 
-                return ApiResponseFactory.Success(driverInfo, StatusCodes.Status200OK);
+                // 7. Retrieve the existing Driver entity for the target user
+                var driverEntity = await db.Drivers.FirstOrDefaultAsync(d => d.AspNetUserId == targetUser.Id);
+                if (driverEntity == null)
+                    return ApiResponseFactory.Error("Driver profile not found for this user.",
+                        StatusCodes.Status404NotFound);
+
+                // 8. If the current user is a "customerAdmin", verify the driver's current CompanyId
+                if (isCustomerAdmin)
+                {
+                    if (!driverEntity.CompanyId.HasValue ||
+                        !customerAdminCompanyIds.Contains(driverEntity.CompanyId.Value))
+                        return ApiResponseFactory.Error("You are not authorized to modify this driver's information.",
+                            StatusCodes.Status403Forbidden);
+                }
+
+                // 9. Begin a database transaction to ensure atomicity
+                using var transaction = await db.Database.BeginTransactionAsync();
+                try
+                {
+                    // 10. Validate and authorize the provided CompanyId (if any)
+                    if (!string.IsNullOrWhiteSpace(req.CompanyId))
+                    {
+                        if (!Guid.TryParse(req.CompanyId, out Guid newCompanyId))
+                            return ApiResponseFactory.Error("Invalid Company ID format.",
+                                StatusCodes.Status400BadRequest);
+
+                        var companyExists = await db.Companies.AnyAsync(c => c.Id == newCompanyId);
+                        if (!companyExists)
+                            return ApiResponseFactory.Error("Company not found.", StatusCodes.Status400BadRequest);
+
+                        // If the current user is a CustomerAdmin, ensure they are only assigning to their own companies
+                        if (isCustomerAdmin && !customerAdminCompanyIds.Contains(newCompanyId))
+                            return ApiResponseFactory.Error("You can only assign drivers to your associated companies.",
+                                StatusCodes.Status403Forbidden);
+
+                        // Update the Driver's CompanyId
+                        driverEntity.CompanyId = newCompanyId;
+                    }
+                    else
+                    {
+                        // If CompanyId is not provided, set it to null (disassociate)
+                        driverEntity.CompanyId = null;
+                    }
+
+                    // 11. (Future-Proofing) Update other Driver properties here as needed
+                    // Example:
+                    // if (!string.IsNullOrWhiteSpace(req.LicenseNumber))
+                    // {
+                    //     driverEntity.LicenseNumber = req.LicenseNumber;
+                    // }
+
+                    // 12. Save changes to the database
+                    await db.SaveChangesAsync();
+
+                    // 13. Commit the transaction
+                    await transaction.CommitAsync();
+
+                    // 14. Retrieve updated driver information for the response
+                    var updatedDriver = await db.Drivers
+                        .Include(d => d.Company)
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(d => d.AspNetUserId == targetUser.Id);
+
+                    var driverInfo = updatedDriver == null
+                        ? null
+                        : new
+                        {
+                            DriverId = updatedDriver.Id,
+                            CompanyId = updatedDriver.CompanyId,
+                            CompanyName = updatedDriver.Company?.Name
+                        };
+
+                    // 15. Return success response
+                    return ApiResponseFactory.Success(driverInfo, StatusCodes.Status200OK);
+                }
+                catch (Exception ex)
+                {
+                    // 16. Rollback the transaction on error
+                    await transaction.RollbackAsync();
+
+                    // 17. Log the exception details to the console
+                    Console.WriteLine($"[Error] An exception occurred while updating the driver.");
+                    Console.WriteLine($"[Error] DriverId: {driverEntity.Id}");
+                    Console.WriteLine($"[Error] TargetUserId: {targetUser.Id}");
+                    Console.WriteLine($"[Error] Exception Message: {ex.Message}");
+                    Console.WriteLine($"[Error] Stack Trace: {ex.StackTrace}");
+
+                    // 18. Return a generic error response to the client
+                    return ApiResponseFactory.Error(
+                        "An error occurred while updating the driver's information.",
+                        StatusCodes.Status500InternalServerError
+                    );
+                }
             });
+
 
         app.MapPut("/users/{id}/contact",
             async (
@@ -687,14 +774,14 @@ public static class UserEndpoints
                 {
                     // 18. Rollback the transaction on error
                     await transaction.RollbackAsync();
-                    
+
                     // Log the exception details to the console
                     Console.WriteLine($"[Error] An exception occurred while updating the contact person.");
                     Console.WriteLine($"[Error] ContactPersonId: {contactPerson.Id}");
                     Console.WriteLine($"[Error] TargetUserId: {targetUser.Id}");
                     Console.WriteLine($"[Error] Exception Message: {ex.Message}");
                     Console.WriteLine($"[Error] Stack Trace: {ex.StackTrace}");
-                    
+
                     return ApiResponseFactory.Error(
                         "An error occurred while updating the contact person.",
                         StatusCodes.Status500InternalServerError
