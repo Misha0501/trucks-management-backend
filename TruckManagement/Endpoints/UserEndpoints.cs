@@ -521,135 +521,187 @@ public static class UserEndpoints
                 string id,
                 [FromBody] UpdateContactPersonRequest req,
                 ApplicationDbContext db,
-                UserManager<ApplicationUser> userManager
+                UserManager<ApplicationUser> userManager,
+                ClaimsPrincipal currentUser
             ) =>
             {
-                // 1. Validate and parse user ID
+                // 1. Validate and parse the user ID from the route
                 if (!Guid.TryParse(id, out Guid userGuid))
                     return ApiResponseFactory.Error("Invalid user ID format.", StatusCodes.Status400BadRequest);
 
-                // 2. Find user by ID
-                var user = await userManager.FindByIdAsync(userGuid.ToString());
-                if (user == null)
+                // 2. Retrieve the target user by ID
+                var targetUser = await userManager.FindByIdAsync(userGuid.ToString());
+                if (targetUser == null)
                     return ApiResponseFactory.Error("User not found.", StatusCodes.Status404NotFound);
 
-                // 3. Retrieve existing ContactPerson entity
+                // 3. Retrieve the current user's ID
+                var currentUserId = userManager.GetUserId(currentUser);
+
+                // 4. Determine the roles of the current user
+                bool isOwner = currentUserId == targetUser.Id;
+                bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+
+                // 5. Authorization Check
+                if (!isOwner && !isGlobalAdmin && !isCustomerAdmin)
+                    return ApiResponseFactory.Error("Unauthorized to update this contact person.",
+                        StatusCodes.Status403Forbidden);
+
+                // 6. If the current user is a "customerAdmin", retrieve their associated company IDs
+                List<Guid> customerAdminCompanyIds = new List<Guid>();
+                if (isCustomerAdmin)
+                {
+                    // Retrieve ContactPerson entity for the current user
+                    var currentContactPerson = await db.ContactPersons
+                        .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
+
+                    if (currentContactPerson != null)
+                    {
+                        // Retrieve associated CompanyIds from ContactPersonClientCompany
+                        customerAdminCompanyIds = await db.ContactPersonClientCompanies
+                            .Where(cpc => cpc.ContactPersonId == currentContactPerson.Id && cpc.CompanyId.HasValue)
+                            .Select(cpc => cpc.CompanyId.Value)
+                            .ToListAsync();
+                    }
+                }
+
+                // 7. Retrieve the existing ContactPerson entity for the target user
                 var contactPerson = await db.ContactPersons
-                    .FirstOrDefaultAsync(cp => cp.AspNetUserId == user.Id);
+                    .FirstOrDefaultAsync(cp => cp.AspNetUserId == targetUser.Id);
                 if (contactPerson == null)
                     return ApiResponseFactory.Error("Contact person not found for this user.",
                         StatusCodes.Status404NotFound);
 
-                // 4. Validate CompanyIds
-                if (req.CompanyIds != null)
+                // 8. Begin a database transaction to ensure atomicity
+                using var transaction = await db.Database.BeginTransactionAsync();
+                try
                 {
-                    foreach (var compStr in req.CompanyIds)
+                    // 9. Validate and authorize each CompanyId if provided
+                    if (req.CompanyIds != null)
                     {
-                        if (!Guid.TryParse(compStr, out Guid compGuid))
-                            return ApiResponseFactory.Error($"Invalid Company ID format: '{compStr}'.",
-                                StatusCodes.Status400BadRequest);
-
-                        var companyExists = await db.Companies.AnyAsync(c => c.Id == compGuid);
-                        if (!companyExists)
-                            return ApiResponseFactory.Error($"Company with ID '{compGuid}' does not exist.",
-                                StatusCodes.Status400BadRequest);
-                    }
-                }
-
-                // 5. Validate ClientIds
-                if (req.ClientIds != null)
-                {
-                    foreach (var clientStr in req.ClientIds)
-                    {
-                        if (!Guid.TryParse(clientStr, out Guid clientGuid))
-                            return ApiResponseFactory.Error($"Invalid Client ID format: '{clientStr}'.",
-                                StatusCodes.Status400BadRequest);
-
-                        var clientExists = await db.Clients.AnyAsync(c => c.Id == clientGuid);
-                        if (!clientExists)
-                            return ApiResponseFactory.Error($"Client with ID '{clientGuid}' does not exist.",
-                                StatusCodes.Status400BadRequest);
-                    }
-                }
-
-                // 6. Remove existing associations
-                var existingAssociations = await db.ContactPersonClientCompanies
-                    .Where(cpc => cpc.ContactPersonId == contactPerson.Id)
-                    .ToListAsync();
-                db.ContactPersonClientCompanies.RemoveRange(existingAssociations);
-
-                // 7. Add new associations based on provided CompanyIds and ClientIds
-                if (req.CompanyIds != null && req.CompanyIds.Any())
-                {
-                    // Only CompanyIds provided: associate contact person with companies (ClientId = null)
-                    foreach (var compStr in req.CompanyIds)
-                    {
-                        var compGuid = Guid.Parse(compStr);
-                        var newCpc = new ContactPersonClientCompany
+                        foreach (var compStr in req.CompanyIds)
                         {
-                            Id = Guid.NewGuid(),
-                            ContactPersonId = contactPerson.Id,
-                            CompanyId = compGuid,
-                            ClientId = null // Assuming nullable
-                        };
-                        db.ContactPersonClientCompanies.Add(newCpc);
-                    }
-                }
-                
-                if (req.ClientIds != null && req.ClientIds.Any())
-                {
-                    // Only ClientIds provided: associate contact person with clients (CompanyId = null)
-                    foreach (var clientStr in req.ClientIds)
-                    {
-                        var clientGuid = Guid.Parse(clientStr);
-                        var newCpc = new ContactPersonClientCompany
-                        {
-                            Id = Guid.NewGuid(),
-                            ContactPersonId = contactPerson.Id,
-                            CompanyId = null, // Assuming nullable
-                            ClientId = clientGuid
-                        };
-                        db.ContactPersonClientCompanies.Add(newCpc);
-                    }
-                }
+                            if (!Guid.TryParse(compStr, out Guid compGuid))
+                                return ApiResponseFactory.Error($"Invalid Company ID format: '{compStr}'.",
+                                    StatusCodes.Status400BadRequest);
 
-                // 8. Save changes to the database
-                var saveResult = await db.SaveChangesAsync();
-                if (saveResult < 0)
+                            var companyExists = await db.Companies.AnyAsync(c => c.Id == compGuid);
+                            if (!companyExists)
+                                return ApiResponseFactory.Error($"Company with ID '{compGuid}' does not exist.",
+                                    StatusCodes.Status400BadRequest);
+
+                            // If the requester is a "customerAdmin", ensure they can only associate with their own companies
+                            if (isCustomerAdmin && !customerAdminCompanyIds.Contains(compGuid))
+                                return ApiResponseFactory.Error(
+                                    $"You do not have permission to associate with Company ID '{compGuid}'.",
+                                    StatusCodes.Status403Forbidden);
+                        }
+                    }
+
+                    // 10. Validate each ClientId if provided
+                    if (req.ClientIds != null)
+                    {
+                        foreach (var clientStr in req.ClientIds)
+                        {
+                            if (!Guid.TryParse(clientStr, out Guid clientGuid))
+                                return ApiResponseFactory.Error($"Invalid Client ID format: '{clientStr}'.",
+                                    StatusCodes.Status400BadRequest);
+
+                            var clientExists = await db.Clients.AnyAsync(c => c.Id == clientGuid);
+                            if (!clientExists)
+                                return ApiResponseFactory.Error($"Client with ID '{clientGuid}' does not exist.",
+                                    StatusCodes.Status400BadRequest);
+                        }
+                    }
+
+                    // 11. Remove existing associations
+                    var existingAssociations = await db.ContactPersonClientCompanies
+                        .Where(cpc => cpc.ContactPersonId == contactPerson.Id)
+                        .ToListAsync();
+                    db.ContactPersonClientCompanies.RemoveRange(existingAssociations);
+
+                    // 12. Add new associations based on provided CompanyIds and ClientIds
+                    if (req.CompanyIds != null && req.CompanyIds.Any())
+                    {
+                        foreach (var compStr in req.CompanyIds)
+                        {
+                            var compGuid = Guid.Parse(compStr);
+                            var newCpc = new ContactPersonClientCompany
+                            {
+                                Id = Guid.NewGuid(),
+                                ContactPersonId = contactPerson.Id,
+                                CompanyId = compGuid,
+                                ClientId = null // Assuming nullable
+                            };
+                            db.ContactPersonClientCompanies.Add(newCpc);
+                        }
+                    }
+
+                    if (req.ClientIds != null && req.ClientIds.Any())
+                    {
+                        foreach (var clientStr in req.ClientIds)
+                        {
+                            var clientGuid = Guid.Parse(clientStr);
+                            var newCpc = new ContactPersonClientCompany
+                            {
+                                Id = Guid.NewGuid(),
+                                ContactPersonId = contactPerson.Id,
+                                CompanyId = null, // Assuming nullable
+                                ClientId = clientGuid
+                            };
+                            db.ContactPersonClientCompanies.Add(newCpc);
+                        }
+                    }
+
+                    // 13. Save changes to the database
+                    await db.SaveChangesAsync();
+
+                    // 14. Commit the transaction
+                    await transaction.CommitAsync();
+
+                    // 15. Retrieve updated associations for the response
+                    var clientsCompanies = await db.ContactPersonClientCompanies
+                        .Where(cpc => cpc.ContactPersonId == contactPerson.Id)
+                        .Include(cpc => cpc.Company)
+                        .Include(cpc => cpc.Client)
+                        .AsNoTracking()
+                        .Select(cpc => new
+                        {
+                            CompanyId = cpc.CompanyId,
+                            CompanyName = cpc.Company != null ? cpc.Company.Name : null,
+                            ClientId = cpc.ClientId,
+                            ClientName = cpc.Client != null ? cpc.Client.Name : null
+                        })
+                        .ToListAsync();
+
+                    // 16. Prepare the response payload
+                    var contactPersonInfo = new
+                    {
+                        ContactPersonId = contactPerson.Id,
+                        clientsCompanies = clientsCompanies
+                    };
+
+                    // 17. Return success response
+                    return ApiResponseFactory.Success(contactPersonInfo, StatusCodes.Status200OK);
+                }
+                catch (Exception ex)
                 {
+                    // 18. Rollback the transaction on error
+                    await transaction.RollbackAsync();
+                    
+                    // Log the exception details to the console
+                    Console.WriteLine($"[Error] An exception occurred while updating the contact person.");
+                    Console.WriteLine($"[Error] ContactPersonId: {contactPerson.Id}");
+                    Console.WriteLine($"[Error] TargetUserId: {targetUser.Id}");
+                    Console.WriteLine($"[Error] Exception Message: {ex.Message}");
+                    Console.WriteLine($"[Error] Stack Trace: {ex.StackTrace}");
+                    
                     return ApiResponseFactory.Error(
                         "An error occurred while updating the contact person.",
                         StatusCodes.Status500InternalServerError
                     );
                 }
-
-                // 9. Retrieve updated associations
-                var clientsCompanies = await db.ContactPersonClientCompanies
-                    .Where(cpc => cpc.ContactPersonId == contactPerson.Id)
-                    .Include(cpc => cpc.Company)
-                    .Include(cpc => cpc.Client)
-                    .AsNoTracking()
-                    .Select(cpc => new
-                    {
-                        CompanyId = cpc.CompanyId,
-                        CompanyName = cpc.Company != null ? cpc.Company.Name : null,
-                        ClientId = cpc.ClientId,
-                        ClientName = cpc.Client != null ? cpc.Client.Name : null
-                    })
-                    .ToListAsync();
-
-                // 10. Prepare ContactPersonInfo for response
-                var contactPersonInfo = new
-                {
-                    ContactPersonId = contactPerson.Id,
-                    clientsCompanies = clientsCompanies
-                };
-
-                // 11. Return success response
-                return ApiResponseFactory.Success(contactPersonInfo, StatusCodes.Status200OK);
             });
-
-
         return app;
     }
 }
