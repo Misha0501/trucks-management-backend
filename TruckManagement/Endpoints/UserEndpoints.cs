@@ -305,42 +305,122 @@ public static class UserEndpoints
 
 
         app.MapGet("/users/{id}",
-            [Authorize(Roles = "globalAdmin, customerAdmin")]
+            [Authorize(Roles = "globalAdmin, customerAdmin, customerAccountant, employer, customer")]
             async (
                 string id,
                 ApplicationDbContext db,
-                UserManager<ApplicationUser> userManager
+                UserManager<ApplicationUser> userManager,
+                ClaimsPrincipal currentUser
             ) =>
             {
-                // 1) Retrieve user by ID
-                var user = await db.Users
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(u => u.Id == id);
+                // 1. Validate and parse the user ID from the route
+                if (!Guid.TryParse(id, out Guid userGuid))
+                    return ApiResponseFactory.Error("Invalid user ID format.", StatusCodes.Status400BadRequest);
 
-                if (user == null)
+                // 2. Retrieve the target user by ID
+                var targetUser = await userManager.FindByIdAsync(userGuid.ToString());
+                if (targetUser == null)
+                    return ApiResponseFactory.Error("User not found.", StatusCodes.Status404NotFound);
+
+                // 3. Retrieve the current user's roles
+                bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+                bool isCustomerAccountant = currentUser.IsInRole("customerAccountant");
+                bool isEmployer = currentUser.IsInRole("employer");
+                bool isCustomer = currentUser.IsInRole("customer");
+
+                bool isContactPerson = isCustomerAdmin || isCustomerAccountant || isEmployer || isCustomer;
+
+                // 4. If the user is not a globalAdmin or a ContactPerson, deny access
+                if (!isGlobalAdmin && !isContactPerson)
+                    return ApiResponseFactory.Error("Unauthorized to view users.", StatusCodes.Status403Forbidden);
+
+                // 5. If the user is a ContactPerson, retrieve their associated company IDs
+                List<Guid> contactPersonCompanyIds = new List<Guid>();
+                if (isContactPerson)
                 {
-                    return ApiResponseFactory.Error(
-                        "User not found.",
-                        StatusCodes.Status404NotFound
-                    );
+                    var currentUserId = userManager.GetUserId(currentUser);
+                    // Retrieve the ContactPerson entity associated with the current user
+                    var currentContactPerson = await db.ContactPersons
+                        .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
+
+                    if (currentContactPerson != null)
+                    {
+                        // Retrieve associated CompanyIds from ContactPersonClientCompany
+                        contactPersonCompanyIds = await db.ContactPersonClientCompanies
+                            .Where(cpc => cpc.ContactPersonId == currentContactPerson.Id && cpc.CompanyId.HasValue)
+                            .Select(cpc => cpc.CompanyId.Value)
+                            .ToListAsync();
+                    }
+                    else
+                    {
+                        // If the current user is a ContactPerson but has no associated ContactPerson record
+                        return ApiResponseFactory.Error("ContactPerson profile not found.",
+                            StatusCodes.Status403Forbidden);
+                    }
                 }
 
-                // 2) Retrieve user roles
-                var roles = await userManager.GetRolesAsync(user);
+                // 6. If the user is a ContactPerson, verify that the target user is associated with their companies
+                if (isContactPerson)
+                {
+                    bool isAuthorized = false;
 
-                // 3) Determine role type
+                    // Check if the target user is a Driver associated with any of the ContactPerson's companies
+                    var driver = await db.Drivers
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(d => d.AspNetUserId == targetUser.Id && d.CompanyId.HasValue);
+
+                    if (driver != null && contactPersonCompanyIds.Contains(driver.CompanyId.Value))
+                    {
+                        isAuthorized = true;
+                    }
+
+                    // Check if the target user is a ContactPerson associated with any of the ContactPerson's companies
+                    if (!isAuthorized)
+                    {
+                        var targetContactPerson = await db.ContactPersons
+                            .AsNoTracking()
+                            .FirstOrDefaultAsync(cp => cp.AspNetUserId == targetUser.Id);
+
+                        if (targetContactPerson != null)
+                        {
+                            var targetUserCompanyIds = await db.ContactPersonClientCompanies
+                                .Where(cpc => cpc.ContactPersonId == targetContactPerson.Id && cpc.CompanyId.HasValue)
+                                .Select(cpc => cpc.CompanyId.Value)
+                                .ToListAsync();
+
+                            if (targetUserCompanyIds.Any(cId => contactPersonCompanyIds.Contains(cId)))
+                            {
+                                isAuthorized = true;
+                            }
+                        }
+                    }
+
+                    if (!isAuthorized)
+                        return ApiResponseFactory.Error("You are not authorized to view this user.",
+                            StatusCodes.Status403Forbidden);
+                }
+
+                // 7. Retrieve user roles
+                var roles = await userManager.GetRolesAsync(targetUser);
+
+                // 8. Determine role type without assuming
                 bool isDriver = roles.Contains("driver");
-                bool isContactPerson = !isDriver; // Binary assumption: if not driver, then contact person
+                bool isContactPersonUser = roles.Any(role =>
+                    role.Equals("customerAdmin", StringComparison.OrdinalIgnoreCase)
+                    || role.Equals("customerAccountant", StringComparison.OrdinalIgnoreCase)
+                    || role.Equals("employer", StringComparison.OrdinalIgnoreCase)
+                    || role.Equals("customer", StringComparison.OrdinalIgnoreCase));
 
                 object? driverInfo = null;
                 object? contactPersonInfo = null;
 
-                // 4) Load driver information if applicable
+                // 9. Load driver information if applicable
                 if (isDriver)
                 {
                     driverInfo = await db.Drivers
                         .AsNoTracking()
-                        .Where(d => d.AspNetUserId == user.Id)
+                        .Where(d => d.AspNetUserId == targetUser.Id)
                         .Include(d => d.Company)
                         .Select(d => new
                         {
@@ -351,12 +431,12 @@ public static class UserEndpoints
                         .FirstOrDefaultAsync();
                 }
 
-                // 5) Load contact person information if applicable
-                if (isContactPerson)
+                // 10. Load contact person information if applicable
+                if (isContactPersonUser)
                 {
                     var contactPerson = await db.ContactPersons
                         .AsNoTracking()
-                        .FirstOrDefaultAsync(cp => cp.AspNetUserId == user.Id);
+                        .FirstOrDefaultAsync(cp => cp.AspNetUserId == targetUser.Id);
 
                     if (contactPerson != null)
                     {
@@ -364,9 +444,9 @@ public static class UserEndpoints
                             .Where(cpc => cpc.ContactPersonId == contactPerson.Id)
                             .Select(cpc => new
                             {
-                                CompanyId = cpc.CompanyId,
+                                cpc.CompanyId,
                                 CompanyName = cpc.Company.Name,
-                                ClientId = cpc.ClientId,
+                                cpc.ClientId,
                                 ClientName = cpc.Client.Name
                             })
                             .ToListAsync();
@@ -379,28 +459,29 @@ public static class UserEndpoints
                     }
                 }
 
-                // 6) Prepare response data
+                // 11. Prepare response data
                 var data = new
                 {
-                    user.Id,
-                    user.Email,
-                    user.FirstName,
-                    user.LastName,
-                    user.Address,
-                    user.PhoneNumber,
-                    user.Postcode,
-                    user.City,
-                    user.Country,
-                    user.Remark,
+                    targetUser.Id,
+                    targetUser.Email,
+                    targetUser.FirstName,
+                    targetUser.LastName,
+                    targetUser.Address,
+                    targetUser.PhoneNumber,
+                    targetUser.Postcode,
+                    targetUser.City,
+                    targetUser.Country,
+                    targetUser.Remark,
                     Roles = roles,
                     DriverInfo = driverInfo,
                     ContactPersonInfo = contactPersonInfo
                 };
 
-                // 7) Return standardized success response
+                // 12. Return standardized success response
                 return ApiResponseFactory.Success(data, StatusCodes.Status200OK);
             }
         );
+
 
         app.MapPut("/users/{id}/basic",
             [Authorize(Roles = "globalAdmin, customerAdmin")]
