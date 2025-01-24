@@ -167,19 +167,81 @@ public static class UserEndpoints
         // GET /users (Paginated)
         // GET /users => Paginated list of users (with roles)
         app.MapGet("/users",
-            [Authorize(Roles = "globalAdmin, customerAdmin")]
+            [Authorize(Roles = "globalAdmin, customerAdmin, customerAccountant, employer, customer")]
             async (
                 ApplicationDbContext db,
+                UserManager<ApplicationUser> userManager,
+                ClaimsPrincipal currentUser,
                 [FromQuery] int pageNumber = 1,
                 [FromQuery] int pageSize = 10
             ) =>
             {
-                // 1) Total user count for pagination
-                var totalUsers = await db.Users.CountAsync();
+                // 1. Retrieve the current user's ID
+                var currentUserId = userManager.GetUserId(currentUser);
+
+                // 2. Determine the roles of the current user
+                bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+                bool isCustomerAccountant = currentUser.IsInRole("customerAccountant");
+                bool isEmployer = currentUser.IsInRole("employer");
+                bool isCustomer = currentUser.IsInRole("customer");
+
+                bool isContactPerson = isCustomerAdmin || isCustomerAccountant || isEmployer || isCustomer;
+
+                // 3. If the user is not a globalAdmin or any ContactPerson role, deny access
+                if (!isGlobalAdmin && !isContactPerson)
+                    return ApiResponseFactory.Error("Unauthorized to view users.", StatusCodes.Status403Forbidden);
+
+                // 4. If the user is a ContactPerson, retrieve their associated company IDs
+                List<Guid> contactPersonCompanyIds = new List<Guid>();
+                if (isContactPerson)
+                {
+                    // Retrieve the ContactPerson entity associated with the current user
+                    var currentContactPerson = await db.ContactPersons
+                        .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
+
+                    if (currentContactPerson != null)
+                    {
+                        // Retrieve associated CompanyIds from ContactPersonClientCompany
+                        contactPersonCompanyIds = await db.ContactPersonClientCompanies
+                            .Where(cpc => cpc.ContactPersonId == currentContactPerson.Id && cpc.CompanyId.HasValue)
+                            .Select(cpc => cpc.CompanyId.Value)
+                            .ToListAsync();
+                    }
+                    else
+                    {
+                        // If the current user is a ContactPerson but has no associated ContactPerson record
+                        return ApiResponseFactory.Error("ContactPerson profile not found.",
+                            StatusCodes.Status403Forbidden);
+                    }
+                }
+
+                // 5. Build the base query based on the user's role
+                IQueryable<ApplicationUser> usersQuery = db.Users.AsQueryable();
+
+                if (isContactPerson)
+                {
+                    usersQuery = usersQuery.Where(u =>
+                        // Users who are Drivers associated with ContactPerson's companies
+                        db.Drivers.Any(d =>
+                            d.AspNetUserId == u.Id && d.CompanyId.HasValue &&
+                            contactPersonCompanyIds.Contains(d.CompanyId.Value)) ||
+
+                        // Users who are ContactPersons associated with ContactPerson's companies
+                        db.ContactPersonClientCompanies.Any(cpc =>
+                            cpc.ContactPerson.AspNetUserId == u.Id &&
+                            cpc.CompanyId.HasValue &&
+                            contactPersonCompanyIds.Contains(cpc.CompanyId.Value))
+                    );
+                }
+                // If globalAdmin, no additional filtering is needed
+
+                // 6. Get total user count after filtering for pagination
+                var totalUsers = await usersQuery.CountAsync();
                 var totalPages = (int)Math.Ceiling((double)totalUsers / pageSize);
 
-                // 2) Query users with additional driver/contact person info
-                var pagedUsers = await db.Users
+                // 7. Apply pagination and select necessary fields
+                var pagedUsers = await usersQuery
                     .AsNoTracking()
                     .OrderBy(u => u.Email)
                     .Skip((pageNumber - 1) * pageSize)
@@ -224,7 +286,7 @@ public static class UserEndpoints
                     })
                     .ToListAsync();
 
-                // 3) Build the response object with pagination info
+                // 8. Build the response object with pagination info
                 var responseData = new
                 {
                     totalUsers,
@@ -234,13 +296,12 @@ public static class UserEndpoints
                     data = pagedUsers
                 };
 
-                // 4) Return success response
+                // 9. Return success response
                 return ApiResponseFactory.Success(
                     responseData,
                     StatusCodes.Status200OK
                 );
-            }
-        );
+            });
 
 
         app.MapGet("/users/{id}",
