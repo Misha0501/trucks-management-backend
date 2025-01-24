@@ -601,8 +601,8 @@ public static class UserEndpoints
                 }
             });
 
-
         app.MapPut("/users/{id}/contact",
+            [Authorize(Roles = "globalAdmin, customerAdmin")]
             async (
                 string id,
                 [FromBody] UpdateContactPersonRequest req,
@@ -623,21 +623,20 @@ public static class UserEndpoints
                 // 3. Retrieve the current user's ID
                 var currentUserId = userManager.GetUserId(currentUser);
 
-                // 4. Determine the roles of the current user
-                bool isOwner = currentUserId == targetUser.Id;
+                // 4. Prevent drivers from modifying their own contact person information
+                if (currentUserId == targetUser.Id)
+                    return ApiResponseFactory.Error("Drivers cannot modify their own contact person information.",
+                        StatusCodes.Status403Forbidden);
+
+                // 5. Determine the roles of the current user
                 bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
                 bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
-
-                // 5. Authorization Check
-                if (!isOwner && !isGlobalAdmin && !isCustomerAdmin)
-                    return ApiResponseFactory.Error("Unauthorized to update this contact person.",
-                        StatusCodes.Status403Forbidden);
 
                 // 6. If the current user is a "customerAdmin", retrieve their associated company IDs
                 List<Guid> customerAdminCompanyIds = new List<Guid>();
                 if (isCustomerAdmin)
                 {
-                    // Retrieve ContactPerson entity for the current user
+                    // Retrieve the ContactPerson entity associated with the current user
                     var currentContactPerson = await db.ContactPersons
                         .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
 
@@ -658,11 +657,28 @@ public static class UserEndpoints
                     return ApiResponseFactory.Error("Contact person not found for this user.",
                         StatusCodes.Status404NotFound);
 
-                // 8. Begin a database transaction to ensure atomicity
+                // 8. If the current user is a "customerAdmin", verify the contact person's current CompanyIds
+                if (isCustomerAdmin)
+                {
+                    // Retrieve the contact person's current CompanyIds
+                    var contactPersonCompanyIds = await db.ContactPersonClientCompanies
+                        .Where(cpc => cpc.ContactPersonId == contactPerson.Id && cpc.CompanyId.HasValue)
+                        .Select(cpc => cpc.CompanyId.Value)
+                        .ToListAsync();
+
+                    // Check if there is any overlap between customerAdminCompanyIds and contactPersonCompanyIds
+                    bool hasOverlap = contactPersonCompanyIds.Any(cpc => customerAdminCompanyIds.Contains(cpc));
+
+                    if (!hasOverlap)
+                        return ApiResponseFactory.Error("You are not authorized to modify this contact person.",
+                            StatusCodes.Status403Forbidden);
+                }
+
+                // 9. Begin a database transaction to ensure atomicity
                 using var transaction = await db.Database.BeginTransactionAsync();
                 try
                 {
-                    // 9. Validate and authorize each CompanyId if provided
+                    // 10. Validate and authorize each CompanyId if provided
                     if (req.CompanyIds != null)
                     {
                         foreach (var compStr in req.CompanyIds)
@@ -684,7 +700,7 @@ public static class UserEndpoints
                         }
                     }
 
-                    // 10. Validate each ClientId if provided
+                    // 11. Validate each ClientId if provided
                     if (req.ClientIds != null)
                     {
                         foreach (var clientStr in req.ClientIds)
@@ -700,13 +716,13 @@ public static class UserEndpoints
                         }
                     }
 
-                    // 11. Remove existing associations
+                    // 12. Remove existing associations
                     var existingAssociations = await db.ContactPersonClientCompanies
                         .Where(cpc => cpc.ContactPersonId == contactPerson.Id)
                         .ToListAsync();
                     db.ContactPersonClientCompanies.RemoveRange(existingAssociations);
 
-                    // 12. Add new associations based on provided CompanyIds and ClientIds
+                    // 13. Add new associations based on provided CompanyIds and ClientIds
                     if (req.CompanyIds != null && req.CompanyIds.Any())
                     {
                         foreach (var compStr in req.CompanyIds)
@@ -739,13 +755,20 @@ public static class UserEndpoints
                         }
                     }
 
-                    // 13. Save changes to the database
+                    // 14. (Future-Proofing) Update other ContactPerson properties here as needed
+                    // Example:
+                    // if (!string.IsNullOrWhiteSpace(req.PhoneNumber))
+                    // {
+                    //     contactPerson.PhoneNumber = req.PhoneNumber;
+                    // }
+
+                    // 15. Save changes to the database
                     await db.SaveChangesAsync();
 
-                    // 14. Commit the transaction
+                    // 16. Commit the transaction
                     await transaction.CommitAsync();
 
-                    // 15. Retrieve updated associations for the response
+                    // 17. Retrieve updated associations for the response
                     var clientsCompanies = await db.ContactPersonClientCompanies
                         .Where(cpc => cpc.ContactPersonId == contactPerson.Id)
                         .Include(cpc => cpc.Company)
@@ -760,34 +783,37 @@ public static class UserEndpoints
                         })
                         .ToListAsync();
 
-                    // 16. Prepare the response payload
+                    // 18. Prepare the response payload
                     var contactPersonInfo = new
                     {
                         ContactPersonId = contactPerson.Id,
                         clientsCompanies = clientsCompanies
+                        // Include additional properties here as needed
                     };
 
-                    // 17. Return success response
+                    // 19. Return success response
                     return ApiResponseFactory.Success(contactPersonInfo, StatusCodes.Status200OK);
                 }
                 catch (Exception ex)
                 {
-                    // 18. Rollback the transaction on error
+                    // 20. Rollback the transaction on error
                     await transaction.RollbackAsync();
 
-                    // Log the exception details to the console
+                    // 21. Log the exception details to the console
                     Console.WriteLine($"[Error] An exception occurred while updating the contact person.");
                     Console.WriteLine($"[Error] ContactPersonId: {contactPerson.Id}");
                     Console.WriteLine($"[Error] TargetUserId: {targetUser.Id}");
                     Console.WriteLine($"[Error] Exception Message: {ex.Message}");
                     Console.WriteLine($"[Error] Stack Trace: {ex.StackTrace}");
 
+                    // 22. Return a generic error response to the client
                     return ApiResponseFactory.Error(
                         "An error occurred while updating the contact person.",
                         StatusCodes.Status500InternalServerError
                     );
                 }
             });
+
         return app;
     }
 }
