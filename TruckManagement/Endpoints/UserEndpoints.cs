@@ -563,7 +563,7 @@ public static class UserEndpoints
                 }
 
                 // If the target user is neither a Driver nor a ContactPerson, restrict modification
-                if (driver == null && targetContactPerson == null)
+                if (driver == null && targetContactPerson == null && !isGlobalAdmin)
                     return ApiResponseFactory.Error(
                         "Only Drivers or Contact Persons can be modified through this endpoint.",
                         StatusCodes.Status403Forbidden);
