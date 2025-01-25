@@ -15,5 +15,7 @@ namespace TruckManagement.Entities
 
         public Guid CompanyId { get; set; }
         public Company Company { get; set; } = default!;
+        // Navigation Properties
+        public ICollection<ContactPersonClientCompany> ContactPersonClientCompanies { get; set; } = new List<ContactPersonClientCompany>();
     }
 }

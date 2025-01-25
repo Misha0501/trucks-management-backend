@@ -11,5 +11,8 @@ namespace TruckManagement.Entities
         public string? City { get; set; }
         public string? Country { get; set; }
         public string? Remark { get; set; }
+        // Navigation Properties
+        public Driver? Driver { get; set; }
+        public ContactPerson? ContactPerson { get; set; }
     }
 }

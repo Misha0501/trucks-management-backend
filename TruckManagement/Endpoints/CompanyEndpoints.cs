@@ -155,81 +155,56 @@ public static class CompanyEndpoints
                             StatusCodes.Status403Forbidden);
                 }
 
-                // 5. Retrieve the company
+                // 5. Retrieve the company with related data
                 var company = await db.Companies
                     .AsNoTracking()
+                    .Include(c => c.Drivers)
+                    .ThenInclude(d => d.User)
+                    .Include(c => c.ContactPersonClientCompanies)
+                    .ThenInclude(cpc => cpc.ContactPerson)
+                    .ThenInclude(cp => cp.User)
                     .FirstOrDefaultAsync(c => c.Id == id);
 
                 if (company == null)
                     return ApiResponseFactory.Error("Company not found.", StatusCodes.Status404NotFound);
 
-                // 6. Retrieve Drivers associated with the company
-                var drivers = await db.Drivers
-                    .AsNoTracking()
-                    .Where(d => d.CompanyId == id)
-                    .Join(db.Users,
-                        d => d.AspNetUserId,
-                        u => u.Id,
-                        (d, u) => new
-                        {
-                            DriverId = d.Id,
-                            AspNetUserId = d.AspNetUserId,
-                            User = new
-                            {
-                                u.Id,
-                                u.Email,
-                                u.FirstName,
-                                u.LastName
-                            }
-                        })
-                    .ToListAsync();
-
-                // 7. Retrieve ContactPersons associated with the company via ContactPersonClientCompany
-                var contactPersonIds = await db.ContactPersonClientCompanies
-                    .AsNoTracking()
-                    .Where(cpc => cpc.CompanyId == id)
-                    .Select(cpc => cpc.ContactPersonId)
-                    .Distinct()
-                    .ToListAsync();
-
-                var contactPersons = await db.ContactPersons
-                    .AsNoTracking()
-                    .Where(cp => contactPersonIds.Contains(cp.Id))
-                    .Select(cp => new
+                // 6. Prepare Drivers data
+                var drivers = company.Drivers.Select(d => new
+                {
+                    d.Id,
+                    d.AspNetUserId,
+                    User = new
                     {
-                        ContactPersonId = cp.Id,
+                        d.User.Id,
+                        d.User.Email,
+                        d.User.FirstName,
+                        d.User.LastName
+                    }
+                }).ToList();
+
+                // 7. Prepare ContactPersons data
+                var contactPersons = company.ContactPersonClientCompanies
+                    .Select(cpc => new
+                    {
+                        ContactPersonId = cpc.ContactPerson.Id,
                         User = new
                         {
-                            cp.User.Id,
-                            cp.User.Email,
-                            cp.User.FirstName,
-                            cp.User.LastName
+                            cpc.ContactPerson.User.Id,
+                            cpc.ContactPerson.User.Email,
+                            cpc.ContactPerson.User.FirstName,
+                            cpc.ContactPerson.User.LastName
                         }
                     })
-                    .ToListAsync();
+                    .Distinct()
+                    .ToList();
 
                 // 8. Prepare response data
                 var data = new
                 {
                     company.Id,
                     company.Name,
-                    Drivers = drivers.Select(d => new
-                    {
-                        d.DriverId,
-                        d.AspNetUserId,
-                        d.User.Id,
-                        d.User.Email,
-                        d.User.FirstName,
-                        d.User.LastName
-                    }).ToList(),
-                    ContactPersons = contactPersons.Select(cp => new
-                    {
-                        cp.ContactPersonId,
-                        cp.User.Id,
-                        cp.User.Email,
-                        cp.User.FirstName,
-                        cp.User.LastName
-                    }).ToList()
+                    Drivers = drivers,
+                    ContactPersons = contactPersons
                 };
 
                 // 9. Return success response

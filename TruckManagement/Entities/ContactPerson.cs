@@ -9,5 +9,7 @@ namespace TruckManagement.Entities
         public string AspNetUserId { get; set; } = default!;
         [ForeignKey(nameof(AspNetUserId))]
         public ApplicationUser User { get; set; } = default!;
+        // Navigation Properties
+        public ICollection<ContactPersonClientCompany> ContactPersonClientCompanies { get; set; } = new List<ContactPersonClientCompany>();
     }
 }

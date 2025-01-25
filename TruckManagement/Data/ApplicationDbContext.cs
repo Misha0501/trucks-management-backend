@@ -30,6 +30,55 @@ namespace TruckManagement.Data
 
             builder.Entity<Company>()
                 .ToTable("Companies");
+
+            // Company ↔ Client (One-to-Many)
+            builder.Entity<Client>()
+                .HasOne(c => c.Company)
+                .WithMany(cmp => cmp.Clients)
+                .HasForeignKey(c => c.CompanyId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Company ↔ Driver (One-to-Many)
+            builder.Entity<Driver>()
+                .HasOne(d => d.Company)
+                .WithMany(cmp => cmp.Drivers)
+                .HasForeignKey(d => d.CompanyId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // ContactPerson ↔ ContactPersonClientCompany (One-to-Many)
+            builder.Entity<ContactPersonClientCompany>()
+                .HasOne(cpc => cpc.ContactPerson)
+                .WithMany(cp => cp.ContactPersonClientCompanies)
+                .HasForeignKey(cpc => cpc.ContactPersonId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // ContactPersonClientCompany ↔ Company (Many-to-One)
+            builder.Entity<ContactPersonClientCompany>()
+                .HasOne(cpc => cpc.Company)
+                .WithMany(cmp => cmp.ContactPersonClientCompanies)
+                .HasForeignKey(cpc => cpc.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // ContactPersonClientCompany ↔ Client (Many-to-One)
+            builder.Entity<ContactPersonClientCompany>()
+                .HasOne(cpc => cpc.Client)
+                .WithMany(c => c.ContactPersonClientCompanies)
+                .HasForeignKey(cpc => cpc.ClientId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // ApplicationUser ↔ Driver (One-to-One)
+            builder.Entity<ApplicationUser>()
+                .HasOne(u => u.Driver)
+                .WithOne(d => d.User)
+                .HasForeignKey<Driver>(d => d.AspNetUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // ApplicationUser ↔ ContactPerson (One-to-One)
+            builder.Entity<ApplicationUser>()
+                .HasOne(u => u.ContactPerson)
+                .WithOne(cp => cp.User)
+                .HasForeignKey<ContactPerson>(cp => cp.AspNetUserId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 }
