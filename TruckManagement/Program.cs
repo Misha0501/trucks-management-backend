@@ -4,6 +4,7 @@ using TruckManagement.Extensions;
 using TruckManagement.Endpoints;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using TruckManagement.Routes;
 using TruckManagement.Seeding;
 using TruckManagement.Services;
 
@@ -62,5 +63,6 @@ app.MapWeatherForecastEndpoints();
 app.MapUserEndpoints();
 app.MapCompanyEndpoints();
 app.MapRoleEndpoints();
+app.RegisterClientsRoutes();
 
 app.Run();
