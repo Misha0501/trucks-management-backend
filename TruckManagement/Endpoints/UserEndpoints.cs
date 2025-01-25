@@ -850,7 +850,7 @@ public static class UserEndpoints
                 }
             });
 
-        app.MapPut("/users/{id}/contact",
+        app.MapPut("/users/{id}/contact-person",
             [Authorize(Roles = "globalAdmin, customerAdmin")]
             async (
                 string id,
