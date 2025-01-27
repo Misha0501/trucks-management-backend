@@ -116,6 +116,26 @@ namespace TruckManagement.Seeding
                     await userManager.AddToRoleAsync(customerUser, "customer");
                 }
             }
+            
+            // Example #2.a: A customerAdmin user
+            const string customerAdminEmail = "customerAdmin@example.com";
+            var customerAdminUser = await userManager.FindByEmailAsync(customerAdminEmail);
+            if (customerAdminUser == null)
+            {
+                customerAdminUser = new ApplicationUser
+                {
+                    UserName = customerAdminEmail,
+                    Email = customerAdminEmail,
+                    FirstName = "Frank",
+                    LastName = "Customer Admin",
+                };
+
+                var result = await userManager.CreateAsync(customerAdminUser, "Customer@123");
+                if (result.Succeeded)
+                {
+                    await userManager.AddToRoleAsync(customerAdminUser, "customerAdmin");
+                }
+            }
 
             // Example #3: A driver user
             const string driverEmail = "driver@example.com";
@@ -180,6 +200,17 @@ namespace TruckManagement.Seeding
                     AspNetUserId = customerUser.Id
                 };
                 dbContext.ContactPersons.Add(contactPerson);
+            }
+            
+            // 8) Seed ContactPerson for customerAdminUser
+            if (!dbContext.ContactPersons.Any(cp => cp.AspNetUserId == customerAdminUser.Id))
+            {
+                var contactPersonCustomerAdmin = new ContactPerson
+                {
+                    Id = Guid.NewGuid(),
+                    AspNetUserId = customerAdminUser.Id
+                };
+                dbContext.ContactPersons.Add(contactPersonCustomerAdmin);
             }
 
             // 9) Seed ContactPerson for adminUser (Global Admin as ContactPerson)
@@ -315,6 +346,22 @@ namespace TruckManagement.Seeding
                         ContactPersonId = customerContact.Id,
                         CompanyId = Guid.Parse("22222222-2222-2222-2222-222222222222"),
                         ClientId = null // Customers are only associated with companies, not clients
+                    });
+                }
+            }
+            
+            if (customerAdminUser != null)
+            {
+                var customerAdminContact = dbContext.ContactPersons.FirstOrDefault(cp => cp.AspNetUserId == customerAdminUser.Id);
+                if (customerAdminContact != null && !dbContext.ContactPersonClientCompanies.Any(cpc =>
+                        cpc.ContactPersonId == customerAdminContact.Id && cpc.CompanyId == Guid.Parse("22222222-2222-2222-2222-222222222222")))
+                {
+                    dbContext.ContactPersonClientCompanies.Add(new ContactPersonClientCompany
+                    {
+                        Id = Guid.NewGuid(),
+                        ContactPersonId = customerAdminContact.Id,
+                        CompanyId = Guid.Parse("22222222-2222-2222-2222-222222222222"),
+                        ClientId = null // Customer admins are only associated with companies
                     });
                 }
             }
