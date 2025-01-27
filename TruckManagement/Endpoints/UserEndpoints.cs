@@ -329,7 +329,7 @@ public static class UserEndpoints
                 bool isEmployer = currentUser.IsInRole("employer");
                 bool isCustomer = currentUser.IsInRole("customer");
 
-                bool isContactPerson = isCustomerAdmin || isCustomerAccountant || isEmployer || isCustomer;
+                bool isContactPerson = isGlobalAdmin|| isCustomerAdmin || isCustomerAccountant || isEmployer || isCustomer;
 
                 // 4. If the user is not a globalAdmin or a ContactPerson, deny access
                 if (!isGlobalAdmin && !isContactPerson)
@@ -407,7 +407,8 @@ public static class UserEndpoints
                 // 8. Determine role type without assuming
                 bool isDriver = roles.Contains("driver");
                 bool isContactPersonUser = roles.Any(role =>
-                    role.Equals("customerAdmin", StringComparison.OrdinalIgnoreCase)
+                    role.Equals("globalAdmin", StringComparison.OrdinalIgnoreCase)
+                    || role.Equals("customerAdmin", StringComparison.OrdinalIgnoreCase)
                     || role.Equals("customerAccountant", StringComparison.OrdinalIgnoreCase)
                     || role.Equals("employer", StringComparison.OrdinalIgnoreCase)
                     || role.Equals("customer", StringComparison.OrdinalIgnoreCase));
