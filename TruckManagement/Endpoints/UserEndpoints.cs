@@ -332,7 +332,7 @@ public static class UserEndpoints
                 bool isContactPerson = isGlobalAdmin|| isCustomerAdmin || isCustomerAccountant || isEmployer || isCustomer;
 
                 // 4. If the user is not a globalAdmin or a ContactPerson, deny access
-                if (!isGlobalAdmin || !isContactPerson)
+                if (!isGlobalAdmin && !isContactPerson)
                     return ApiResponseFactory.Error("Unauthorized to view users.", StatusCodes.Status403Forbidden);
 
                 // 5. If the user is a ContactPerson, retrieve their associated company IDs
