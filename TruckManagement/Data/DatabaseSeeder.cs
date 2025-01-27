@@ -21,7 +21,7 @@ namespace TruckManagement.Seeding
 
             // 3) Seed roles (including "client")
             var roleManager = serviceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
-            var roles = new[] { "driver", "employer", "customer", "customerAdmin", "customerAccountant", "globalAdmin", "client" };
+            var roles = new[] { "driver", "employer", "customer", "customerAdmin", "customerAccountant", "globalAdmin" };
             foreach (var role in roles)
             {
                 if (!await roleManager.RoleExistsAsync(role))
@@ -153,7 +153,7 @@ namespace TruckManagement.Seeding
                 var result = await userManager.CreateAsync(clientUser, "Client@123");
                 if (result.Succeeded)
                 {
-                    await userManager.AddToRoleAsync(clientUser, "client");
+                    await userManager.AddToRoleAsync(clientUser, "employer");
                 }
             }
 
