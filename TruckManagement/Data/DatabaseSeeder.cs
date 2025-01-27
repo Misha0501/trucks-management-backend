@@ -285,40 +285,40 @@ namespace TruckManagement.Seeding
                 }
             }
 
-            // 13) Ensure admin and customer ContactPersons are only linked with companies, not with clients
-            var adminContactPersonEntity = dbContext.ContactPersons.FirstOrDefault(cp => cp.AspNetUserId == adminUser.Id);
-            var customerContactPersonEntity = dbContext.ContactPersons.FirstOrDefault(cp => cp.AspNetUserId == customerUser.Id);
-
-            if (adminContactPersonEntity != null)
+            // 13) Add admin and customer ContactPersons to companies
+            // Associate adminUser with the default company
+            if (adminUser != null)
             {
-                var adminCPCs = dbContext.ContactPersonClientCompanies
-                    .Where(cpc => cpc.ContactPersonId == adminContactPersonEntity.Id)
-                    .ToList();
-
-                foreach (var cpc in adminCPCs)
+                var adminContact = dbContext.ContactPersons.FirstOrDefault(cp => cp.AspNetUserId == adminUser.Id);
+                if (adminContact != null && !dbContext.ContactPersonClientCompanies.Any(cpc =>
+                        cpc.ContactPersonId == adminContact.Id && cpc.CompanyId == defaultCompanyId))
                 {
-                    if (cpc.ClientId != Guid.Empty && cpc.ClientId != null)
+                    dbContext.ContactPersonClientCompanies.Add(new ContactPersonClientCompany
                     {
-                        dbContext.ContactPersonClientCompanies.Remove(cpc);
-                    }
+                        Id = Guid.NewGuid(),
+                        ContactPersonId = adminContact.Id,
+                        CompanyId = defaultCompanyId,
+                        ClientId = null // Admins are only associated with companies, not clients
+                    });
                 }
             }
-
-            if (customerContactPersonEntity != null)
+            
+            if (customerUser != null)
             {
-                var customerCPCs = dbContext.ContactPersonClientCompanies
-                    .Where(cpc => cpc.ContactPersonId == customerContactPersonEntity.Id)
-                    .ToList();
-
-                foreach (var cpc in customerCPCs)
+                var customerContact = dbContext.ContactPersons.FirstOrDefault(cp => cp.AspNetUserId == customerUser.Id);
+                if (customerContact != null && !dbContext.ContactPersonClientCompanies.Any(cpc =>
+                        cpc.ContactPersonId == customerContact.Id && cpc.CompanyId == Guid.Parse("22222222-2222-2222-2222-222222222222")))
                 {
-                    if (cpc.ClientId != Guid.Empty && cpc.ClientId != null)
+                    dbContext.ContactPersonClientCompanies.Add(new ContactPersonClientCompany
                     {
-                        dbContext.ContactPersonClientCompanies.Remove(cpc);
-                    }
+                        Id = Guid.NewGuid(),
+                        ContactPersonId = customerContact.Id,
+                        CompanyId = Guid.Parse("22222222-2222-2222-2222-222222222222"),
+                        ClientId = null // Customers are only associated with companies, not clients
+                    });
                 }
             }
-
+            
             await dbContext.SaveChangesAsync();
 
             // 14) Seed Rates with fixed GUIDs
