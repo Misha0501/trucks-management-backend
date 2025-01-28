@@ -64,5 +64,6 @@ app.MapUserEndpoints();
 app.MapCompanyEndpoints();
 app.MapRoleEndpoints();
 app.RegisterClientsRoutes();
+app.MapDriversEndpoints();
 
 app.Run();
