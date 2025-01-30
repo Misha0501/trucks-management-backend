@@ -229,22 +229,73 @@ public static class CompanyEndpoints
             });
 
 
-        // 4) PUT /companies/{id:guid} -> Update (Require globalAdmin)
-        app.MapPut("/companies/{id:guid}", async (
-            Guid id,
-            [FromBody] Company updatedCompany,
-            ApplicationDbContext db) =>
-        {
-            var existing = await db.Companies.FindAsync(id);
-            if (existing == null)
+        app.MapPut("/companies/{id:guid}",
+            [Authorize(Roles = "globalAdmin, customerAdmin, customerAccountant, employer, customer")]
+            async (
+                Guid id,
+                ClaimsPrincipal user,
+                [FromBody] Company updatedCompany,
+                ApplicationDbContext db,
+                UserManager<ApplicationUser> userManager
+            ) =>
             {
-                return ApiResponseFactory.Error("Company not found.", StatusCodes.Status404NotFound);
-            }
+                // Retrieve the requesting user's ID
+                var currentUserId = userManager.GetUserId(user);
+                var roles = await userManager.GetRolesAsync(await userManager.FindByIdAsync(currentUserId));
 
-            existing.Name = updatedCompany.Name;
-            await db.SaveChangesAsync();
-            return ApiResponseFactory.Success(existing);
-        });
+                // Check if the user is a global admin
+                bool isGlobalAdmin = roles.Contains("globalAdmin");
+
+                // Retrieve the target company
+                var existing = await db.Companies
+                    .Include(c => c.ContactPersonClientCompanies)
+                    .FirstOrDefaultAsync(c => c.Id == id);
+
+                if (existing == null)
+                {
+                    return ApiResponseFactory.Error("Company not found.", StatusCodes.Status404NotFound);
+                }
+
+                // Allow global admins to update the company
+                if (isGlobalAdmin)
+                {
+                    existing.Name = updatedCompany.Name;
+                    await db.SaveChangesAsync();
+                    return ApiResponseFactory.Success(new
+                    {
+                        existing.Id,
+                        existing.Name
+                    });
+                }
+
+                // For non-global admins, check if they are an associated contact person
+                var contactPerson = await db.ContactPersons
+                    .Where(cp => cp.AspNetUserId == currentUserId)
+                    .Select(cp => new
+                    {
+                        cp.Id,
+                        CompanyIds = db.ContactPersonClientCompanies
+                            .Where(cpc => cpc.ContactPersonId == cp.Id && cpc.CompanyId.HasValue)
+                            .Select(cpc => cpc.CompanyId.Value)
+                            .ToList()
+                    })
+                    .FirstOrDefaultAsync();
+
+                if (contactPerson == null || !contactPerson.CompanyIds.Contains(id))
+                {
+                    return ApiResponseFactory.Error("Unauthorized to update this company.",
+                        StatusCodes.Status403Forbidden);
+                }
+
+                // Proceed with updating the company
+                existing.Name = updatedCompany.Name;
+                await db.SaveChangesAsync();
+                return ApiResponseFactory.Success(new
+                {
+                    existing.Id,
+                    existing.Name
+                });
+            });
 
 
         // 5) DELETE /companies/{id:guid} -> Delete (Require globalAdmin)
