@@ -213,56 +213,57 @@ public static class CompanyEndpoints
         );
 
 
-        // // 3) POST /companies -> Create a new company (Require globalAdmin)
-        // app.MapPost("/companies", async (
-        //         [FromBody] Company newCompany,
-        //         ApplicationDbContext db) =>
-        //     {
-        //         if (newCompany.Id == Guid.Empty)
-        //             newCompany.Id = Guid.NewGuid();
-        //
-        //         db.Companies.Add(newCompany);
-        //         await db.SaveChangesAsync();
-        //
-        //         return ApiResponseFactory.Success(newCompany, StatusCodes.Status201Created);
-        //     })
-        //     .RequireAuthorization("GlobalAdminOnly"); // <--- policy name
-        //
-        // // 4) PUT /companies/{id:guid} -> Update (Require globalAdmin)
-        // app.MapPut("/companies/{id:guid}", async (
-        //         Guid id,
-        //         [FromBody] Company updatedCompany,
-        //         ApplicationDbContext db) =>
-        //     {
-        //         var existing = await db.Companies.FindAsync(id);
-        //         if (existing == null)
-        //         {
-        //             return ApiResponseFactory.Error("Company not found.", StatusCodes.Status404NotFound);
-        //         }
-        //
-        //         existing.Name = updatedCompany.Name;
-        //         await db.SaveChangesAsync();
-        //         return ApiResponseFactory.Success(existing);
-        //     })
-        //     .RequireAuthorization("GlobalAdminOnly"); // <--- policy name
-        //
-        // // 5) DELETE /companies/{id:guid} -> Delete (Require globalAdmin)
-        // app.MapDelete("/companies/{id:guid}", async (
-        //         Guid id,
-        //         ApplicationDbContext db) =>
-        //     {
-        //         var existing = await db.Companies.FindAsync(id);
-        //         if (existing == null)
-        //         {
-        //             return ApiResponseFactory.Error("Company not found.", StatusCodes.Status404NotFound);
-        //         }
-        //
-        //         db.Companies.Remove(existing);
-        //         await db.SaveChangesAsync();
-        //
-        //         return ApiResponseFactory.Success("Company deleted successfully.", StatusCodes.Status200OK);
-        //     })
-        //     .RequireAuthorization("GlobalAdminOnly"); // <--- policy name
+        // 3) POST /companies -> Create a new company (Require globalAdmin)
+        app.MapPost("/companies",
+            [Authorize(Roles = "globalAdmin")] async (
+                [FromBody] Company newCompany,
+                ApplicationDbContext db) =>
+            {
+                if (newCompany.Id == Guid.Empty)
+                    newCompany.Id = Guid.NewGuid();
+
+                db.Companies.Add(newCompany);
+                await db.SaveChangesAsync();
+
+                return ApiResponseFactory.Success(newCompany, StatusCodes.Status201Created);
+            });
+
+
+        // 4) PUT /companies/{id:guid} -> Update (Require globalAdmin)
+        app.MapPut("/companies/{id:guid}", async (
+            Guid id,
+            [FromBody] Company updatedCompany,
+            ApplicationDbContext db) =>
+        {
+            var existing = await db.Companies.FindAsync(id);
+            if (existing == null)
+            {
+                return ApiResponseFactory.Error("Company not found.", StatusCodes.Status404NotFound);
+            }
+
+            existing.Name = updatedCompany.Name;
+            await db.SaveChangesAsync();
+            return ApiResponseFactory.Success(existing);
+        });
+
+
+        // 5) DELETE /companies/{id:guid} -> Delete (Require globalAdmin)
+        app.MapDelete("/companies/{id:guid}", async (
+                Guid id,
+                ApplicationDbContext db) =>
+            {
+                var existing = await db.Companies.FindAsync(id);
+                if (existing == null)
+                {
+                    return ApiResponseFactory.Error("Company not found.", StatusCodes.Status404NotFound);
+                }
+
+                db.Companies.Remove(existing);
+                await db.SaveChangesAsync();
+
+                return ApiResponseFactory.Success("Company deleted successfully.", StatusCodes.Status200OK);
+            })
+            .RequireAuthorization("GlobalAdminOnly"); // <--- policy name
 
         return app;
     }
