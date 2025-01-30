@@ -1,5 +1,3 @@
-// /TruckManagement/Routes/ClientsRoute.cs
-
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
@@ -51,8 +49,9 @@ namespace TruckManagement.Routes
                             StatusCodes.Status403Forbidden);
                     }
 
-                    // 4. Initialize list to hold CompanyIds for filtering
+                    // 4. Initialize lists to hold CompanyIds and ClientIds for filtering
                     List<Guid> companyIds = new List<Guid>();
+                    List<Guid> clientIds = new List<Guid>();
 
                     if (isContactPerson)
                     {
@@ -65,14 +64,20 @@ namespace TruckManagement.Routes
                         {
                             // Retrieve associated CompanyIds from ContactPersonClientCompany
                             companyIds = contactPerson.ContactPersonClientCompanies
-                                .Where(cpc => cpc.CompanyId != null)
+                                .Where(cpc => cpc.CompanyId.HasValue)
                                 .Select(cpc => cpc.CompanyId.Value)
+                                .Distinct()
+                                .ToList();
+
+                            // Retrieve associated ClientIds from ContactPersonClientCompany
+                            clientIds = contactPerson.ContactPersonClientCompanies
+                                .Where(cpc => cpc.ClientId.HasValue)
+                                .Select(cpc => cpc.ClientId.Value)
                                 .Distinct()
                                 .ToList();
                         }
                         else
                         {
-                            // If the user is a ContactPerson but has no associated record
                             return ApiResponseFactory.Error("ContactPerson profile not found.",
                                 StatusCodes.Status403Forbidden);
                         }
@@ -90,7 +95,6 @@ namespace TruckManagement.Routes
                         }
                         else
                         {
-                            // If the user is a Driver but has no associated company
                             return ApiResponseFactory.Error(
                                 "Driver profile not found or not associated with any company.",
                                 StatusCodes.Status403Forbidden);
@@ -102,8 +106,9 @@ namespace TruckManagement.Routes
 
                     if (isContactPerson || isDriver)
                     {
-                        // Restrict to clients associated with the ContactPerson's or Driver's companies
-                        clientsQuery = clientsQuery.Where(c => companyIds.Contains(c.CompanyId));
+                        // Restrict to clients associated with the ContactPerson's companies OR directly assigned clients
+                        clientsQuery = clientsQuery.Where(c =>
+                            companyIds.Contains(c.CompanyId) || clientIds.Contains(c.Id));
                     }
                     // If globalAdmin, no additional filtering is needed
 
