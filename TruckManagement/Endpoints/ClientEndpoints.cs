@@ -464,6 +464,143 @@ namespace TruckManagement.Routes
                         );
                     }
                 });
+
+            app.MapPut("/clients/{id:guid}",
+                [Authorize(Roles = "globalAdmin, customerAdmin")]
+                async (
+                    Guid id,
+                    [FromBody] UpdateClientRequest request,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    try
+                    {
+                        // Basic validation: Name is mandatory
+                        if (request == null || string.IsNullOrWhiteSpace(request.Name))
+                        {
+                            return ApiResponseFactory.Error("Invalid request. Name is required.",
+                                StatusCodes.Status400BadRequest);
+                        }
+
+                        // Retrieve user info
+                        var currentUserId = userManager.GetUserId(currentUser);
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                        bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+
+                        // If user is neither globalAdmin nor customerAdmin, deny access
+                        if (!isGlobalAdmin && !isCustomerAdmin)
+                        {
+                            return ApiResponseFactory.Error("Unauthorized to edit the client.",
+                                StatusCodes.Status403Forbidden);
+                        }
+
+                        // Find the target client
+                        var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == id);
+                        if (client == null)
+                        {
+                            return ApiResponseFactory.Error("Client not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        // If user is global admin, no further checks needed
+                        if (!isGlobalAdmin)
+                        {
+                            // For a customer admin, ensure they are a contact person
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error("No ContactPerson profile found.",
+                                    StatusCodes.Status403Forbidden);
+                            }
+
+                            // Verify user can still edit the existing company
+                            bool isAssociatedWithCurrentCompany = contactPerson.ContactPersonClientCompanies
+                                .Any(cpc => cpc.CompanyId == client.CompanyId);
+
+                            if (!isAssociatedWithCurrentCompany)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "You cannot edit clients of a company you are not associated with.",
+                                    StatusCodes.Status403Forbidden
+                                );
+                            }
+
+                            // If customer admin wants to change company, ensure association with the new one
+                            if (request.CompanyId.HasValue && request.CompanyId.Value != client.CompanyId)
+                            {
+                                bool isAssociatedWithNewCompany = contactPerson.ContactPersonClientCompanies
+                                    .Any(cpc => cpc.CompanyId == request.CompanyId.Value);
+
+                                if (!isAssociatedWithNewCompany)
+                                {
+                                    return ApiResponseFactory.Error(
+                                        "You cannot assign this client to a company you are not associated with.",
+                                        StatusCodes.Status403Forbidden
+                                    );
+                                }
+                            }
+                        }
+
+                        // Update fields
+                        client.Name = request.Name;
+                        client.Tav = request.Tav;
+                        client.Address = request.Address;
+                        client.Postcode = request.Postcode;
+                        client.City = request.City;
+                        client.Country = request.Country;
+                        client.PhoneNumber = request.PhoneNumber;
+                        client.Email = request.Email;
+                        client.Remark = request.Remark;
+
+                        // Update CompanyId if provided
+                        if (request.CompanyId.HasValue && request.CompanyId.Value != client.CompanyId)
+                        {
+                            // Double-check the new company exists (for safety)
+                            bool newCompanyExists = await db.Companies.AnyAsync(c => c.Id == request.CompanyId.Value);
+                            if (!newCompanyExists)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "The specified new company does not exist.",
+                                    StatusCodes.Status400BadRequest
+                                );
+                            }
+
+                            client.CompanyId = request.CompanyId.Value;
+                        }
+
+                        await db.SaveChangesAsync();
+
+                        return ApiResponseFactory.Success(new
+                        {
+                            client.Id,
+                            client.Name,
+                            client.Tav,
+                            client.Address,
+                            client.Postcode,
+                            client.City,
+                            client.Country,
+                            client.PhoneNumber,
+                            client.Email,
+                            client.Remark,
+                            client.CompanyId
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log error details (for debugging)
+                        Console.WriteLine($"[Error] {ex.Message}");
+                        Console.WriteLine($"[StackTrace] {ex.StackTrace}");
+
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while updating the client.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+                });
         }
     }
 }
