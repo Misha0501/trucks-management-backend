@@ -39,25 +39,35 @@ public static class CompanyEndpoints
                 if (!isGlobalAdmin && !isContactPerson)
                     return ApiResponseFactory.Error("Unauthorized to view companies.", StatusCodes.Status403Forbidden);
 
-                // 4. If the user is a ContactPerson, retrieve their associated company IDs
+                // 4. If the user is a ContactPerson, retrieve their associated company and client-based company IDs
                 List<Guid> contactPersonCompanyIds = new List<Guid>();
+
                 if (isContactPerson)
                 {
-                    // Retrieve the ContactPerson entity associated with the current user
                     var currentContactPerson = await db.ContactPersons
+                        .Include(cp => cp.ContactPersonClientCompanies)
                         .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
 
                     if (currentContactPerson != null)
                     {
-                        // Retrieve associated CompanyIds from ContactPersonClientCompany
-                        contactPersonCompanyIds = await db.ContactPersonClientCompanies
-                            .Where(cpc => cpc.ContactPersonId == currentContactPerson.Id && cpc.CompanyId.HasValue)
-                            .Select(cpc => cpc.CompanyId.Value)
-                            .ToListAsync();
+                        // Retrieve companies directly associated with the contact person
+                        var directCompanyIds = currentContactPerson.ContactPersonClientCompanies
+                            .Where(cpc => cpc.CompanyId.HasValue)
+                            .Select(cpc => cpc.CompanyId.Value);
+
+                        // Retrieve companies indirectly associated via clients
+                        var clientBasedCompanyIds = currentContactPerson.ContactPersonClientCompanies
+                            .Where(cpc => cpc.ClientId.HasValue)
+                            .SelectMany(cpc => db.Clients
+                                .Where(client => client.Id == cpc.ClientId)
+                                .Select(client => client.CompanyId))
+                            .Distinct();
+
+                        // Combine both direct and indirect associations
+                        contactPersonCompanyIds = directCompanyIds.Concat(clientBasedCompanyIds).Distinct().ToList();
                     }
                     else
                     {
-                        // If the current user is a ContactPerson but has no associated ContactPerson record
                         return ApiResponseFactory.Error("ContactPerson profile not found.",
                             StatusCodes.Status403Forbidden);
                     }
@@ -68,7 +78,7 @@ public static class CompanyEndpoints
 
                 if (isContactPerson)
                 {
-                    // Restrict to companies associated with the ContactPerson
+                    // Restrict to companies associated with the ContactPerson directly or via clients
                     companiesQuery = companiesQuery.Where(c => contactPersonCompanyIds.Contains(c.Id));
                 }
                 // If globalAdmin, no additional filtering is needed
@@ -101,10 +111,7 @@ public static class CompanyEndpoints
                 };
 
                 // 9. Return success response
-                return ApiResponseFactory.Success(
-                    responseData,
-                    StatusCodes.Status200OK
-                );
+                return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
             }
         );
 
@@ -133,24 +140,34 @@ public static class CompanyEndpoints
 
                 // 3. If the user is not a globalAdmin or a ContactPerson, deny access
                 if (!isGlobalAdmin && !isContactPerson)
-                    return ApiResponseFactory.Error("Unauthorized to view companies.", StatusCodes.Status403Forbidden);
+                    return ApiResponseFactory.Error("Unauthorized to view this company.",
+                        StatusCodes.Status403Forbidden);
 
                 // 4. If the user is a ContactPerson, verify association with the company
                 if (isContactPerson)
                 {
-                    // Retrieve the ContactPerson entity associated with the current user
                     var currentContactPerson = await db.ContactPersons
+                        .Include(cp => cp.ContactPersonClientCompanies)
                         .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
 
                     if (currentContactPerson == null)
                         return ApiResponseFactory.Error("ContactPerson profile not found.",
                             StatusCodes.Status403Forbidden);
 
-                    // Check if the company is associated with the ContactPerson
-                    bool isAssociated = await db.ContactPersonClientCompanies
-                        .AnyAsync(cpc => cpc.ContactPersonId == currentContactPerson.Id && cpc.CompanyId == id);
+                    // Direct association check
+                    bool isDirectlyAssociated = currentContactPerson.ContactPersonClientCompanies
+                        .Any(cpc => cpc.CompanyId == id);
 
-                    if (!isAssociated)
+                    // Indirect association via clients
+                    bool isIndirectlyAssociated = currentContactPerson.ContactPersonClientCompanies
+                        .Where(cpc => cpc.ClientId.HasValue)
+                        .SelectMany(cpc => db.Clients
+                            .Where(client => client.Id == cpc.ClientId)
+                            .Select(client => client.CompanyId))
+                        .Distinct()
+                        .Any(companyId => companyId == id);
+
+                    if (!isDirectlyAssociated && !isIndirectlyAssociated)
                         return ApiResponseFactory.Error("You are not authorized to view this company.",
                             StatusCodes.Status403Forbidden);
                 }
