@@ -156,7 +156,7 @@ namespace TruckManagement.Routes
                     // 9. Return success response
                     return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
                 });
-            
+
             app.MapGet("/clients/{id:guid}",
                 [Authorize(Roles = "globalAdmin, customerAdmin, customerAccountant, employer, customer, driver")]
                 async (
@@ -278,6 +278,191 @@ namespace TruckManagement.Routes
 
                     // 7. Return success response
                     return ApiResponseFactory.Success(client, StatusCodes.Status200OK);
+                });
+
+            app.MapPost("/clients",
+                [Authorize(Roles = "globalAdmin, customerAdmin")]
+                async (
+                    [FromBody] CreateClientRequest request,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    try
+                    {
+                        // 1️⃣ Validate input
+                        if (request == null || string.IsNullOrWhiteSpace(request.Name) ||
+                            request.CompanyId == Guid.Empty)
+                        {
+                            return ApiResponseFactory.Error("Invalid request. Name and CompanyId are required.",
+                                StatusCodes.Status400BadRequest);
+                        }
+
+                        // 2️⃣ Retrieve the current user's ID
+                        var currentUserId = userManager.GetUserId(currentUser);
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                        bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+
+                        // 3️⃣ Check if the company exists
+                        var companyExists = await db.Companies.AnyAsync(c => c.Id == request.CompanyId);
+                        if (!companyExists)
+                        {
+                            return ApiResponseFactory.Error("The specified company does not exist.",
+                                StatusCodes.Status400BadRequest);
+                        }
+
+                        // 4️⃣ If the user is a Customer Admin, verify they are associated with the company
+                        if (isCustomerAdmin)
+                        {
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error("Unauthorized: No ContactPerson profile found.",
+                                    StatusCodes.Status403Forbidden);
+                            }
+
+                            bool isAssociated = contactPerson.ContactPersonClientCompanies
+                                .Any(cpc => cpc.CompanyId == request.CompanyId);
+
+                            if (!isAssociated)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "Unauthorized: You cannot add clients to a company you are not associated with.",
+                                    StatusCodes.Status403Forbidden
+                                );
+                            }
+                        }
+
+                        // 5️⃣ Create new Client
+                        var newClient = new Client
+                        {
+                            Id = Guid.NewGuid(),
+                            Name = request.Name,
+                            Tav = request.Tav,
+                            Address = request.Address,
+                            Postcode = request.Postcode,
+                            City = request.City,
+                            Country = request.Country,
+                            PhoneNumber = request.PhoneNumber,
+                            Email = request.Email,
+                            Remark = request.Remark,
+                            CompanyId = request.CompanyId
+                        };
+
+                        db.Clients.Add(newClient);
+                        await db.SaveChangesAsync();
+
+                        // 6️⃣ Return success response
+                        return ApiResponseFactory.Success(new
+                        {
+                            newClient.Id,
+                            newClient.Name,
+                            newClient.Tav,
+                            newClient.Address,
+                            newClient.Postcode,
+                            newClient.City,
+                            newClient.Country,
+                            newClient.PhoneNumber,
+                            newClient.Email,
+                            newClient.Remark,
+                            newClient.CompanyId
+                        }, StatusCodes.Status201Created);
+                    }
+                    catch (Exception ex)
+                    {
+                        // 7️⃣ Handle unexpected errors (e.g., EF exceptions, DB issues)
+                        //    Log the exception as needed for diagnostics
+                        Console.WriteLine($"[Error] {ex.Message}");
+                        Console.WriteLine($"[Stack] {ex.StackTrace}");
+
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while creating the client.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+                });
+
+            app.MapDelete("/clients/{id:guid}",
+                [Authorize(Roles = "globalAdmin, customerAdmin")]
+                async (
+                    Guid id,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    try
+                    {
+                        // 1️⃣ Retrieve the current user's ID and roles
+                        var currentUserId = userManager.GetUserId(currentUser);
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                        bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+
+                        // 2️⃣ Find the client by ID
+                        var client = await db.Clients.FindAsync(id);
+                        if (client == null)
+                        {
+                            return ApiResponseFactory.Error("Client not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        // 3️⃣ If the user is a Global Admin, skip further checks
+                        if (isGlobalAdmin)
+                        {
+                            db.Clients.Remove(client);
+                            await db.SaveChangesAsync();
+                            return ApiResponseFactory.Success("Client removed successfully.", StatusCodes.Status200OK);
+                        }
+
+                        // 4️⃣ If the user is a Customer Admin, validate their association with the client's company
+                        if (isCustomerAdmin)
+                        {
+                            // Retrieve associated ContactPerson
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error("No ContactPerson profile found.",
+                                    StatusCodes.Status403Forbidden);
+                            }
+
+                            // Check if the user is associated with the company's ID of the client
+                            bool isAssociated = contactPerson.ContactPersonClientCompanies
+                                .Any(cpc => cpc.CompanyId == client.CompanyId);
+
+                            if (!isAssociated)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "Unauthorized: You cannot remove clients from a company you are not associated with.",
+                                    StatusCodes.Status403Forbidden
+                                );
+                            }
+
+                            // 5️⃣ If valid association, remove the client
+                            db.Clients.Remove(client);
+                            await db.SaveChangesAsync();
+                            return ApiResponseFactory.Success("Client removed successfully.", StatusCodes.Status200OK);
+                        }
+
+                        // 6️⃣ If none of the roles matched, deny access
+                        return ApiResponseFactory.Error("Unauthorized to remove the client.",
+                            StatusCodes.Status403Forbidden);
+                    }
+                    catch (Exception ex)
+                    {
+                        // 7️⃣ Handle unexpected errors (EF exceptions, DB connection issues, etc.)
+                        Console.WriteLine($"[Error] {ex.Message}");
+                        Console.WriteLine($"[Stack] {ex.StackTrace}");
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while removing the client.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
                 });
         }
     }
