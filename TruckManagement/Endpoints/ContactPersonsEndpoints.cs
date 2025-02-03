@@ -1,8 +1,11 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System;
+using System.Linq;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Mvc;
 using TruckManagement.Data;
 using TruckManagement.Entities;
 using TruckManagement.Helpers;
@@ -19,8 +22,8 @@ namespace TruckManagement.Endpoints
                     ApplicationDbContext db,
                     UserManager<ApplicationUser> userManager,
                     ClaimsPrincipal currentUser,
-                    [FromQuery] Guid? companyId,
-                    [FromQuery] Guid? clientId,
+                    [FromQuery] string? companyId,
+                    [FromQuery] string? clientId,
                     [FromQuery] int pageNumber = 1,
                     [FromQuery] int pageSize = 10
                 ) =>
@@ -30,14 +33,39 @@ namespace TruckManagement.Endpoints
                         var currentUserId = userManager.GetUserId(currentUser);
                         bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
 
-                        // Build the base query
+                        // Attempt to parse the GUIDs, returning 400 if invalid format
+                        Guid? parsedCompanyId = null;
+                        if (!string.IsNullOrWhiteSpace(companyId))
+                        {
+                            if (!Guid.TryParse(companyId, out Guid validCompanyId))
+                            {
+                                return ApiResponseFactory.Error("Invalid companyId format. Must be a valid GUID.",
+                                    StatusCodes.Status400BadRequest);
+                            }
+
+                            parsedCompanyId = validCompanyId;
+                        }
+
+                        Guid? parsedClientId = null;
+                        if (!string.IsNullOrWhiteSpace(clientId))
+                        {
+                            if (!Guid.TryParse(clientId, out Guid validClientId))
+                            {
+                                return ApiResponseFactory.Error("Invalid clientId format. Must be a valid GUID.",
+                                    StatusCodes.Status400BadRequest);
+                            }
+
+                            parsedClientId = validClientId;
+                        }
+
                         IQueryable<ContactPerson> query = db.ContactPersons
                             .Include(cp => cp.User)
-                            .Include(cp => cp.ContactPersonClientCompanies).ThenInclude(cpc => cpc.Company)
-                            .Include(cp => cp.ContactPersonClientCompanies).ThenInclude(cpc => cpc.Client)
+                            .Include(cp => cp.ContactPersonClientCompanies)
+                            .ThenInclude(cpc => cpc.Company)
+                            .Include(cp => cp.ContactPersonClientCompanies)
+                            .ThenInclude(cpc => cpc.Client)
                             .AsNoTracking();
 
-                        // If not globalAdmin, the user must be a contact person with limited access
                         if (!isGlobalAdmin)
                         {
                             var myContact = await db.ContactPersons
@@ -46,43 +74,43 @@ namespace TruckManagement.Endpoints
                                 .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
 
                             if (myContact == null)
-                            {
-                                return ApiResponseFactory.Error(
-                                    "ContactPerson profile not found.",
-                                    StatusCodes.Status403Forbidden
-                                );
-                            }
+                                return ApiResponseFactory.Error("ContactPerson profile not found.",
+                                    StatusCodes.Status403Forbidden);
 
-                            // Gather direct company IDs from ContactPersonClientCompanies
                             var directCompanyIds = myContact.ContactPersonClientCompanies
                                 .Where(cpc => cpc.CompanyId.HasValue)
                                 .Select(cpc => cpc.CompanyId.Value)
                                 .Distinct()
                                 .ToList();
 
-                            // Gather client IDs and then find parent companies of those clients
-                            var clientIds = myContact.ContactPersonClientCompanies
+                            var directClientIds = myContact.ContactPersonClientCompanies
                                 .Where(cpc => cpc.ClientId.HasValue)
                                 .Select(cpc => cpc.ClientId.Value)
                                 .Distinct()
                                 .ToList();
 
                             var parentCompanyIds = await db.Clients
-                                .Where(cl => clientIds.Contains(cl.Id))
+                                .Where(cl => directClientIds.Contains(cl.Id))
                                 .Select(cl => cl.CompanyId)
                                 .Distinct()
                                 .ToListAsync();
 
-                            // Combine direct companies and the parent companies of any clients
                             var myCompanyIds = directCompanyIds
                                 .Concat(parentCompanyIds)
                                 .Distinct()
                                 .ToList();
 
-                            // If companyId is provided, ensure user is associated with that company
-                            if (companyId.HasValue)
+                            // If companyId is provided, check existence & association
+                            if (parsedCompanyId.HasValue)
                             {
-                                if (!myCompanyIds.Contains(companyId.Value))
+                                var requestedCompany = await db.Companies
+                                    .AsNoTracking()
+                                    .FirstOrDefaultAsync(c => c.Id == parsedCompanyId.Value);
+                                if (requestedCompany == null)
+                                    return ApiResponseFactory.Error("The specified company does not exist.",
+                                        StatusCodes.Status404NotFound);
+
+                                if (!myCompanyIds.Contains(parsedCompanyId.Value))
                                 {
                                     return ApiResponseFactory.Error(
                                         "Unauthorized: You are not associated with the specified company.",
@@ -90,25 +118,20 @@ namespace TruckManagement.Endpoints
                                     );
                                 }
 
-                                // Restrict query to contact persons associated with that company
                                 query = query.Where(cp => cp.ContactPersonClientCompanies
-                                    .Any(cpc => cpc.CompanyId == companyId.Value));
+                                    .Any(cpc => cpc.CompanyId == parsedCompanyId.Value));
                             }
 
-                            // If clientId is provided, ensure user is associated with the client's parent company
-                            if (clientId.HasValue)
+                            // If clientId is provided, check existence & association
+                            if (parsedClientId.HasValue)
                             {
-                                var client = await db.Clients
+                                var requestedClient = await db.Clients
                                     .AsNoTracking()
-                                    .FirstOrDefaultAsync(c => c.Id == clientId.Value);
-
-                                if (client == null)
-                                {
+                                    .FirstOrDefaultAsync(c => c.Id == parsedClientId.Value);
+                                if (requestedClient == null)
                                     return ApiResponseFactory.Error("Client not found.", StatusCodes.Status404NotFound);
-                                }
 
-                                // If the user is not associated with the client's owning company, deny
-                                if (!myCompanyIds.Contains(client.CompanyId))
+                                if (!myCompanyIds.Contains(requestedClient.CompanyId))
                                 {
                                     return ApiResponseFactory.Error(
                                         "Unauthorized: You are not associated with the client's company.",
@@ -116,14 +139,13 @@ namespace TruckManagement.Endpoints
                                     );
                                 }
 
-                                // Restrict query to contact persons who are associated with this client
-                                // or with the company that owns this client
-                                query = query.Where(cp => cp.ContactPersonClientCompanies.Any(cpc => cpc.ClientId == clientId.Value)
-                                    || cp.ContactPersonClientCompanies.Any(cpc => cpc.CompanyId == client.CompanyId));
+                                query = query.Where(cp =>
+                                    cp.ContactPersonClientCompanies.Any(cpc => cpc.ClientId == requestedClient.Id)
+                                    || cp.ContactPersonClientCompanies.Any(cpc =>
+                                        cpc.CompanyId == requestedClient.CompanyId));
                             }
 
-                            // If neither companyId nor clientId is provided, just restrict to the user's companies & their clients
-                            if (!companyId.HasValue && !clientId.HasValue)
+                            if (!parsedCompanyId.HasValue && !parsedClientId.HasValue)
                             {
                                 var myClientIds = myContact.ContactPersonClientCompanies
                                     .Where(cpc => cpc.ClientId.HasValue)
@@ -139,25 +161,32 @@ namespace TruckManagement.Endpoints
                         }
                         else
                         {
-                            // If globalAdmin, optionally filter by companyId or clientId
-                            if (companyId.HasValue)
+                            // global admin flow
+                            if (parsedCompanyId.HasValue)
                             {
-                                query = query.Where(cp => cp.ContactPersonClientCompanies
-                                    .Any(cpc => cpc.CompanyId == companyId.Value));
-                            }
-                            if (clientId.HasValue)
-                            {
-                                var client = await db.Clients
+                                var requestedCompany = await db.Companies
                                     .AsNoTracking()
-                                    .FirstOrDefaultAsync(c => c.Id == clientId.Value);
+                                    .FirstOrDefaultAsync(c => c.Id == parsedCompanyId.Value);
+                                if (requestedCompany == null)
+                                    return ApiResponseFactory.Error("The specified company does not exist.",
+                                        StatusCodes.Status404NotFound);
 
-                                if (client == null)
-                                {
+                                query = query.Where(cp =>
+                                    cp.ContactPersonClientCompanies.Any(cpc => cpc.CompanyId == parsedCompanyId.Value));
+                            }
+
+                            if (parsedClientId.HasValue)
+                            {
+                                var requestedClient = await db.Clients
+                                    .AsNoTracking()
+                                    .FirstOrDefaultAsync(c => c.Id == parsedClientId.Value);
+                                if (requestedClient == null)
                                     return ApiResponseFactory.Error("Client not found.", StatusCodes.Status404NotFound);
-                                }
 
-                                query = query.Where(cp => cp.ContactPersonClientCompanies.Any(cpc => cpc.ClientId == clientId.Value)
-                                    || cp.ContactPersonClientCompanies.Any(cpc => cpc.CompanyId == client.CompanyId));
+                                query = query.Where(cp =>
+                                    cp.ContactPersonClientCompanies.Any(cpc => cpc.ClientId == requestedClient.Id)
+                                    || cp.ContactPersonClientCompanies.Any(cpc =>
+                                        cpc.CompanyId == requestedClient.CompanyId));
                             }
                         }
 
