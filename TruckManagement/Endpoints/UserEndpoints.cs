@@ -202,11 +202,32 @@ public static class UserEndpoints
 
                     if (currentContactPerson != null)
                     {
-                        // Retrieve associated CompanyIds from ContactPersonClientCompany
-                        contactPersonCompanyIds = await db.ContactPersonClientCompanies
+                        // Retrieve direct company IDs the contact person is associated with
+                        var directCompanyIds = await db.ContactPersonClientCompanies
                             .Where(cpc => cpc.ContactPersonId == currentContactPerson.Id && cpc.CompanyId.HasValue)
                             .Select(cpc => cpc.CompanyId.Value)
+                            .Distinct()
                             .ToListAsync();
+
+                        // Retrieve client IDs associated with those companies
+                        var clientIdsOfMyCompanies = await db.Clients
+                            .Where(client => directCompanyIds.Contains(client.CompanyId))
+                            .Select(client => client.Id)
+                            .Distinct()
+                            .ToListAsync();
+
+                        // Retrieve parent company IDs from those clients
+                        var parentCompanyIdsFromClients = await db.Clients
+                            .Where(client => clientIdsOfMyCompanies.Contains(client.Id))
+                            .Select(client => client.CompanyId)
+                            .Distinct()
+                            .ToListAsync();
+
+                        // Merge direct company IDs and client-owned parent companies
+                        contactPersonCompanyIds = directCompanyIds
+                            .Concat(parentCompanyIdsFromClients)
+                            .Distinct()
+                            .ToList();
                     }
                     else
                     {
@@ -231,7 +252,15 @@ public static class UserEndpoints
                         db.ContactPersonClientCompanies.Any(cpc =>
                             cpc.ContactPerson.AspNetUserId == u.Id &&
                             cpc.CompanyId.HasValue &&
-                            contactPersonCompanyIds.Contains(cpc.CompanyId.Value))
+                            contactPersonCompanyIds.Contains(cpc.CompanyId.Value)) ||
+
+                        // Users who are ContactPersons associated with clients owned by ContactPerson's companies
+                        db.ContactPersonClientCompanies.Any(cpc =>
+                            cpc.ContactPerson.AspNetUserId == u.Id &&
+                            cpc.ClientId.HasValue &&
+                            db.Clients.Any(client =>
+                                client.Id == cpc.ClientId.Value &&
+                                contactPersonCompanyIds.Contains(client.CompanyId)))
                     );
                 }
                 // If globalAdmin, no additional filtering is needed
