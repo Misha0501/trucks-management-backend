@@ -141,8 +141,7 @@ namespace TruckManagement.Endpoints
 
                                 query = query.Where(cp =>
                                     cp.ContactPersonClientCompanies.Any(cpc => cpc.ClientId == requestedClient.Id)
-                                    || cp.ContactPersonClientCompanies.Any(cpc =>
-                                        cpc.CompanyId == requestedClient.CompanyId));
+                                );
                             }
 
                             if (!parsedCompanyId.HasValue && !parsedClientId.HasValue)
@@ -185,8 +184,7 @@ namespace TruckManagement.Endpoints
 
                                 query = query.Where(cp =>
                                     cp.ContactPersonClientCompanies.Any(cpc => cpc.ClientId == requestedClient.Id)
-                                    || cp.ContactPersonClientCompanies.Any(cpc =>
-                                        cpc.CompanyId == requestedClient.CompanyId));
+                                );
                             }
                         }
 
