@@ -565,28 +565,28 @@ public static class UserEndpoints
 
                     if (currentContactPerson != null)
                     {
-// 1) Retrieve direct company IDs associated with the customer admin
+                        // 1) Retrieve direct company IDs associated with the customer admin
                         var directCompanyIds = await db.ContactPersonClientCompanies
                             .Where(cpc => cpc.ContactPersonId == currentContactPerson.Id && cpc.CompanyId.HasValue)
                             .Select(cpc => cpc.CompanyId.Value)
                             .Distinct()
                             .ToListAsync();
 
-// 2) Retrieve client IDs that the customer admin is associated with
+                        // 2) Retrieve client IDs that the customer admin is associated with
                         var directClientIds = await db.ContactPersonClientCompanies
                             .Where(cpc => cpc.ContactPersonId == currentContactPerson.Id && cpc.ClientId.HasValue)
                             .Select(cpc => cpc.ClientId.Value)
                             .Distinct()
                             .ToListAsync();
 
-// 3) Retrieve the parent company IDs of the associated clients
+                        // 3) Retrieve the parent company IDs of the associated clients
                         var parentCompanyIds = await db.Clients
                             .Where(cl => directClientIds.Contains(cl.Id))
                             .Select(cl => cl.CompanyId)
                             .Distinct()
                             .ToListAsync();
 
-// 4) Merge both direct company IDs and parent company IDs from clients
+                        // 4) Merge both direct company IDs and parent company IDs from clients
                         customerAdminCompanyIds = directCompanyIds
                             .Concat(parentCompanyIds)
                             .Distinct()
