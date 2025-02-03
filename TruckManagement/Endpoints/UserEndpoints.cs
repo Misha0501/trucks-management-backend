@@ -353,7 +353,7 @@ public static class UserEndpoints
                             .Select(cpc => cpc.CompanyId.Value)
                             .Distinct()
                             .ToListAsync();
-                        
+
                         // 2)Retrieve direct cletn IDs from ContactPersonClientCompanies
                         var directClientIds = await db.ContactPersonClientCompanies
                             .Where(cpc => cpc.ContactPersonId == currentContactPerson.Id && cpc.ClientId.HasValue)
@@ -367,7 +367,7 @@ public static class UserEndpoints
                             .Select(client => client.Id)
                             .Distinct()
                             .ToListAsync();
-                        
+
                         // 4) directClientParentCompanies for clients to view companies
                         var directClientParentCompanies = await db.Clients
                             .Where(client => directClientIds.Contains(client.Id))
@@ -419,15 +419,15 @@ public static class UserEndpoints
                                 .Where(cpc => cpc.ContactPersonId == targetContactPerson.Id && cpc.CompanyId.HasValue)
                                 .Select(cpc => cpc.CompanyId.Value)
                                 .ToListAsync();
-                            
+
                             var targetUserClientIds = await db.ContactPersonClientCompanies
                                 .Where(cpc => cpc.ContactPersonId == targetContactPerson.Id && cpc.ClientId.HasValue)
                                 .Select(cpc => cpc.ClientId.Value)
                                 .Distinct()
                                 .ToListAsync();
-                            
+
                             var sum = targetUserCompanyIds.Concat(targetUserClientIds).Distinct().ToList();
-                            
+
                             if (sum.Any(cId => contactPersonCompanyIds.Contains(cId)))
                             {
                                 isAuthorized = true;
@@ -619,20 +619,20 @@ public static class UserEndpoints
                         .Where(cpc => cpc.ContactPersonId == targetContactPerson.Id && cpc.CompanyId.HasValue)
                         .Select(cpc => cpc.CompanyId.Value)
                         .ToListAsync();
-                    
+
                     // Retrieve client IDs the target user is associated with
                     var contactPersonClientIds = await db.ContactPersonClientCompanies
                         .Where(cpc => cpc.ContactPersonId == targetContactPerson.Id && cpc.ClientId.HasValue)
                         .Select(cpc => cpc.ClientId.Value)
                         .ToListAsync();
-                    
+
                     // Retrieve the parent company IDs of the associated clients
                     var parentCompanyIds = await db.Clients
                         .Where(cl => contactPersonClientIds.Contains(cl.Id))
                         .Select(cl => cl.CompanyId)
                         .Distinct()
                         .ToListAsync();
-                    
+
                     targetUserCompanyIds.AddRange(contactPersonCompanyIds);
                     targetUserCompanyIds.AddRange(contactPersonClientIds);
                     targetUserCompanyIds.AddRange(parentCompanyIds);
