@@ -963,10 +963,31 @@ public static class UserEndpoints
                     if (currentContactPerson != null)
                     {
                         // Retrieve associated CompanyIds from ContactPersonClientCompany
-                        customerAdminCompanyIds = await db.ContactPersonClientCompanies
+                        var directCompanyIds = await db.ContactPersonClientCompanies
                             .Where(cpc => cpc.ContactPersonId == currentContactPerson.Id && cpc.CompanyId.HasValue)
                             .Select(cpc => cpc.CompanyId.Value)
+                            .Distinct()
                             .ToListAsync();
+
+                        // Retrieve associated ClientIds
+                        var associatedClientIds = await db.ContactPersonClientCompanies
+                            .Where(cpc => cpc.ContactPersonId == currentContactPerson.Id && cpc.ClientId.HasValue)
+                            .Select(cpc => cpc.ClientId.Value)
+                            .Distinct()
+                            .ToListAsync();
+
+                        // Retrieve parent companies of associated clients
+                        var parentCompanyIds = await db.Clients
+                            .Where(cl => associatedClientIds.Contains(cl.Id))
+                            .Select(cl => cl.CompanyId)
+                            .Distinct()
+                            .ToListAsync();
+
+                        // Merge direct company IDs and parent company IDs from clients
+                        customerAdminCompanyIds = directCompanyIds
+                            .Concat(parentCompanyIds)
+                            .Distinct()
+                            .ToList();
                     }
                 }
 
@@ -981,10 +1002,31 @@ public static class UserEndpoints
                 if (isCustomerAdmin)
                 {
                     // Retrieve the contact person's current CompanyIds
-                    var contactPersonCompanyIds = await db.ContactPersonClientCompanies
+                    var directCompanyIds = await db.ContactPersonClientCompanies
                         .Where(cpc => cpc.ContactPersonId == contactPerson.Id && cpc.CompanyId.HasValue)
                         .Select(cpc => cpc.CompanyId.Value)
+                        .Distinct()
                         .ToListAsync();
+
+                    // Retrieve associated ClientIds
+                    var associatedClientIds = await db.ContactPersonClientCompanies
+                        .Where(cpc => cpc.ContactPersonId == contactPerson.Id && cpc.ClientId.HasValue)
+                        .Select(cpc => cpc.ClientId.Value)
+                        .Distinct()
+                        .ToListAsync();
+
+                    // Retrieve parent companies of associated clients
+                    var parentCompanyIds = await db.Clients
+                        .Where(cl => associatedClientIds.Contains(cl.Id))
+                        .Select(cl => cl.CompanyId)
+                        .Distinct()
+                        .ToListAsync();
+
+                    // Merge direct company IDs and parent company IDs from clients
+                    var contactPersonCompanyIds = directCompanyIds
+                        .Concat(parentCompanyIds)
+                        .Distinct()
+                        .ToList();
 
                     // Check if there is any overlap between customerAdminCompanyIds and contactPersonCompanyIds
                     bool hasOverlap = contactPersonCompanyIds.Any(cpc => customerAdminCompanyIds.Contains(cpc));
