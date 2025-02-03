@@ -329,7 +329,8 @@ public static class UserEndpoints
                 bool isEmployer = currentUser.IsInRole("employer");
                 bool isCustomer = currentUser.IsInRole("customer");
 
-                bool isContactPerson = isGlobalAdmin|| isCustomerAdmin || isCustomerAccountant || isEmployer || isCustomer;
+                bool isContactPerson = isGlobalAdmin || isCustomerAdmin || isCustomerAccountant || isEmployer ||
+                                       isCustomer;
 
                 // 4. If the user is not a globalAdmin or a ContactPerson, deny access
                 if (!isGlobalAdmin && !isContactPerson)
@@ -346,11 +347,41 @@ public static class UserEndpoints
 
                     if (currentContactPerson != null)
                     {
-                        // Retrieve associated CompanyIds from ContactPersonClientCompany
-                        contactPersonCompanyIds = await db.ContactPersonClientCompanies
+                        // 1) Retrieve direct company IDs from ContactPersonClientCompanies
+                        var directCompanyIds = await db.ContactPersonClientCompanies
                             .Where(cpc => cpc.ContactPersonId == currentContactPerson.Id && cpc.CompanyId.HasValue)
                             .Select(cpc => cpc.CompanyId.Value)
+                            .Distinct()
                             .ToListAsync();
+                        
+                        // 2)Retrieve direct cletn IDs from ContactPersonClientCompanies
+                        var directClientIds = await db.ContactPersonClientCompanies
+                            .Where(cpc => cpc.ContactPersonId == currentContactPerson.Id && cpc.ClientId.HasValue)
+                            .Select(cpc => cpc.ClientId.Value)
+                            .Distinct()
+                            .ToListAsync();
+
+                        // 2) Gather client IDs from those companies so that company people can view clients 
+                        var companyOwnedClientIds = await db.Clients
+                            .Where(client => directCompanyIds.Contains(client.CompanyId))
+                            .Select(client => client.Id)
+                            .Distinct()
+                            .ToListAsync();
+                        
+                        // 4) directClientParentCompanies for clients to view companies
+                        var directClientParentCompanies = await db.Clients
+                            .Where(client => directClientIds.Contains(client.Id))
+                            .Select(client => client.CompanyId)
+                            .Distinct()
+                            .ToListAsync();
+
+                        // 5) Combine both sets of client IDs
+                        contactPersonCompanyIds = directClientIds
+                            .Concat(companyOwnedClientIds)
+                            .Concat(directCompanyIds)
+                            .Concat(directClientParentCompanies)
+                            .Distinct()
+                            .ToList();
                     }
                     else
                     {
@@ -388,8 +419,16 @@ public static class UserEndpoints
                                 .Where(cpc => cpc.ContactPersonId == targetContactPerson.Id && cpc.CompanyId.HasValue)
                                 .Select(cpc => cpc.CompanyId.Value)
                                 .ToListAsync();
-
-                            if (targetUserCompanyIds.Any(cId => contactPersonCompanyIds.Contains(cId)))
+                            
+                            var targetUserClientIds = await db.ContactPersonClientCompanies
+                                .Where(cpc => cpc.ContactPersonId == targetContactPerson.Id && cpc.ClientId.HasValue)
+                                .Select(cpc => cpc.ClientId.Value)
+                                .Distinct()
+                                .ToListAsync();
+                            
+                            var sum = targetUserCompanyIds.Concat(targetUserClientIds).Distinct().ToList();
+                            
+                            if (sum.Any(cId => contactPersonCompanyIds.Contains(cId)))
                             {
                                 isAuthorized = true;
                             }
@@ -872,7 +911,7 @@ public static class UserEndpoints
 
                 // 3. Retrieve the current user's ID
                 var currentUserId = userManager.GetUserId(currentUser);
-                
+
                 // 4. Determine the roles of the current user
                 bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
                 bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
