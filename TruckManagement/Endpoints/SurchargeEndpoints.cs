@@ -135,6 +135,98 @@ namespace TruckManagement.Api.Endpoints
                         );
                     }
                 });
+            
+            app.MapGet("/surcharges/{clientId}",
+                [Authorize(Roles = "globalAdmin, customerAdmin")]
+                async (
+                    string clientId,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    try
+                    {
+                        if (!Guid.TryParse(clientId, out Guid validClientId))
+                        {
+                            return ApiResponseFactory.Error("Invalid clientId format. Must be a valid GUID.",
+                                StatusCodes.Status400BadRequest);
+                        }
+
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                        bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+
+                        if (!isGlobalAdmin && !isCustomerAdmin)
+                        {
+                            return ApiResponseFactory.Error("Unauthorized to view surcharges.",
+                                StatusCodes.Status403Forbidden);
+                        }
+
+                        List<Guid> userCompanyIds = new();
+                        List<Guid> clientsOwnedByCompanies = new();
+
+                        if (!isGlobalAdmin)
+                        {
+                            var currentUserId = userManager.GetUserId(currentUser);
+                            var currentContactPerson = await db.ContactPersons
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
+
+                            if (currentContactPerson == null)
+                            {
+                                return ApiResponseFactory.Error("ContactPerson profile not found.",
+                                    StatusCodes.Status403Forbidden);
+                            }
+
+                            userCompanyIds = await db.ContactPersonClientCompanies
+                                .Where(cpc => cpc.ContactPersonId == currentContactPerson.Id && cpc.CompanyId.HasValue)
+                                .Select(cpc => cpc.CompanyId.Value)
+                                .ToListAsync();
+
+                            clientsOwnedByCompanies = await db.Clients
+                                .Where(cl => userCompanyIds.Contains(cl.CompanyId))
+                                .Select(cl => cl.Id)
+                                .ToListAsync();
+
+                            if (!clientsOwnedByCompanies.Contains(validClientId))
+                            {
+                                return ApiResponseFactory.Error(
+                                    "Unauthorized: The specified client is not associated with your company.",
+                                    StatusCodes.Status403Forbidden
+                                );
+                            }
+                        }
+
+                        var surcharges = await db.Surcharges
+                            .Where(s => s.ClientId == validClientId)
+                            .Select(s => new
+                            {
+                                s.Id,
+                                s.Value,
+                                Client = new
+                                {
+                                    s.Client.Id,
+                                    s.Client.Name
+                                },
+                                Company = new
+                                {
+                                    s.Company.Id,
+                                    s.Company.Name
+                                }
+                            })
+                            .ToListAsync();
+
+                        return ApiResponseFactory.Success(surcharges, StatusCodes.Status200OK);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Error] {ex.Message}");
+                        Console.WriteLine($"[StackTrace] {ex.StackTrace}");
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while fetching surcharges.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+                });
         }
     }
 }
