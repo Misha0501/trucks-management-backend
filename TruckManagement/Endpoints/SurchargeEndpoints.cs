@@ -211,21 +211,21 @@ namespace TruckManagement.Api.Endpoints
                             }
                         }
 
-                        // Count total surcharges for pagination
-                        var totalSurcharges = await db.Surcharges
-                            .Where(s => s.ClientId == validClientId)
-                            .CountAsync();
+                        // Filter surcharges to only those where `CompanyId` is in `userCompanyIds`
+                        IQueryable<Surcharge> surchargesQuery = db.Surcharges
+                            .Where(s => s.ClientId == validClientId);
 
-                        if (totalSurcharges == 0)
+                        if (!isGlobalAdmin)
                         {
-                            return ApiResponseFactory.Error("No surcharges found for this client.",
-                                StatusCodes.Status404NotFound);
+                            surchargesQuery = surchargesQuery.Where(s => userCompanyIds.Contains(s.CompanyId));
                         }
+
+                        // Count total surcharges for pagination
+                        var totalSurcharges = await surchargesQuery.CountAsync();
 
                         var totalPages = (int)Math.Ceiling((double)totalSurcharges / pageSize);
 
-                        var paginatedSurcharges = await db.Surcharges
-                            .Where(s => s.ClientId == validClientId)
+                        var paginatedSurcharges = await surchargesQuery
                             .OrderBy(s => s.Id) // Ordering to ensure consistent pagination
                             .Skip((pageNumber - 1) * pageSize)
                             .Take(pageSize)
