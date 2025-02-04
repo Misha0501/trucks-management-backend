@@ -155,7 +155,9 @@ namespace TruckManagement.Api.Endpoints
                     string clientId,
                     ApplicationDbContext db,
                     UserManager<ApplicationUser> userManager,
-                    ClaimsPrincipal currentUser
+                    ClaimsPrincipal currentUser,
+                    [FromQuery] int pageNumber = 1,
+                    [FromQuery] int pageSize = 10
                 ) =>
                 {
                     try
@@ -209,8 +211,24 @@ namespace TruckManagement.Api.Endpoints
                             }
                         }
 
-                        var surcharges = await db.Surcharges
+                        // Count total surcharges for pagination
+                        var totalSurcharges = await db.Surcharges
                             .Where(s => s.ClientId == validClientId)
+                            .CountAsync();
+
+                        if (totalSurcharges == 0)
+                        {
+                            return ApiResponseFactory.Error("No surcharges found for this client.",
+                                StatusCodes.Status404NotFound);
+                        }
+
+                        var totalPages = (int)Math.Ceiling((double)totalSurcharges / pageSize);
+
+                        var paginatedSurcharges = await db.Surcharges
+                            .Where(s => s.ClientId == validClientId)
+                            .OrderBy(s => s.Id) // Ordering to ensure consistent pagination
+                            .Skip((pageNumber - 1) * pageSize)
+                            .Take(pageSize)
                             .Select(s => new
                             {
                                 s.Id,
@@ -228,7 +246,16 @@ namespace TruckManagement.Api.Endpoints
                             })
                             .ToListAsync();
 
-                        return ApiResponseFactory.Success(surcharges, StatusCodes.Status200OK);
+                        var response = new
+                        {
+                            TotalSurcharges = totalSurcharges,
+                            TotalPages = totalPages,
+                            PageNumber = pageNumber,
+                            PageSize = pageSize,
+                            Data = paginatedSurcharges
+                        };
+
+                        return ApiResponseFactory.Success(response, StatusCodes.Status200OK);
                     }
                     catch (Exception ex)
                     {
