@@ -4,6 +4,7 @@ using TruckManagement.Extensions;
 using TruckManagement.Endpoints;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using TruckManagement.Api.Endpoints;
 using TruckManagement.Routes;
 using TruckManagement.Seeding;
 using TruckManagement.Services;
@@ -66,5 +67,6 @@ app.MapRoleEndpoints();
 app.RegisterClientsRoutes();
 app.MapDriversEndpoints();
 app.MapContactPersonsEndpoints();
+app.MapSurchargeEndpoints();
 
 app.Run();
