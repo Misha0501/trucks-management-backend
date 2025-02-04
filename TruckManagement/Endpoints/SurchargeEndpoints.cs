@@ -33,8 +33,12 @@ namespace TruckManagement.Api.Endpoints
                             return ApiResponseFactory.Error("Surcharge Value must be greater than 0.",
                                 StatusCodes.Status400BadRequest);
 
-                        if (request.CompanyId == Guid.Empty || request.ClientId == Guid.Empty)
-                            return ApiResponseFactory.Error("CompanyId and ClientId are required.",
+                        if (!Guid.TryParse(request.CompanyId, out Guid validCompanyId))
+                            return ApiResponseFactory.Error("Invalid CompanyId format. Must be a valid GUID.",
+                                StatusCodes.Status400BadRequest);
+
+                        if (!Guid.TryParse(request.ClientId, out Guid validClientId))
+                            return ApiResponseFactory.Error("Invalid ClientId format. Must be a valid GUID.",
                                 StatusCodes.Status400BadRequest);
 
                         var currentUserId = userManager.GetUserId(currentUser);
@@ -46,6 +50,9 @@ namespace TruckManagement.Api.Endpoints
                             return ApiResponseFactory.Error("Unauthorized to create a surcharge.",
                                 StatusCodes.Status403Forbidden);
                         }
+
+                        List<Guid> userCompanyIds = new();
+                        List<Guid> clientsOwnedByCompanies = new();
 
                         if (!isGlobalAdmin)
                         {
@@ -59,19 +66,19 @@ namespace TruckManagement.Api.Endpoints
                                     StatusCodes.Status403Forbidden);
                             }
 
-                            var directCompanyIds = await db.ContactPersonClientCompanies
+                            userCompanyIds = await db.ContactPersonClientCompanies
                                 .Where(cpc => cpc.ContactPersonId == contactPerson.Id && cpc.CompanyId.HasValue)
                                 .Select(cpc => cpc.CompanyId.Value)
                                 .Distinct()
                                 .ToListAsync();
 
-                            var clientsOwnedByCompanies = await db.Clients
-                                .Where(client => directCompanyIds.Contains(client.CompanyId))
+                            clientsOwnedByCompanies = await db.Clients
+                                .Where(client => userCompanyIds.Contains(client.CompanyId))
                                 .Select(client => client.Id)
                                 .Distinct()
                                 .ToListAsync();
 
-                            if (!directCompanyIds.Contains(request.CompanyId))
+                            if (!userCompanyIds.Contains(validCompanyId))
                             {
                                 return ApiResponseFactory.Error(
                                     "You are not authorized to create surcharges for this company.",
@@ -79,24 +86,7 @@ namespace TruckManagement.Api.Endpoints
                                 );
                             }
 
-                            var requestedClient = await db.Clients
-                                .AsNoTracking()
-                                .FirstOrDefaultAsync(c => c.Id == request.ClientId);
-
-                            if (requestedClient == null)
-                            {
-                                return ApiResponseFactory.Error("Client not found.", StatusCodes.Status404NotFound);
-                            }
-
-                            if (!directCompanyIds.Contains(requestedClient.CompanyId))
-                            {
-                                return ApiResponseFactory.Error(
-                                    "You are not authorized to create surcharges for this client.",
-                                    StatusCodes.Status403Forbidden
-                                );
-                            }
-
-                            if (!clientsOwnedByCompanies.Contains(request.ClientId))
+                            if (!clientsOwnedByCompanies.Contains(validClientId))
                             {
                                 return ApiResponseFactory.Error(
                                     "You are not authorized to create surcharges for this client.",
@@ -105,12 +95,34 @@ namespace TruckManagement.Api.Endpoints
                             }
                         }
 
+                        var requestedCompany = await db.Companies.AsNoTracking()
+                            .FirstOrDefaultAsync(c => c.Id == validCompanyId);
+                        if (requestedCompany == null)
+                        {
+                            return ApiResponseFactory.Error("Company not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        var requestedClient =
+                            await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == validClientId);
+                        if (requestedClient == null)
+                        {
+                            return ApiResponseFactory.Error("Client not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        if (requestedClient.CompanyId != validCompanyId)
+                        {
+                            return ApiResponseFactory.Error(
+                                "The specified client does not belong to the given company.",
+                                StatusCodes.Status400BadRequest
+                            );
+                        }
+
                         var surcharge = new Surcharge
                         {
                             Id = Guid.NewGuid(),
                             Value = request.Value,
-                            ClientId = request.ClientId,
-                            CompanyId = request.CompanyId
+                            ClientId = validClientId,
+                            CompanyId = validCompanyId
                         };
 
                         db.Surcharges.Add(surcharge);
@@ -135,7 +147,8 @@ namespace TruckManagement.Api.Endpoints
                         );
                     }
                 });
-            
+
+
             app.MapGet("/surcharges/{clientId}",
                 [Authorize(Roles = "globalAdmin, customerAdmin")]
                 async (
