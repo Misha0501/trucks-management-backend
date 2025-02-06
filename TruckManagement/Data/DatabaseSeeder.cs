@@ -84,7 +84,10 @@ namespace TruckManagement.Seeding
 
             // Example #1: A globalAdmin user
             const string adminEmail = "admin@admin.com";
-            var adminUser = await userManager.FindByEmailAsync(adminEmail);
+            var adminUser =await userManager.Users
+                .IgnoreQueryFilters()
+                .SingleOrDefaultAsync(u => u.NormalizedEmail == adminEmail.ToUpper());
+            
             if (adminUser == null)
             {
                 adminUser = new ApplicationUser
@@ -106,7 +109,10 @@ namespace TruckManagement.Seeding
 
             // Example #2: A customer user
             const string customerEmail = "customer@example.com";
-            var customerUser = await userManager.FindByEmailAsync(customerEmail);
+            var customerUser = await userManager.Users
+                .IgnoreQueryFilters()
+                .SingleOrDefaultAsync(u => u.NormalizedEmail == customerEmail.ToUpper());
+            
             if (customerUser == null)
             {
                 customerUser = new ApplicationUser
@@ -126,7 +132,10 @@ namespace TruckManagement.Seeding
 
             // Example #2.a: A customerAdmin user
             const string customerAdminEmail = "customerAdmin@example.com";
-            var customerAdminUser = await userManager.FindByEmailAsync(customerAdminEmail);
+            var customerAdminUser = await userManager.Users
+                .IgnoreQueryFilters()
+                .SingleOrDefaultAsync(u => u.NormalizedEmail == customerAdminEmail.ToUpper());
+            
             if (customerAdminUser == null)
             {
                 customerAdminUser = new ApplicationUser
@@ -146,7 +155,10 @@ namespace TruckManagement.Seeding
 
             // Example #3: A driver user
             const string driverEmail = "driver@example.com";
-            var driverUser = await userManager.FindByEmailAsync(driverEmail);
+            var driverUser = await userManager.Users
+                .IgnoreQueryFilters()
+                .SingleOrDefaultAsync(u => u.NormalizedEmail == driverEmail.ToUpper());
+            
             if (driverUser == null)
             {
                 driverUser = new ApplicationUser
@@ -166,7 +178,10 @@ namespace TruckManagement.Seeding
 
             // Example #4: A client user
             const string clientEmail = "client@example.com";
-            var clientUser = await userManager.FindByEmailAsync(clientEmail);
+            var clientUser = await userManager.Users
+                .IgnoreQueryFilters()
+                .SingleOrDefaultAsync(u => u.NormalizedEmail == clientEmail.ToUpper());
+            
             if (clientUser == null)
             {
                 clientUser = new ApplicationUser
