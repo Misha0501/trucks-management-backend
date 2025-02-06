@@ -510,7 +510,10 @@ public static class UserEndpoints
                     if (contactPerson != null)
                     {
                         var companiesAndClients = await db.ContactPersonClientCompanies
-                            .Where(cpc => cpc.ContactPersonId == contactPerson.Id)
+                            .Where(cpc => cpc.ContactPersonId == contactPerson.Id &&
+                                          cpc.Company != null &&
+                                          !cpc.Company.IsDeleted && 
+                                          cpc.Company.IsApproved)
                             .Select(cpc => new
                             {
                                 cpc.CompanyId,
