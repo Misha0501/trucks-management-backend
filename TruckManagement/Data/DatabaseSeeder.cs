@@ -17,7 +17,8 @@ namespace TruckManagement.Seeding
 
             // 3) Seed roles (including "client")
             var roleManager = serviceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
-            var roles = new[] { "driver", "employer", "customer", "customerAdmin", "customerAccountant", "globalAdmin" };
+            var roles = new[]
+                { "driver", "employer", "customer", "customerAdmin", "customerAccountant", "globalAdmin" };
             foreach (var role in roles)
             {
                 if (!await roleManager.RoleExistsAsync(role))
@@ -33,7 +34,8 @@ namespace TruckManagement.Seeding
                 dbContext.Companies.Add(new Company
                 {
                     Id = defaultCompanyId,
-                    Name = "DefaultCompany"
+                    Name = "DefaultCompany",
+                    IsApproved = true
                 });
                 await dbContext.SaveChangesAsync();
             }
@@ -44,17 +46,26 @@ namespace TruckManagement.Seeding
                 new Company
                 {
                     Id = Guid.Parse("22222222-2222-2222-2222-222222222222"),
-                    Name = "SecondCompany"
+                    Name = "SecondCompany",
+                    IsApproved = true
                 },
                 new Company
                 {
                     Id = Guid.Parse("33333333-3333-3333-3333-333333333333"),
-                    Name = "ThirdCompany"
+                    Name = "ThirdCompany",
+                    IsApproved = true
                 },
                 new Company
                 {
                     Id = Guid.Parse("44444444-4444-4444-4444-444444444444"),
-                    Name = "FourthCompany"
+                    Name = "FourthCompany",
+                    IsApproved = true
+                },
+                new Company
+                {
+                    Id = Guid.Parse("55555555-5555-5555-5555-555555555555"),
+                    Name = "5 Global Express",
+                    IsApproved = true
                 }
             };
 
@@ -112,7 +123,7 @@ namespace TruckManagement.Seeding
                     await userManager.AddToRoleAsync(customerUser, "customer");
                 }
             }
-            
+
             // Example #2.a: A customerAdmin user
             const string customerAdminEmail = "customerAdmin@example.com";
             var customerAdminUser = await userManager.FindByEmailAsync(customerAdminEmail);
@@ -197,7 +208,7 @@ namespace TruckManagement.Seeding
                 };
                 dbContext.ContactPersons.Add(contactPerson);
             }
-            
+
             // 8) Seed ContactPerson for customerAdminUser
             if (!dbContext.ContactPersons.Any(cp => cp.AspNetUserId == customerAdminUser.Id))
             {
@@ -248,7 +259,8 @@ namespace TruckManagement.Seeding
                     PhoneNumber = "555-0001",
                     Email = "contact@alphacorp.com",
                     Remark = "Top-tier client",
-                    CompanyId = defaultCompanyId
+                    CompanyId = defaultCompanyId,
+                    IsApproved = true,
                 },
                 new Client
                 {
@@ -262,7 +274,8 @@ namespace TruckManagement.Seeding
                     PhoneNumber = "555-0002",
                     Email = "info@betaindustries.com",
                     Remark = "Valued client",
-                    CompanyId = defaultCompanyId
+                    CompanyId = defaultCompanyId,
+                    IsApproved = true,
                 },
                 new Client
                 {
@@ -276,7 +289,24 @@ namespace TruckManagement.Seeding
                     PhoneNumber = "555-0003",
                     Email = "support@gammasolutions.com",
                     Remark = "Strategic partner",
-                    CompanyId = defaultCompanyId
+                    CompanyId = defaultCompanyId,
+                    IsApproved = true,
+                }
+                ,
+                new Client
+                {
+                    Id = Guid.Parse("78777777-7777-7777-7777-777777777777"),
+                    Name = "78 Express Solutions",
+                    Tav = "TAV-Express",
+                    Address = "300 Express Road",
+                    Postcode = "30003",
+                    City = "Den Haag",
+                    Country = "Netherlands",
+                    PhoneNumber = "555-0003",
+                    Email = "support@express.com",
+                    Remark = "Strategic partner",
+                    CompanyId = Guid.Parse("55555555-5555-5555-5555-555555555555"),
+                    IsApproved = true,
                 }
             };
 
@@ -291,14 +321,15 @@ namespace TruckManagement.Seeding
             await dbContext.SaveChangesAsync();
 
             // 12) Associate client user with clients via ContactPersonClientCompany
-            var seededClientUserContact = dbContext.ContactPersons.FirstOrDefault(cp => cp.AspNetUserId == clientUser.Id);
+            var seededClientUserContact =
+                dbContext.ContactPersons.FirstOrDefault(cp => cp.AspNetUserId == clientUser.Id);
             if (seededClientUserContact != null)
             {
                 foreach (var client in clientsToSeed)
                 {
                     if (!dbContext.ContactPersonClientCompanies.Any(cpc =>
-                        cpc.ContactPersonId == seededClientUserContact.Id &&
-                        cpc.ClientId == client.Id))
+                            cpc.ContactPersonId == seededClientUserContact.Id &&
+                            cpc.ClientId == client.Id))
                     {
                         var cpc = new ContactPersonClientCompany
                         {
@@ -329,12 +360,13 @@ namespace TruckManagement.Seeding
                     });
                 }
             }
-            
+
             if (customerUser != null)
             {
                 var customerContact = dbContext.ContactPersons.FirstOrDefault(cp => cp.AspNetUserId == customerUser.Id);
                 if (customerContact != null && !dbContext.ContactPersonClientCompanies.Any(cpc =>
-                        cpc.ContactPersonId == customerContact.Id && cpc.CompanyId == Guid.Parse("22222222-2222-2222-2222-222222222222")))
+                        cpc.ContactPersonId == customerContact.Id &&
+                        cpc.CompanyId == Guid.Parse("22222222-2222-2222-2222-222222222222")))
                 {
                     dbContext.ContactPersonClientCompanies.Add(new ContactPersonClientCompany
                     {
@@ -345,12 +377,14 @@ namespace TruckManagement.Seeding
                     });
                 }
             }
-            
+
             if (customerAdminUser != null)
             {
-                var customerAdminContact = dbContext.ContactPersons.FirstOrDefault(cp => cp.AspNetUserId == customerAdminUser.Id);
+                var customerAdminContact =
+                    dbContext.ContactPersons.FirstOrDefault(cp => cp.AspNetUserId == customerAdminUser.Id);
                 if (customerAdminContact != null && !dbContext.ContactPersonClientCompanies.Any(cpc =>
-                        cpc.ContactPersonId == customerAdminContact.Id && cpc.CompanyId == Guid.Parse("22222222-2222-2222-2222-222222222222")))
+                        cpc.ContactPersonId == customerAdminContact.Id &&
+                        cpc.CompanyId == Guid.Parse("22222222-2222-2222-2222-222222222222")))
                 {
                     dbContext.ContactPersonClientCompanies.Add(new ContactPersonClientCompany
                     {
@@ -361,7 +395,7 @@ namespace TruckManagement.Seeding
                     });
                 }
             }
-            
+
             await dbContext.SaveChangesAsync();
 
             // 14) Seed Rates with fixed GUIDs
@@ -451,7 +485,8 @@ namespace TruckManagement.Seeding
             var seededDriverEntity = dbContext.Drivers.FirstOrDefault(d => d.AspNetUserId == driverUser.Id);
 
             // 18) Seed CarDrivers
-            if (seededCar1Entity != null && seededDriverEntity != null && !dbContext.CarDrivers.Any(cd => cd.CarId == seededCar1Entity.Id && cd.DriverId == seededDriverEntity.Id))
+            if (seededCar1Entity != null && seededDriverEntity != null && !dbContext.CarDrivers.Any(cd =>
+                    cd.CarId == seededCar1Entity.Id && cd.DriverId == seededDriverEntity.Id))
             {
                 var carDriver = new CarDriver
                 {
@@ -462,7 +497,8 @@ namespace TruckManagement.Seeding
                 dbContext.CarDrivers.Add(carDriver);
             }
 
-            if (seededCar2Entity != null && seededDriverEntity != null && !dbContext.CarDrivers.Any(cd => cd.CarId == seededCar2Entity.Id && cd.DriverId == seededDriverEntity.Id))
+            if (seededCar2Entity != null && seededDriverEntity != null && !dbContext.CarDrivers.Any(cd =>
+                    cd.CarId == seededCar2Entity.Id && cd.DriverId == seededDriverEntity.Id))
             {
                 var carDriver = new CarDriver
                 {
