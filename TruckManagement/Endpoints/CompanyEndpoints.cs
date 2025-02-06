@@ -236,8 +236,8 @@ public static class CompanyEndpoints
                 [FromBody] Company newCompany,
                 ApplicationDbContext db) =>
             {
-                if (newCompany.Id == Guid.Empty)
-                    newCompany.Id = Guid.NewGuid();
+                newCompany.Id = Guid.NewGuid();
+                newCompany.IsApproved = true;
 
                 db.Companies.Add(newCompany);
                 await db.SaveChangesAsync();
