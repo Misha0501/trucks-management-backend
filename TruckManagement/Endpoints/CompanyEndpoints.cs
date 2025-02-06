@@ -315,22 +315,104 @@ public static class CompanyEndpoints
 
 
         // 5) DELETE /companies/{id:guid} -> Delete (Require globalAdmin)
-        app.MapDelete("/companies/{id:guid}", async (
-                Guid id,
-                ApplicationDbContext db) =>
+        app.MapDelete("/companies/{id:guid}",
+            [Authorize(Roles = "globalAdmin, customerAdmin")]
+            async (
+                string id,
+                ApplicationDbContext db,
+                UserManager<ApplicationUser> userManager,
+                ClaimsPrincipal currentUser
+            ) =>
             {
-                var existing = await db.Companies.FindAsync(id);
-                if (existing == null)
+                using var transaction = await db.Database.BeginTransactionAsync();
+                try
                 {
-                    return ApiResponseFactory.Error("Company not found.", StatusCodes.Status404NotFound);
+                    // 1) Validate GUID format
+                    if (!Guid.TryParse(id, out Guid companyGuid))
+                    {
+                        return ApiResponseFactory.Error("Invalid company ID format. Must be a valid GUID.",
+                            StatusCodes.Status400BadRequest);
+                    }
+
+                    // 2) Find the company
+                    var existingCompany = await db.Companies.FindAsync(companyGuid);
+                    if (existingCompany == null)
+                    {
+                        return ApiResponseFactory.Error("Company not found.", StatusCodes.Status404NotFound);
+                    }
+
+                    // 3) Determine if user is globalAdmin or customerAdmin
+                    bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                    bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+
+                    if (!isGlobalAdmin && !isCustomerAdmin)
+                    {
+                        return ApiResponseFactory.Error("Unauthorized to delete this company.",
+                            StatusCodes.Status403Forbidden);
+                    }
+
+                    // 4) If customerAdmin, verify they are assigned to this company
+                    if (isCustomerAdmin)
+                    {
+                        var currentUserId = userManager.GetUserId(currentUser);
+
+                        // Retrieve the ContactPerson entity associated with the user
+                        var currentContactPerson = await db.ContactPersons
+                            .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
+
+                        if (currentContactPerson == null)
+                        {
+                            return ApiResponseFactory.Error("ContactPerson profile not found.",
+                                StatusCodes.Status403Forbidden);
+                        }
+
+                        // Check if user is assigned to this company
+                        bool isAssigned = await db.ContactPersonClientCompanies
+                            .AnyAsync(cpc =>
+                                cpc.ContactPersonId == currentContactPerson.Id && cpc.CompanyId == companyGuid);
+
+                        if (!isAssigned)
+                        {
+                            return ApiResponseFactory.Error(
+                                "You are not authorized to delete this company.",
+                                StatusCodes.Status403Forbidden
+                            );
+                        }
+                    }
+
+                    // 5) Soft-delete the company
+                    existingCompany.IsDeleted = true;
+                    await db.SaveChangesAsync();
+
+                    // 6) Remove all ContactPersonClientCompanies records related to this company
+                    var cpcRecords = await db.ContactPersonClientCompanies
+                        .Where(cpc => cpc.CompanyId == companyGuid)
+                        .ToListAsync();
+
+                    if (cpcRecords.Any())
+                    {
+                        db.ContactPersonClientCompanies.RemoveRange(cpcRecords);
+                        await db.SaveChangesAsync();
+                    }
+
+                    // 7) Commit the transaction
+                    await transaction.CommitAsync();
+
+                    return ApiResponseFactory.Success("Company deleted successfully.", StatusCodes.Status200OK);
                 }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
 
-                db.Companies.Remove(existing);
-                await db.SaveChangesAsync();
-
-                return ApiResponseFactory.Success("Company deleted successfully.", StatusCodes.Status200OK);
-            })
-            .RequireAuthorization("GlobalAdminOnly"); // <--- policy name
+                    Console.WriteLine($"[Error] {ex.Message}");
+                    Console.WriteLine($"[StackTrace] {ex.StackTrace}");
+                    return ApiResponseFactory.Error(
+                        "An unexpected error occurred while deleting the company.",
+                        StatusCodes.Status500InternalServerError
+                    );
+                }
+            }
+        );
 
         return app;
     }
