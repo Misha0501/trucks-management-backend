@@ -1209,6 +1209,136 @@ public static class UserEndpoints
                 }
             });
 
+        app.MapDelete("/contactpersons/{contactPersonId:guid}",
+            [Authorize(Roles = "globalAdmin, customerAdmin")]
+            async (
+                string contactPersonId,
+                ApplicationDbContext db,
+                UserManager<ApplicationUser> userManager,
+                ClaimsPrincipal currentUser
+            ) =>
+            {
+                using var transaction = await db.Database.BeginTransactionAsync();
+                try
+                {
+                    // 1️⃣ Validate GUID format
+                    if (!Guid.TryParse(contactPersonId, out Guid contactPersonGuid))
+                    {
+                        return ApiResponseFactory.Error("Invalid contact person ID format. Must be a valid GUID.",
+                            StatusCodes.Status400BadRequest);
+                    }
+
+                    // 2️⃣ Find the contact person
+                    var contactPerson = await db.ContactPersons
+                        .Include(cp => cp.ContactPersonClientCompanies)
+                        .FirstOrDefaultAsync(cp => cp.Id == contactPersonGuid);
+
+                    if (contactPerson == null)
+                    {
+                        return ApiResponseFactory.Error("Contact person not found.", StatusCodes.Status404NotFound);
+                    }
+
+                    // 3️⃣ Determine user roles
+                    bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                    bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+
+                    if (!isGlobalAdmin && !isCustomerAdmin)
+                    {
+                        return ApiResponseFactory.Error("Unauthorized to delete this contact person.",
+                            StatusCodes.Status403Forbidden);
+                    }
+
+                    // 4️⃣ If the requester is a **Customer Admin**, check if they are associated with this contact person
+                    if (!isGlobalAdmin)
+                    {
+                        var currentUserId = userManager.GetUserId(currentUser);
+
+                        // Get the current user's ContactPerson record
+                        var currentContactPerson = await db.ContactPersons
+                            .Include(cp => cp.ContactPersonClientCompanies)
+                            .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
+
+                        if (currentContactPerson == null)
+                        {
+                            return ApiResponseFactory.Error("Your ContactPerson profile was not found.",
+                                StatusCodes.Status403Forbidden);
+                        }
+
+                        // Get all **companies** that the current **customerAdmin** is assigned to
+                        var adminCompanyIds = currentContactPerson.ContactPersonClientCompanies
+                            .Where(cpc => cpc.CompanyId.HasValue)
+                            .Select(cpc => cpc.CompanyId!.Value)
+                            .Distinct()
+                            .ToList();
+
+                        // Get all **clients** owned by those companies
+                        var clientsOwnedByAdminCompanies = await db.Clients
+                            .Where(client => adminCompanyIds.Contains(client.CompanyId))
+                            .Select(client => client.Id)
+                            .Distinct()
+                            .ToListAsync();
+
+                        // Check if the contact person is assigned to **ANY** of the same companies or clients
+                        bool isAuthorizedToDelete = contactPerson.ContactPersonClientCompanies
+                            .Any(cpc =>
+                                (cpc.CompanyId.HasValue && adminCompanyIds.Contains(cpc.CompanyId.Value)) ||
+                                (cpc.ClientId.HasValue && clientsOwnedByAdminCompanies.Contains(cpc.ClientId.Value))
+                            );
+
+                        if (!isAuthorizedToDelete)
+                        {
+                            return ApiResponseFactory.Error(
+                                "Unauthorized: You cannot delete this contact person as they are not associated with your company or clients.",
+                                StatusCodes.Status403Forbidden
+                            );
+                        }
+                    }
+
+                    // 5 Soft-delete the associated ApplicationUser instead of ContactPerson
+                    var user = await db.Users.FindAsync(contactPerson.AspNetUserId);
+                    if (user == null)
+                    {
+                        throw new InvalidOperationException(
+                            $"User with ID {contactPerson.AspNetUserId} not found. Cannot delete contact person.");
+                    }
+
+                    user.IsDeleted = true;
+
+                    await db.SaveChangesAsync();
+
+                    // 6️⃣ Remove all ContactPersonClientCompanies associated with this contact person
+                    var cpcRecords = await db.ContactPersonClientCompanies
+                        .Where(cpc => cpc.ContactPersonId == contactPersonGuid)
+                        .ToListAsync();
+
+                    if (cpcRecords.Any())
+                    {
+                        db.ContactPersonClientCompanies.RemoveRange(cpcRecords);
+                        await db.SaveChangesAsync();
+                    }
+
+                    // 7️⃣ Commit transaction
+                    await transaction.CommitAsync();
+
+                    return ApiResponseFactory.Success("Contact person deleted successfully.",
+                        StatusCodes.Status200OK);
+                }
+                catch (Exception ex)
+                {
+                    // 8️⃣ Roll back on failure
+                    await transaction.RollbackAsync();
+
+                    Console.WriteLine($"[Error] {ex.Message}");
+                    Console.WriteLine($"[StackTrace] {ex.StackTrace}");
+                    return ApiResponseFactory.Error(
+                        "An unexpected error occurred while deleting the contact person.",
+                        StatusCodes.Status500InternalServerError
+                    );
+                }
+            }
+        );
+
+
         return app;
     }
 }
