@@ -5,37 +5,23 @@
 namespace TruckManagement.Migrations
 {
     /// <inheritdoc />
-    public partial class AddIsDeletedAndIsApproved : Migration
+    public partial class AddIsDeletedAndIsApprovedToApplicationUser : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<bool>(
                 name: "IsApproved",
-                table: "Companies",
+                table: "AspNetUsers",
                 type: "boolean",
                 nullable: false,
                 defaultValue: true);
 
             migrationBuilder.AddColumn<bool>(
                 name: "IsDeleted",
-                table: "Companies",
+                table: "AspNetUsers",
                 type: "boolean",
                 nullable: false,
-                defaultValue: false);
-
-            migrationBuilder.AddColumn<bool>(
-                name: "IsApproved",
-                table: "Clients",
-                type: "boolean",
-                nullable: false,
-                defaultValue: false);
-
-            migrationBuilder.AddColumn<bool>(
-                name: "IsDeleted",
-                table: "Clients",
-                type: "boolean",
-                nullable: true,
                 defaultValue: false);
         }
 
@@ -44,19 +30,11 @@ namespace TruckManagement.Migrations
         {
             migrationBuilder.DropColumn(
                 name: "IsApproved",
-                table: "Companies");
+                table: "AspNetUsers");
 
             migrationBuilder.DropColumn(
                 name: "IsDeleted",
-                table: "Companies");
-
-            migrationBuilder.DropColumn(
-                name: "IsApproved",
-                table: "Clients");
-
-            migrationBuilder.DropColumn(
-                name: "IsDeleted",
-                table: "Clients");
+                table: "AspNetUsers");
         }
     }
 }

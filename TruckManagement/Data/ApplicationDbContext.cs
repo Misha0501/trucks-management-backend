@@ -31,6 +31,7 @@ namespace TruckManagement.Data
             // // Apply global filters
             builder.Entity<Company>().HasQueryFilter(c => !c.IsDeleted && c.IsApproved);
             builder.Entity<Client>().HasQueryFilter(c => !c.IsDeleted && c.IsApproved);
+            builder.Entity<ApplicationUser>().HasQueryFilter(u => !u.IsDeleted && u.IsApproved);
 
             builder.Entity<Company>()
                 .ToTable("Companies");
