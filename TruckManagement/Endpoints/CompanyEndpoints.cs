@@ -245,7 +245,6 @@ public static class CompanyEndpoints
                 return ApiResponseFactory.Success(newCompany, StatusCodes.Status201Created);
             });
 
-
         app.MapPut("/companies/{id:guid}",
             [Authorize(Roles = "globalAdmin, customerAdmin, customerAccountant, employer, customer")]
             async (
