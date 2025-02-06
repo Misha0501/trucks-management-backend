@@ -28,6 +28,10 @@ namespace TruckManagement.Data
         {
             base.OnModelCreating(builder);
 
+            // // Apply global filters
+            builder.Entity<Company>().HasQueryFilter(c => !c.IsDeleted && c.IsApproved);
+            builder.Entity<Client>().HasQueryFilter(c => !c.IsDeleted && c.IsApproved);
+
             builder.Entity<Company>()
                 .ToTable("Companies");
 

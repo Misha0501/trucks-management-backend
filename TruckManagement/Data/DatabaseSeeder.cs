@@ -29,7 +29,7 @@ namespace TruckManagement.Seeding
 
             // 4) Seed the default company if it doesn't exist
             var defaultCompanyId = Guid.Parse("11111111-1111-1111-1111-111111111111");
-            if (!dbContext.Companies.Any(c => c.Id == defaultCompanyId))
+            if (!dbContext.Companies.IgnoreQueryFilters().Any(c => c.Id == defaultCompanyId))
             {
                 dbContext.Companies.Add(new Company
                 {
@@ -71,7 +71,7 @@ namespace TruckManagement.Seeding
 
             foreach (var comp in companiesToSeed)
             {
-                if (!dbContext.Companies.Any(c => c.Id == comp.Id))
+                if (!dbContext.Companies.IgnoreQueryFilters().Any(c => c.Id == comp.Id))
                 {
                     dbContext.Companies.Add(comp);
                 }
@@ -312,7 +312,7 @@ namespace TruckManagement.Seeding
 
             foreach (var client in clientsToSeed)
             {
-                if (!dbContext.Clients.Any(c => c.Id == client.Id))
+                if (!dbContext.Clients.IgnoreQueryFilters().Any(c => c.Id == client.Id))
                 {
                     dbContext.Clients.Add(client);
                 }

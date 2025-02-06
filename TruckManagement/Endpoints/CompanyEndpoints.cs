@@ -75,7 +75,6 @@ public static class CompanyEndpoints
 
                 // 5. Build the base query based on the user's role
                 IQueryable<Company> companiesQuery = db.Companies.AsQueryable();
-                companiesQuery = companiesQuery.Where(cp => cp.IsDeleted == false && cp.IsApproved == true);
 
                 if (isContactPerson)
                 {
@@ -176,7 +175,6 @@ public static class CompanyEndpoints
                 // 5. Retrieve the company with related data
                 var company = await db.Companies
                     .AsNoTracking()
-                    .Where(cp => cp.IsDeleted == false && cp.IsApproved == true)
                     .Include(c => c.Drivers)
                     .ThenInclude(d => d.User)
                     .Include(c => c.ContactPersonClientCompanies)

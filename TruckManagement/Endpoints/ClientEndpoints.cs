@@ -103,7 +103,6 @@ namespace TruckManagement.Routes
 
                     // 5. Build the base query based on the user's role
                     IQueryable<Client> clientsQuery = db.Clients.AsQueryable();
-                    clientsQuery = clientsQuery.Where(c => c.IsDeleted == false && c.IsApproved == true);
 
                     if (isContactPerson || isDriver)
                     {
@@ -243,7 +242,6 @@ namespace TruckManagement.Routes
                     var clientQuery = db.Clients
                         .AsNoTracking()
                         .Include(c => c.Company)
-                        .Where(c => c.IsApproved == true && c.IsDeleted == false)
                         .Where(c => c.Id == id);
 
                     // 6. Apply access restrictions if not a global admin
