@@ -1303,7 +1303,7 @@ public static class UserEndpoints
                     }
 
                     user.IsDeleted = true;
-
+                    contactPerson.IsDeleted = true;
                     await db.SaveChangesAsync();
 
                     // 6️⃣ Remove all ContactPersonClientCompanies associated with this contact person
@@ -1337,6 +1337,96 @@ public static class UserEndpoints
                 }
             }
         );
+
+        app.MapDelete("/drivers/{id:guid}",
+            [Authorize(Roles = "globalAdmin, customerAdmin")]
+            async (
+                Guid id,
+                ApplicationDbContext db,
+                UserManager<ApplicationUser> userManager,
+                ClaimsPrincipal currentUser
+            ) =>
+            {
+                try
+                {
+                    using var transaction = await db.Database.BeginTransactionAsync();
+
+                    // Validate driver ID
+                    var driver = await db.Drivers.FindAsync(id);
+                    if (driver == null)
+                    {
+                        return ApiResponseFactory.Error("Driver not found.", StatusCodes.Status404NotFound);
+                    }
+
+                    // Fetch the associated ApplicationUser
+                    var user = await db.Users.FindAsync(driver.AspNetUserId);
+                    if (user == null)
+                    {
+                        throw new InvalidOperationException(
+                            $"User with ID {driver.AspNetUserId} not found. Cannot delete driver.");
+                    }
+
+                    bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                    bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+
+                    // If the requester is a customerAdmin, ensure they are associated with the driver's company
+                    if (isCustomerAdmin)
+                    {
+                        var currentUserId = userManager.GetUserId(currentUser);
+                        var contactPerson = await db.ContactPersons
+                            .Include(cp => cp.ContactPersonClientCompanies)
+                            .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
+
+                        if (contactPerson == null)
+                        {
+                            return ApiResponseFactory.Error("No ContactPerson profile found.",
+                                StatusCodes.Status403Forbidden);
+                        }
+
+                        // Get companies the customer admin is associated with
+                        var customerAdminCompanyIds = contactPerson.ContactPersonClientCompanies
+                            .Where(cpc => cpc.CompanyId.HasValue)
+                            .Select(cpc => cpc.CompanyId.Value)
+                            .ToList();
+
+                        if (!customerAdminCompanyIds.Contains(driver.CompanyId.Value))
+                        {
+                            return ApiResponseFactory.Error(
+                                "Unauthorized: You cannot delete drivers from companies you are not associated with.",
+                                StatusCodes.Status403Forbidden
+                            );
+                        }
+                    }
+
+                    // Soft-delete the ApplicationUser
+                    user.IsDeleted = true;
+                    await db.SaveChangesAsync();
+
+                    // Remove associations from CarDrivers
+                    var carDriverAssociations = await db.CarDrivers
+                        .Where(cd => cd.DriverId == driver.Id)
+                        .ToListAsync();
+                    db.CarDrivers.RemoveRange(carDriverAssociations);
+                    await db.SaveChangesAsync();
+
+                    // Soft delete the driver by setting IsDeleted to true
+                    driver.IsDeleted = true;
+                    await db.SaveChangesAsync();
+
+                    await transaction.CommitAsync();
+
+                    return ApiResponseFactory.Success("Driver deleted successfully.", StatusCodes.Status200OK);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Error] {ex.Message}");
+                    Console.WriteLine($"[Stack] {ex.StackTrace}");
+                    return ApiResponseFactory.Error(
+                        "An unexpected error occurred while deleting the driver.",
+                        StatusCodes.Status500InternalServerError
+                    );
+                }
+            });
 
 
         return app;

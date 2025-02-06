@@ -32,6 +32,8 @@ namespace TruckManagement.Data
             builder.Entity<Company>().HasQueryFilter(c => !c.IsDeleted && c.IsApproved);
             builder.Entity<Client>().HasQueryFilter(c => !c.IsDeleted && c.IsApproved);
             builder.Entity<ApplicationUser>().HasQueryFilter(u => !u.IsDeleted && u.IsApproved);
+            builder.Entity<Driver>().HasQueryFilter(d => !d.IsDeleted);
+            builder.Entity<ContactPerson>().HasQueryFilter(cp => !cp.IsDeleted);
 
             builder.Entity<Company>()
                 .ToTable("Companies");
