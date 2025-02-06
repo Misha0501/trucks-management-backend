@@ -150,7 +150,7 @@ namespace TruckManagement.Api.Endpoints
 
 
             app.MapGet("/surcharges/{clientId}",
-                [Authorize(Roles = "globalAdmin, customerAdmin")]
+                [Authorize(Roles = "globalAdmin, customerAdmin, customer, customerAccountant")]
                 async (
                     string clientId,
                     ApplicationDbContext db,
@@ -170,8 +170,13 @@ namespace TruckManagement.Api.Endpoints
 
                         bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
                         bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+                        bool isCustomerAccountant = currentUser.IsInRole("customerAccountant");
+                        bool isEmployer = currentUser.IsInRole("employer");
+                        bool isCustomer = currentUser.IsInRole("customer");
 
-                        if (!isGlobalAdmin && !isCustomerAdmin)
+                        bool isContactPerson = isCustomerAdmin || isCustomerAccountant || isEmployer || isCustomer;
+                        
+                        if (!isGlobalAdmin && !isContactPerson)
                         {
                             return ApiResponseFactory.Error("Unauthorized to view surcharges.",
                                 StatusCodes.Status403Forbidden);
