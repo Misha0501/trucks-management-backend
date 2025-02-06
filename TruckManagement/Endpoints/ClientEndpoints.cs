@@ -389,81 +389,109 @@ namespace TruckManagement.Routes
             app.MapDelete("/clients/{id:guid}",
                 [Authorize(Roles = "globalAdmin, customerAdmin")]
                 async (
-                    Guid id,
+                    string id,
                     ApplicationDbContext db,
                     UserManager<ApplicationUser> userManager,
                     ClaimsPrincipal currentUser
                 ) =>
                 {
+                    using var transaction = await db.Database.BeginTransactionAsync();
                     try
                     {
-                        // 1️⃣ Retrieve the current user's ID and roles
-                        var currentUserId = userManager.GetUserId(currentUser);
-                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
-                        bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+                        // 1) Validate GUID format
+                        if (!Guid.TryParse(id, out Guid clientGuid))
+                        {
+                            return ApiResponseFactory.Error("Invalid client ID format. Must be a valid GUID.",
+                                StatusCodes.Status400BadRequest);
+                        }
 
-                        // 2️⃣ Find the client by ID
-                        var client = await db.Clients.FindAsync(id);
+                        // 2) Find the client
+                        var client = await db.Clients.FindAsync(clientGuid);
                         if (client == null)
                         {
                             return ApiResponseFactory.Error("Client not found.", StatusCodes.Status404NotFound);
                         }
 
-                        // 3️⃣ If the user is a Global Admin, skip further checks
-                        if (isGlobalAdmin)
+                        // 3) Determine user roles
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                        bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+
+                        if (!isGlobalAdmin && !isCustomerAdmin)
                         {
-                            db.Clients.Remove(client);
-                            await db.SaveChangesAsync();
-                            return ApiResponseFactory.Success("Client removed successfully.", StatusCodes.Status200OK);
+                            return ApiResponseFactory.Error("Unauthorized to delete this client.",
+                                StatusCodes.Status403Forbidden);
                         }
 
-                        // 4️⃣ If the user is a Customer Admin, validate their association with the client's company
-                        if (isCustomerAdmin)
+                        // 4) If globalAdmin, skip the company check logic
+                        if (!isGlobalAdmin)
                         {
-                            // Retrieve associated ContactPerson
+                            var currentUserId = userManager.GetUserId(currentUser);
+
+                            // Retrieve the ContactPerson entity for the user
                             var contactPerson = await db.ContactPersons
                                 .Include(cp => cp.ContactPersonClientCompanies)
                                 .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
 
                             if (contactPerson == null)
                             {
-                                return ApiResponseFactory.Error("No ContactPerson profile found.",
+                                return ApiResponseFactory.Error("ContactPerson profile not found.",
                                     StatusCodes.Status403Forbidden);
                             }
 
-                            // Check if the user is associated with the company's ID of the client
-                            bool isAssociated = contactPerson.ContactPersonClientCompanies
-                                .Any(cpc => cpc.CompanyId == client.CompanyId);
+                            // We check if at least one of the user's companies owns this client
+                            //  --> CompanyId on the client must be in the user's assigned companies
+                            // The user might be assigned to multiple companies, so let's gather them:
+                            var userCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Where(cpc => cpc.CompanyId.HasValue)
+                                .Select(cpc => cpc.CompanyId!.Value)
+                                .Distinct()
+                                .ToList();
 
-                            if (!isAssociated)
+                            // If the client's CompanyId is not in that list, the user can't delete this client
+                            if (!userCompanyIds.Contains(client.CompanyId))
                             {
                                 return ApiResponseFactory.Error(
                                     "Unauthorized: You cannot remove clients from a company you are not associated with.",
                                     StatusCodes.Status403Forbidden
                                 );
                             }
-
-                            // 5️⃣ If valid association, remove the client
-                            db.Clients.Remove(client);
-                            await db.SaveChangesAsync();
-                            return ApiResponseFactory.Success("Client removed successfully.", StatusCodes.Status200OK);
                         }
 
-                        // 6️⃣ If none of the roles matched, deny access
-                        return ApiResponseFactory.Error("Unauthorized to remove the client.",
-                            StatusCodes.Status403Forbidden);
+                        // 5) Soft-delete the client instead of removing from DB
+                        client.IsDeleted = true;
+                        await db.SaveChangesAsync();
+
+                        // 6) Remove all ContactPersonClientCompanies referencing this client
+                        var cpcRecords = await db.ContactPersonClientCompanies
+                            .Where(cpc => cpc.ClientId == clientGuid)
+                            .ToListAsync();
+
+                        if (cpcRecords.Any())
+                        {
+                            db.ContactPersonClientCompanies.RemoveRange(cpcRecords);
+                            await db.SaveChangesAsync();
+                        }
+
+                        // 7) Commit the transaction
+                        await transaction.CommitAsync();
+
+                        return ApiResponseFactory.Success("Client soft-deleted successfully.", StatusCodes.Status200OK);
                     }
                     catch (Exception ex)
                     {
-                        // 7️⃣ Handle unexpected errors (EF exceptions, DB connection issues, etc.)
+                        // Roll back changes on any error
+                        await transaction.RollbackAsync();
+
                         Console.WriteLine($"[Error] {ex.Message}");
-                        Console.WriteLine($"[Stack] {ex.StackTrace}");
+                        Console.WriteLine($"[StackTrace] {ex.StackTrace}");
                         return ApiResponseFactory.Error(
-                            "An unexpected error occurred while removing the client.",
+                            "An unexpected error occurred while deleting the client.",
                             StatusCodes.Status500InternalServerError
                         );
                     }
-                });
+                }
+            );
+
 
             app.MapPut("/clients/{id:guid}",
                 [Authorize(Roles = "globalAdmin, customerAdmin")]
