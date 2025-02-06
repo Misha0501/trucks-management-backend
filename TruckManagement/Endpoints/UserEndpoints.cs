@@ -77,7 +77,9 @@ public static class UserEndpoints
                     if (contactPerson != null)
                     {
                         var companiesAndClients = await dbContext.ContactPersonClientCompanies
-                            .Where(cpc => cpc.ContactPersonId == contactPerson.Id)
+                            .Where(cpc => cpc.ContactPersonId == contactPerson.Id &&
+                                          ((cpc.Company != null && !cpc.Company.IsDeleted && cpc.Company.IsApproved) ||
+                                           (cpc.Client != null && !cpc.Client.IsDeleted && cpc.Client.IsApproved)))
                             .Select(cpc => new
                             {
                                 CompanyId = cpc.CompanyId,
@@ -511,9 +513,8 @@ public static class UserEndpoints
                     {
                         var companiesAndClients = await db.ContactPersonClientCompanies
                             .Where(cpc => cpc.ContactPersonId == contactPerson.Id &&
-                                          cpc.Company != null &&
-                                          !cpc.Company.IsDeleted && 
-                                          cpc.Company.IsApproved)
+                                          ((cpc.Company != null && !cpc.Company.IsDeleted && cpc.Company.IsApproved) ||
+                                           (cpc.Client != null && !cpc.Client.IsDeleted && cpc.Client.IsApproved)))
                             .Select(cpc => new
                             {
                                 cpc.CompanyId,
