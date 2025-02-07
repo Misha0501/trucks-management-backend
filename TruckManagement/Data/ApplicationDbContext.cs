@@ -28,12 +28,18 @@ namespace TruckManagement.Data
         {
             base.OnModelCreating(builder);
 
-            // // Apply global filters
+            // Apply global filters
             builder.Entity<Company>().HasQueryFilter(c => !c.IsDeleted && c.IsApproved);
             builder.Entity<Client>().HasQueryFilter(c => !c.IsDeleted && c.IsApproved);
             builder.Entity<ApplicationUser>().HasQueryFilter(u => !u.IsDeleted && u.IsApproved);
             builder.Entity<Driver>().HasQueryFilter(d => !d.IsDeleted);
             builder.Entity<ContactPerson>().HasQueryFilter(cp => !cp.IsDeleted);
+            
+            // Apply matching filters to dependent entities
+            builder.Entity<Car>().HasQueryFilter(c => !c.Company.IsDeleted);
+            builder.Entity<Charter>().HasQueryFilter(ch => !ch.Client.IsDeleted && !ch.Company.IsDeleted);
+            builder.Entity<Rate>().HasQueryFilter(r => !r.Client.IsDeleted && !r.Company.IsDeleted);
+            builder.Entity<Surcharge>().HasQueryFilter(s => !s.Client.IsDeleted && !s.Company.IsDeleted);
 
             builder.Entity<Company>()
                 .ToTable("Companies");

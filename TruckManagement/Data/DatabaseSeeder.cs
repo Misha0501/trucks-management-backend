@@ -202,7 +202,7 @@ namespace TruckManagement.Seeding
             await dbContext.SaveChangesAsync();
 
             // 7) Seed Driver for driverUser
-            if (!dbContext.Drivers.Any(d => d.AspNetUserId == driverUser.Id))
+            if (!dbContext.Drivers.IgnoreQueryFilters().Any(d => d.AspNetUserId == driverUser.Id))
             {
                 var driver = new Driver
                 {
@@ -214,7 +214,7 @@ namespace TruckManagement.Seeding
             }
 
             // 8) Seed ContactPerson for customerUser
-            if (!dbContext.ContactPersons.Any(cp => cp.AspNetUserId == customerUser.Id))
+            if (!dbContext.ContactPersons.IgnoreQueryFilters().Any(cp => cp.AspNetUserId == customerUser.Id))
             {
                 var contactPerson = new ContactPerson
                 {
@@ -225,7 +225,7 @@ namespace TruckManagement.Seeding
             }
 
             // 8) Seed ContactPerson for customerAdminUser
-            if (!dbContext.ContactPersons.Any(cp => cp.AspNetUserId == customerAdminUser.Id))
+            if (!dbContext.ContactPersons.IgnoreQueryFilters().Any(cp => cp.AspNetUserId == customerAdminUser.Id))
             {
                 var contactPersonCustomerAdmin = new ContactPerson
                 {
@@ -236,7 +236,7 @@ namespace TruckManagement.Seeding
             }
 
             // 9) Seed ContactPerson for adminUser (Global Admin as ContactPerson)
-            if (!dbContext.ContactPersons.Any(cp => cp.AspNetUserId == adminUser.Id))
+            if (!dbContext.ContactPersons.IgnoreQueryFilters().Any(cp => cp.AspNetUserId == adminUser.Id))
             {
                 var adminContactPerson = new ContactPerson
                 {
@@ -247,7 +247,7 @@ namespace TruckManagement.Seeding
             }
 
             // 10) Seed ContactPerson for clientUser
-            if (!dbContext.ContactPersons.Any(cp => cp.AspNetUserId == clientUser.Id))
+            if (!dbContext.ContactPersons.IgnoreQueryFilters().Any(cp => cp.AspNetUserId == clientUser.Id))
             {
                 var clientContactPerson = new ContactPerson
                 {
@@ -337,12 +337,12 @@ namespace TruckManagement.Seeding
 
             // 12) Associate client user with clients via ContactPersonClientCompany
             var seededClientUserContact =
-                dbContext.ContactPersons.FirstOrDefault(cp => cp.AspNetUserId == clientUser.Id);
+                dbContext.ContactPersons.IgnoreQueryFilters().FirstOrDefault(cp => cp.AspNetUserId == clientUser.Id);
             if (seededClientUserContact != null)
             {
                 foreach (var client in clientsToSeed)
                 {
-                    if (!dbContext.ContactPersonClientCompanies.Any(cpc =>
+                    if (!dbContext.ContactPersonClientCompanies.IgnoreQueryFilters().Any(cpc =>
                             cpc.ContactPersonId == seededClientUserContact.Id &&
                             cpc.ClientId == client.Id))
                     {
@@ -362,8 +362,8 @@ namespace TruckManagement.Seeding
             // Associate adminUser with the default company
             if (adminUser != null)
             {
-                var adminContact = dbContext.ContactPersons.FirstOrDefault(cp => cp.AspNetUserId == adminUser.Id);
-                if (adminContact != null && !dbContext.ContactPersonClientCompanies.Any(cpc =>
+                var adminContact = dbContext.ContactPersons.IgnoreQueryFilters().FirstOrDefault(cp => cp.AspNetUserId == adminUser.Id);
+                if (adminContact != null && !dbContext.ContactPersonClientCompanies.IgnoreQueryFilters().Any(cpc =>
                         cpc.ContactPersonId == adminContact.Id && cpc.CompanyId == defaultCompanyId))
                 {
                     dbContext.ContactPersonClientCompanies.Add(new ContactPersonClientCompany
@@ -378,8 +378,8 @@ namespace TruckManagement.Seeding
 
             if (customerUser != null)
             {
-                var customerContact = dbContext.ContactPersons.FirstOrDefault(cp => cp.AspNetUserId == customerUser.Id);
-                if (customerContact != null && !dbContext.ContactPersonClientCompanies.Any(cpc =>
+                var customerContact = dbContext.ContactPersons.IgnoreQueryFilters().FirstOrDefault(cp => cp.AspNetUserId == customerUser.Id);
+                if (customerContact != null && !dbContext.ContactPersonClientCompanies.IgnoreQueryFilters().Any(cpc =>
                         cpc.ContactPersonId == customerContact.Id &&
                         cpc.CompanyId == Guid.Parse("22222222-2222-2222-2222-222222222222")))
                 {
@@ -396,8 +396,8 @@ namespace TruckManagement.Seeding
             if (customerAdminUser != null)
             {
                 var customerAdminContact =
-                    dbContext.ContactPersons.FirstOrDefault(cp => cp.AspNetUserId == customerAdminUser.Id);
-                if (customerAdminContact != null && !dbContext.ContactPersonClientCompanies.Any(cpc =>
+                    dbContext.ContactPersons.IgnoreQueryFilters().FirstOrDefault(cp => cp.AspNetUserId == customerAdminUser.Id);
+                if (customerAdminContact != null && !dbContext.ContactPersonClientCompanies.IgnoreQueryFilters().Any(cpc =>
                         cpc.ContactPersonId == customerAdminContact.Id &&
                         cpc.CompanyId == Guid.Parse("22222222-2222-2222-2222-222222222222")))
                 {
@@ -414,7 +414,7 @@ namespace TruckManagement.Seeding
             await dbContext.SaveChangesAsync();
 
             // 14) Seed Rates with fixed GUIDs
-            if (!dbContext.Rates.Any())
+            if (!dbContext.Rates.IgnoreQueryFilters().Any())
             {
                 var rate1 = new Rate
                 {
@@ -436,7 +436,7 @@ namespace TruckManagement.Seeding
             }
 
             // 15) Seed Surcharges with fixed GUIDs
-            if (!dbContext.Surcharges.Any())
+            if (!dbContext.Surcharges.IgnoreQueryFilters().Any())
             {
                 var surcharge1 = new Surcharge
                 {
@@ -456,7 +456,7 @@ namespace TruckManagement.Seeding
             }
 
             // 16) Seed Units with fixed GUIDs
-            if (!dbContext.Units.Any())
+            if (!dbContext.Units.IgnoreQueryFilters().Any())
             {
                 var unit1 = new Unit
                 {
@@ -474,7 +474,7 @@ namespace TruckManagement.Seeding
             await dbContext.SaveChangesAsync();
 
             // 17) Seed Cars with fixed GUIDs
-            if (!dbContext.Cars.Any())
+            if (!dbContext.Cars.IgnoreQueryFilters().Any())
             {
                 var car1 = new Car
                 {
@@ -495,12 +495,12 @@ namespace TruckManagement.Seeding
 
             await dbContext.SaveChangesAsync();
 
-            var seededCar1Entity = dbContext.Cars.FirstOrDefault(c => c.LicensePlate == "XYZ-789");
-            var seededCar2Entity = dbContext.Cars.FirstOrDefault(c => c.LicensePlate == "LMN-456");
-            var seededDriverEntity = dbContext.Drivers.FirstOrDefault(d => d.AspNetUserId == driverUser.Id);
+            var seededCar1Entity = dbContext.Cars.IgnoreQueryFilters().FirstOrDefault(c => c.LicensePlate == "XYZ-789");
+            var seededCar2Entity = dbContext.Cars.IgnoreQueryFilters().FirstOrDefault(c => c.LicensePlate == "LMN-456");
+            var seededDriverEntity = dbContext.Drivers.IgnoreQueryFilters().FirstOrDefault(d => d.AspNetUserId == driverUser.Id);
 
             // 18) Seed CarDrivers
-            if (seededCar1Entity != null && seededDriverEntity != null && !dbContext.CarDrivers.Any(cd =>
+            if (seededCar1Entity != null && seededDriverEntity != null && !dbContext.CarDrivers.IgnoreQueryFilters().Any(cd =>
                     cd.CarId == seededCar1Entity.Id && cd.DriverId == seededDriverEntity.Id))
             {
                 var carDriver = new CarDriver
@@ -512,7 +512,7 @@ namespace TruckManagement.Seeding
                 dbContext.CarDrivers.Add(carDriver);
             }
 
-            if (seededCar2Entity != null && seededDriverEntity != null && !dbContext.CarDrivers.Any(cd =>
+            if (seededCar2Entity != null && seededDriverEntity != null && !dbContext.CarDrivers.IgnoreQueryFilters().Any(cd =>
                     cd.CarId == seededCar2Entity.Id && cd.DriverId == seededDriverEntity.Id))
             {
                 var carDriver = new CarDriver
@@ -527,7 +527,7 @@ namespace TruckManagement.Seeding
             await dbContext.SaveChangesAsync();
 
             // 19) Seed Rides with fixed GUIDs
-            if (!dbContext.Rides.Any())
+            if (!dbContext.Rides.IgnoreQueryFilters().Any())
             {
                 var ride1 = new Ride
                 {
@@ -546,11 +546,11 @@ namespace TruckManagement.Seeding
 
             await dbContext.SaveChangesAsync();
 
-            var seededRide1 = dbContext.Rides.FirstOrDefault(r => r.Name == "MorningDelivery");
-            var seededRide2 = dbContext.Rides.FirstOrDefault(r => r.Name == "EveningTransport");
+            var seededRide1 = dbContext.Rides.IgnoreQueryFilters().FirstOrDefault(r => r.Name == "MorningDelivery");
+            var seededRide2 = dbContext.Rides.IgnoreQueryFilters().FirstOrDefault(r => r.Name == "EveningTransport");
 
             // 20) Seed Charters with fixed GUIDs
-            if (!dbContext.Charters.Any())
+            if (!dbContext.Charters.IgnoreQueryFilters().Any())
             {
                 var charter1 = new Charter
                 {
@@ -573,24 +573,24 @@ namespace TruckManagement.Seeding
 
             await dbContext.SaveChangesAsync();
 
-            var seededCharter1 = dbContext.Charters.FirstOrDefault(c => c.Name == "CharterAlpha");
-            var seededCharter2 = dbContext.Charters.FirstOrDefault(c => c.Name == "CharterBeta");
+            var seededCharter1 = dbContext.Charters.IgnoreQueryFilters().FirstOrDefault(c => c.Name == "CharterAlpha");
+            var seededCharter2 = dbContext.Charters.IgnoreQueryFilters().FirstOrDefault(c => c.Name == "CharterBeta");
 
             // 21) Seed PartRides
-            if (!dbContext.PartRides.Any())
+            if (!dbContext.PartRides.IgnoreQueryFilters().Any())
             {
                 // PartRide 1
                 if (seededRide1 != null &&
                     seededCar1Entity != null &&
                     seededDriverEntity != null &&
-                    dbContext.Units.Any() &&
-                    dbContext.Rates.Any() &&
-                    dbContext.Surcharges.Any() &&
+                    dbContext.Units.IgnoreQueryFilters().Any() &&
+                    dbContext.Rates.IgnoreQueryFilters().Any() &&
+                    dbContext.Surcharges.IgnoreQueryFilters().Any() &&
                     seededCharter1 != null)
                 {
-                    var seededUnit = dbContext.Units.FirstOrDefault(u => u.Value == "Hours");
-                    var seededRate = dbContext.Rates.FirstOrDefault(r => r.Name == "StandardRate");
-                    var seededSurcharge = dbContext.Surcharges.FirstOrDefault(s => s.Value == 15.0m);
+                    var seededUnit = dbContext.Units.IgnoreQueryFilters().FirstOrDefault(u => u.Value == "Hours");
+                    var seededRate = dbContext.Rates.IgnoreQueryFilters().FirstOrDefault(r => r.Name == "StandardRate");
+                    var seededSurcharge = dbContext.Surcharges.IgnoreQueryFilters().FirstOrDefault(s => s.Value == 15.0m);
 
                     var partRide1 = new PartRide
                     {
@@ -626,14 +626,14 @@ namespace TruckManagement.Seeding
                 if (seededRide2 != null &&
                     seededCar2Entity != null &&
                     seededDriverEntity != null &&
-                    dbContext.Units.Any() &&
-                    dbContext.Rates.Any() &&
-                    dbContext.Surcharges.Any() &&
+                    dbContext.Units.IgnoreQueryFilters().Any() &&
+                    dbContext.Rates.IgnoreQueryFilters().Any() &&
+                    dbContext.Surcharges.IgnoreQueryFilters().Any() &&
                     seededCharter2 != null)
                 {
-                    var seededUnit = dbContext.Units.FirstOrDefault(u => u.Value == "Hours");
-                    var seededRate = dbContext.Rates.FirstOrDefault(r => r.Name == "PremiumRate");
-                    var seededSurcharge = dbContext.Surcharges.FirstOrDefault(s => s.Value == 25.0m);
+                    var seededUnit = dbContext.Units.IgnoreQueryFilters().FirstOrDefault(u => u.Value == "Hours");
+                    var seededRate = dbContext.Rates.IgnoreQueryFilters().FirstOrDefault(r => r.Name == "PremiumRate");
+                    var seededSurcharge = dbContext.Surcharges.IgnoreQueryFilters().FirstOrDefault(s => s.Value == 25.0m);
 
                     var partRide2 = new PartRide
                     {
