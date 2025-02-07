@@ -273,6 +273,101 @@ namespace TruckManagement.Api.Endpoints
                     }
                 });
 
+            app.MapGet("/surcharges/detail/{surchargeId}",
+                [Authorize(Roles = "globalAdmin, customerAdmin, customer, customerAccountant")]
+                async (
+                    string surchargeId,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    try
+                    {
+                        if (!Guid.TryParse(surchargeId, out Guid validSurchargeId))
+                        {
+                            return ApiResponseFactory.Error("Invalid surchargeId format. Must be a valid GUID.",
+                                StatusCodes.Status400BadRequest);
+                        }
+
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                        bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+                        bool isCustomerAccountant = currentUser.IsInRole("customerAccountant");
+                        bool isEmployer = currentUser.IsInRole("employer");
+                        bool isCustomer = currentUser.IsInRole("customer");
+
+                        bool isContactPerson = isCustomerAdmin || isCustomerAccountant || isEmployer || isCustomer;
+
+                        if (!isGlobalAdmin && !isContactPerson)
+                        {
+                            return ApiResponseFactory.Error("Unauthorized to view surcharge details.",
+                                StatusCodes.Status403Forbidden);
+                        }
+
+                        List<Guid> userCompanyIds = new();
+
+                        if (!isGlobalAdmin)
+                        {
+                            var currentUserId = userManager.GetUserId(currentUser);
+                            var currentContactPerson = await db.ContactPersons
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
+
+                            if (currentContactPerson == null)
+                            {
+                                return ApiResponseFactory.Error("ContactPerson profile not found.",
+                                    StatusCodes.Status403Forbidden);
+                            }
+
+                            userCompanyIds = await db.ContactPersonClientCompanies
+                                .Where(cpc => cpc.ContactPersonId == currentContactPerson.Id && cpc.CompanyId.HasValue)
+                                .Select(cpc => cpc.CompanyId.Value)
+                                .ToListAsync();
+                        }
+
+                        var surchargeQuery = db.Surcharges
+                            .Where(s => s.Id == validSurchargeId)
+                            .Select(s => new
+                            {
+                                s.Id,
+                                s.Value,
+                                Client = new
+                                {
+                                    s.Client.Id,
+                                    s.Client.Name
+                                },
+                                Company = new
+                                {
+                                    s.Company.Id,
+                                    s.Company.Name
+                                }
+                            });
+
+                        if (!isGlobalAdmin)
+                        {
+                            surchargeQuery = surchargeQuery.Where(s => userCompanyIds.Contains(s.Company.Id));
+                        }
+
+                        var surcharge = await surchargeQuery.FirstOrDefaultAsync();
+
+                        if (surcharge == null)
+                        {
+                            return ApiResponseFactory.Error("Surcharge not found or you do not have access to it.",
+                                StatusCodes.Status404NotFound);
+                        }
+
+                        return ApiResponseFactory.Success(surcharge, StatusCodes.Status200OK);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Error] {ex.Message}");
+                        Console.WriteLine($"[StackTrace] {ex.StackTrace}");
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while fetching surcharge details.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+                });
+
             app.MapDelete("/surcharges/{id:guid}",
                 [Authorize(Roles = "globalAdmin, customerAdmin")]
                 async (
