@@ -175,7 +175,7 @@ namespace TruckManagement.Api.Endpoints
                         bool isCustomer = currentUser.IsInRole("customer");
 
                         bool isContactPerson = isCustomerAdmin || isCustomerAccountant || isEmployer || isCustomer;
-                        
+
                         if (!isGlobalAdmin && !isContactPerson)
                         {
                             return ApiResponseFactory.Error("Unauthorized to view surcharges.",
@@ -268,6 +268,84 @@ namespace TruckManagement.Api.Endpoints
                         Console.WriteLine($"[StackTrace] {ex.StackTrace}");
                         return ApiResponseFactory.Error(
                             "An unexpected error occurred while fetching surcharges.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+                });
+
+            app.MapDelete("/surcharges/{id:guid}",
+                [Authorize(Roles = "globalAdmin, customerAdmin")]
+                async (
+                    Guid id,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    await using var transaction = await db.Database.BeginTransactionAsync();
+                    try
+                    {
+                        // 1️⃣ Retrieve the surcharge
+                        var surcharge = await db.Surcharges.FindAsync(id);
+                        if (surcharge == null)
+                        {
+                            return ApiResponseFactory.Error("Surcharge not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        // 2️⃣ Get the current user's ID and roles
+                        var currentUserId = userManager.GetUserId(currentUser);
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                        bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+
+                        // 3️⃣ Global Admins can delete without additional checks
+                        if (!isGlobalAdmin)
+                        {
+                            if (!isCustomerAdmin)
+                            {
+                                return ApiResponseFactory.Error("Unauthorized to delete this surcharge.",
+                                    StatusCodes.Status403Forbidden);
+                            }
+
+                            // 4️⃣ Get the contact person details
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error("No ContactPerson profile found.",
+                                    StatusCodes.Status403Forbidden);
+                            }
+
+                            // 5️⃣ Fetch the companies the user is associated with
+                            var userCompanyIds = await db.ContactPersonClientCompanies
+                                .Where(cpc => cpc.ContactPersonId == contactPerson.Id && cpc.CompanyId.HasValue)
+                                .Select(cpc => cpc.CompanyId.Value)
+                                .ToListAsync();
+
+                            // 6️⃣ Ensure the user is authorized to delete this surcharge
+                            if (!userCompanyIds.Contains(surcharge.CompanyId))
+                            {
+                                return ApiResponseFactory.Error(
+                                    "Unauthorized: You cannot delete surcharges from this company.",
+                                    StatusCodes.Status403Forbidden);
+                            }
+                        }
+
+                        // 7️⃣ Proceed with deleting the surcharge
+                        db.Surcharges.Remove(surcharge);
+                        await db.SaveChangesAsync();
+                        await transaction.CommitAsync();
+
+                        return ApiResponseFactory.Success("Surcharge deleted successfully.", StatusCodes.Status200OK);
+                    }
+                    catch (Exception ex)
+                    {
+                        await transaction.RollbackAsync();
+                        Console.WriteLine($"[Error] {ex.Message}");
+                        Console.WriteLine($"[StackTrace] {ex.StackTrace}");
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while deleting the surcharge.",
                             StatusCodes.Status500InternalServerError
                         );
                     }
