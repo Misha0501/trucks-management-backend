@@ -557,7 +557,7 @@ public static class CompanyEndpoints
                 try
                 {
                     var pendingCompanies = await db.Companies.IgnoreQueryFilters()
-                        .Where(c => !c.IsApproved)
+                        .Where(c => !c.IsApproved && !c.IsDeleted)
                         .Select(c => new
                         {
                             c.Id,
