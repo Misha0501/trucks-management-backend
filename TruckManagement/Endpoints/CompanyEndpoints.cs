@@ -173,8 +173,8 @@ public static class CompanyEndpoints
                 }
 
                 // 5. Retrieve the company with related data
-                var companyQuery = isGlobalAdmin 
-                    ? db.Companies.IgnoreQueryFilters() 
+                var companyQuery = isGlobalAdmin
+                    ? db.Companies.IgnoreQueryFilters()
                     : db.Companies;
 
                 companyQuery = companyQuery
@@ -422,14 +422,7 @@ public static class CompanyEndpoints
                             StatusCodes.Status400BadRequest);
                     }
 
-                    // 2) Find the company
-                    var existingCompany = await db.Companies.FindAsync(companyGuid);
-                    if (existingCompany == null)
-                    {
-                        return ApiResponseFactory.Error("Company not found.", StatusCodes.Status404NotFound);
-                    }
-
-                    // 3) Determine if user is globalAdmin or customerAdmin
+                    // 2) Determine if user is globalAdmin or customerAdmin
                     bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
                     bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
 
@@ -438,6 +431,24 @@ public static class CompanyEndpoints
                         return ApiResponseFactory.Error("Unauthorized to delete this company.",
                             StatusCodes.Status403Forbidden);
                     }
+
+                    // 3) Find the company
+                    var companyQuery = db.Companies.AsQueryable();
+
+                    // ✅ If global admin, ignore query filters
+                    if (isGlobalAdmin)
+                    {
+                        companyQuery = companyQuery.IgnoreQueryFilters();
+                    }
+
+                    // Fetch the company by ID
+                    var existingCompany = await companyQuery.FirstOrDefaultAsync(c => c.Id == companyGuid);
+
+                    if (existingCompany == null)
+                    {
+                        return ApiResponseFactory.Error("Company not found.", StatusCodes.Status404NotFound);
+                    }
+
 
                     // 4) If customerAdmin, verify they are assigned to this company
                     if (isCustomerAdmin)
