@@ -529,7 +529,12 @@ namespace TruckManagement.Routes
                         }
 
                         // Find the target client
-                        var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == id);
+                        var clientQuery = isGlobalAdmin 
+                            ? db.Clients.IgnoreQueryFilters() 
+                            : db.Clients;
+
+                        var client = await clientQuery.FirstOrDefaultAsync(c => c.Id == id);
+
                         if (client == null)
                         {
                             return ApiResponseFactory.Error("Client not found.", StatusCodes.Status404NotFound);
