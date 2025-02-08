@@ -495,36 +495,40 @@ public static class CompanyEndpoints
                 }
             }
         );
-        
+
         app.MapPut("/companies/{id}/approve",
             [Authorize(Roles = "globalAdmin")]
             async (
-                Guid id,
+                string id,
                 ApplicationDbContext db
             ) =>
             {
+                // Validate ID format
+                if (!Guid.TryParse(id, out Guid companyGuid))
+                {
+                    return ApiResponseFactory.Error("Invalid company ID format.", StatusCodes.Status400BadRequest);
+                }
+
                 await using var transaction = await db.Database.BeginTransactionAsync();
 
                 try
                 {
-                    // ✅ Ignore global query filters to fetch **all** companies, including non-approved ones
+                    // Bypass global query filters to include unapproved companies
                     var company = await db.Companies
                         .IgnoreQueryFilters()
-                        .FirstOrDefaultAsync(c => c.Id == id);
+                        .FirstOrDefaultAsync(c => c.Id == companyGuid);
 
-                    // 1️⃣ Handle not found
                     if (company == null)
                     {
                         return ApiResponseFactory.Error("Company not found.", StatusCodes.Status404NotFound);
                     }
 
-                    // 2️⃣ Prevent approving an already approved company
                     if (company.IsApproved)
                     {
                         return ApiResponseFactory.Error("Company is already approved.", StatusCodes.Status400BadRequest);
                     }
 
-                    // 3️⃣ Approve company & save changes
+                    // Approve company
                     company.IsApproved = true;
                     await db.SaveChangesAsync();
 
@@ -535,14 +539,14 @@ public static class CompanyEndpoints
                 catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
-
-                    return ApiResponseFactory.Error(
-                        $"Error approving company: {ex.Message}",
-                        StatusCodes.Status500InternalServerError
-                    );
+                    return ApiResponseFactory.Error($"Error approving company: {ex.Message}", StatusCodes.Status500InternalServerError);
                 }
             });
-        
+
+
+       
+
+
         return app;
     }
 }
