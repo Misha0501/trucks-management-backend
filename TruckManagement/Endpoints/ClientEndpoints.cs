@@ -239,8 +239,8 @@ namespace TruckManagement.Routes
                     }
 
                     // 5. Fetch the client by ID
-                    var clientQuery = isGlobalAdmin 
-                        ? db.Clients.IgnoreQueryFilters() 
+                    var clientQuery = isGlobalAdmin
+                        ? db.Clients.IgnoreQueryFilters()
                         : db.Clients;
 
                     clientQuery = clientQuery
@@ -531,8 +531,8 @@ namespace TruckManagement.Routes
                         }
 
                         // Find the target client
-                        var clientQuery = isGlobalAdmin 
-                            ? db.Clients.IgnoreQueryFilters() 
+                        var clientQuery = isGlobalAdmin
+                            ? db.Clients.IgnoreQueryFilters()
                             : db.Clients;
 
                         var client = await clientQuery.FirstOrDefaultAsync(c => c.Id == id);
@@ -640,10 +640,9 @@ namespace TruckManagement.Routes
                         );
                     }
                 });
-            
+
             app.MapPut("/clients/{id:guid}/approve",
-                [Authorize(Roles = "globalAdmin")]
-                async (Guid id, ApplicationDbContext db) =>
+                [Authorize(Roles = "globalAdmin")] async (Guid id, ApplicationDbContext db) =>
                 {
                     await using var transaction = await db.Database.BeginTransactionAsync();
 
@@ -662,7 +661,8 @@ namespace TruckManagement.Routes
                         // 2️⃣ Check if the client is already approved
                         if (client.IsApproved)
                         {
-                            return ApiResponseFactory.Error("Client is already approved.", StatusCodes.Status400BadRequest);
+                            return ApiResponseFactory.Error("Client is already approved.",
+                                StatusCodes.Status400BadRequest);
                         }
 
                         // 3️⃣ Approve the client
@@ -682,6 +682,47 @@ namespace TruckManagement.Routes
 
                         return ApiResponseFactory.Error(
                             "An error occurred while approving the client.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+                });
+
+            app.MapGet("/clients/pending",
+                [Authorize(Roles = "globalAdmin")] async (ApplicationDbContext db) =>
+                {
+                    try
+                    {
+                        // 1️⃣ Fetch all pending clients (not approved)
+                        var pendingClients = await db.Clients
+                            .IgnoreQueryFilters() // ✅ Fetch clients even if query filters hide unapproved ones
+                            .Where(c => !c.IsApproved)
+                            .Select(c => new
+                            {
+                                c.Id,
+                                c.Name,
+                                c.Tav,
+                                c.Address,
+                                c.Postcode,
+                                c.City,
+                                c.Country,
+                                c.PhoneNumber,
+                                c.Email,
+                                c.Remark,
+                                c.CompanyId,
+                                CompanyName = c.Company.Name // Include related company name
+                            })
+                            .ToListAsync();
+
+                        // 2️⃣ Return empty array if no pending clients
+                        return ApiResponseFactory.Success(pendingClients, StatusCodes.Status200OK);
+                    }
+                    catch (Exception ex)
+                    {
+                        // 3️⃣ Handle errors properly
+                        Console.WriteLine($"Error fetching pending clients: {ex.Message}");
+
+                        return ApiResponseFactory.Error(
+                            "An error occurred while fetching pending clients.",
                             StatusCodes.Status500InternalServerError
                         );
                     }
