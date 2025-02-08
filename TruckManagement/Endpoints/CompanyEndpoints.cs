@@ -232,18 +232,100 @@ public static class CompanyEndpoints
 
         // 3) POST /companies -> Create a new company (Require globalAdmin)
         app.MapPost("/companies",
-            [Authorize(Roles = "globalAdmin")] async (
+            [Authorize(Roles = "globalAdmin, customerAdmin")]
+            async (
+                HttpContext httpContext,
                 [FromBody] Company newCompany,
-                ApplicationDbContext db) =>
+                ApplicationDbContext db,
+                UserManager<ApplicationUser> userManager
+            ) =>
             {
-                newCompany.Id = Guid.NewGuid();
-                newCompany.IsApproved = true;
+                await using var transaction = await db.Database.BeginTransactionAsync();
+                try
+                {
+                    // 1️⃣ Identify user creating the company
+                    var userEmail = httpContext.User.FindFirstValue(ClaimTypes.Email);
+                    if (string.IsNullOrEmpty(userEmail))
+                    {
+                        return ApiResponseFactory.Error("User email claim not found.",
+                            StatusCodes.Status401Unauthorized);
+                    }
 
-                db.Companies.Add(newCompany);
-                await db.SaveChangesAsync();
+                    var user = await userManager.FindByEmailAsync(userEmail);
+                    if (user == null)
+                    {
+                        return ApiResponseFactory.Error("User not found.", StatusCodes.Status401Unauthorized);
+                    }
 
-                return ApiResponseFactory.Success(newCompany, StatusCodes.Status201Created);
-            });
+                    // 2️⃣ Check the user's roles
+                    var roles = await userManager.GetRolesAsync(user);
+                    bool isGlobalAdmin = roles.Contains("globalAdmin");
+                    bool isCustomerAdmin = roles.Contains("customerAdmin");
+
+                    // 3️⃣ Ensure CustomerAdmin has an existing ContactPerson record
+                    ContactPerson? contactPerson = null;
+                    if (isCustomerAdmin)
+                    {
+                        contactPerson = await db.ContactPersons.FirstOrDefaultAsync(cp => cp.AspNetUserId == user.Id);
+                        if (contactPerson == null)
+                        {
+                            return ApiResponseFactory.Error(
+                                "CustomerAdmin must have an existing ContactPerson record before creating a company.",
+                                StatusCodes.Status400BadRequest
+                            );
+                        }
+                    }
+
+                    // 4️⃣ Create the new company
+                    newCompany.Id = Guid.NewGuid();
+                    newCompany.IsApproved = isGlobalAdmin; // Only global admins can auto-approve
+
+                    db.Companies.Add(newCompany);
+                    await db.SaveChangesAsync();
+
+                    // 5️⃣ If CustomerAdmin, link to new company
+                    if (isCustomerAdmin && contactPerson != null)
+                    {
+                        var cpc = new ContactPersonClientCompany
+                        {
+                            Id = Guid.NewGuid(),
+                            ContactPersonId = contactPerson.Id,
+                            CompanyId = newCompany.Id,
+                            ClientId = null // No client assigned yet
+                        };
+
+                        db.ContactPersonClientCompanies.Add(cpc);
+                        await db.SaveChangesAsync();
+                    }
+
+                    // 6️⃣ Commit transaction & return filtered response
+                    await transaction.CommitAsync();
+
+                    // Return a **DTO** (to avoid infinite recursion)
+                    var response = new
+                    {
+                        newCompany.Id,
+                        newCompany.Name,
+                        newCompany.IsApproved
+                    };
+
+                    return ApiResponseFactory.Success(response, StatusCodes.Status201Created);
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+
+                    // Log error (consider using ILogger)
+                    Console.Error.WriteLine($"Error while creating company: {ex.Message}");
+
+                    return ApiResponseFactory.Error(
+                        "An unexpected error occurred while processing the request.",
+                        StatusCodes.Status500InternalServerError
+                    );
+                }
+            }
+        );
+
 
         app.MapPut("/companies/{id:guid}",
             [Authorize(Roles = "globalAdmin, customerAdmin, customerAccountant, employer, customer")]
