@@ -495,7 +495,54 @@ public static class CompanyEndpoints
                 }
             }
         );
+        
+        app.MapPut("/companies/{id}/approve",
+            [Authorize(Roles = "globalAdmin")]
+            async (
+                Guid id,
+                ApplicationDbContext db
+            ) =>
+            {
+                await using var transaction = await db.Database.BeginTransactionAsync();
 
+                try
+                {
+                    // ✅ Ignore global query filters to fetch **all** companies, including non-approved ones
+                    var company = await db.Companies
+                        .IgnoreQueryFilters()
+                        .FirstOrDefaultAsync(c => c.Id == id);
+
+                    // 1️⃣ Handle not found
+                    if (company == null)
+                    {
+                        return ApiResponseFactory.Error("Company not found.", StatusCodes.Status404NotFound);
+                    }
+
+                    // 2️⃣ Prevent approving an already approved company
+                    if (company.IsApproved)
+                    {
+                        return ApiResponseFactory.Error("Company is already approved.", StatusCodes.Status400BadRequest);
+                    }
+
+                    // 3️⃣ Approve company & save changes
+                    company.IsApproved = true;
+                    await db.SaveChangesAsync();
+
+                    await transaction.CommitAsync();
+
+                    return ApiResponseFactory.Success("Company approved successfully.", StatusCodes.Status200OK);
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+
+                    return ApiResponseFactory.Error(
+                        $"Error approving company: {ex.Message}",
+                        StatusCodes.Status500InternalServerError
+                    );
+                }
+            });
+        
         return app;
     }
 }
