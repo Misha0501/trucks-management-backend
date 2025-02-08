@@ -351,6 +351,7 @@ public static class CompanyEndpoints
 
                 // Retrieve the target company
                 var existing = await db.Companies
+                    .IgnoreQueryFilters()
                     .Include(c => c.ContactPersonClientCompanies)
                     .FirstOrDefaultAsync(c => c.Id == id);
 
