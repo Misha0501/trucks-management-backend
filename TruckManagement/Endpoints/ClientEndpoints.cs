@@ -239,7 +239,11 @@ namespace TruckManagement.Routes
                     }
 
                     // 5. Fetch the client by ID
-                    var clientQuery = db.Clients
+                    var clientQuery = isGlobalAdmin 
+                        ? db.Clients.IgnoreQueryFilters() 
+                        : db.Clients;
+
+                    clientQuery = clientQuery
                         .AsNoTracking()
                         .Include(c => c.Company)
                         .Where(c => c.Id == id);
