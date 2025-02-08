@@ -413,14 +413,7 @@ namespace TruckManagement.Routes
                                 StatusCodes.Status400BadRequest);
                         }
 
-                        // 2) Find the client
-                        var client = await db.Clients.FindAsync(clientGuid);
-                        if (client == null)
-                        {
-                            return ApiResponseFactory.Error("Client not found.", StatusCodes.Status404NotFound);
-                        }
-
-                        // 3) Determine user roles
+                        // 2) Determine user roles
                         bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
                         bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
 
@@ -428,6 +421,21 @@ namespace TruckManagement.Routes
                         {
                             return ApiResponseFactory.Error("Unauthorized to delete this client.",
                                 StatusCodes.Status403Forbidden);
+                        }
+                        
+                        // 3) Find the client
+                        var clientQuery = db.Clients.AsQueryable();
+
+                        // ✅ If global admin, ignore query filters
+                        if (isGlobalAdmin)
+                        {
+                            clientQuery = clientQuery.IgnoreQueryFilters();
+                        }
+                        
+                        var client = await clientQuery.FirstOrDefaultAsync(c => c.Id == clientGuid);
+                        if (client == null)
+                        {
+                            return ApiResponseFactory.Error("Client not found.", StatusCodes.Status404NotFound);
                         }
 
                         // 4) If globalAdmin, skip the company check logic
