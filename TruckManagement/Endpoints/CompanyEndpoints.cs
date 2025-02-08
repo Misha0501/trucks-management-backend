@@ -173,15 +173,18 @@ public static class CompanyEndpoints
                 }
 
                 // 5. Retrieve the company with related data
-                var company = await db.Companies
-                    .AsNoTracking()
+                var companyQuery = isGlobalAdmin 
+                    ? db.Companies.IgnoreQueryFilters() 
+                    : db.Companies;
+
+                companyQuery = companyQuery
                     .Include(c => c.Drivers)
                     .ThenInclude(d => d.User)
                     .Include(c => c.ContactPersonClientCompanies)
                     .ThenInclude(cpc => cpc.ContactPerson)
-                    .ThenInclude(cp => cp.User)
-                    .FirstOrDefaultAsync(c => c.Id == id);
+                    .ThenInclude(cp => cp.User);
 
+                var company = await companyQuery.FirstOrDefaultAsync(c => c.Id == id);
                 if (company == null)
                     return ApiResponseFactory.Error("Company not found.", StatusCodes.Status404NotFound);
 
@@ -220,6 +223,8 @@ public static class CompanyEndpoints
                 {
                     company.Id,
                     company.Name,
+                    company.IsApproved,
+                    company.IsDeleted,
                     Drivers = drivers,
                     ContactPersons = contactPersons
                 };
@@ -497,8 +502,7 @@ public static class CompanyEndpoints
         );
 
         app.MapPut("/companies/{id}/approve",
-            [Authorize(Roles = "globalAdmin")]
-            async (
+            [Authorize(Roles = "globalAdmin")] async (
                 string id,
                 ApplicationDbContext db
             ) =>
@@ -525,7 +529,8 @@ public static class CompanyEndpoints
 
                     if (company.IsApproved)
                     {
-                        return ApiResponseFactory.Error("Company is already approved.", StatusCodes.Status400BadRequest);
+                        return ApiResponseFactory.Error("Company is already approved.",
+                            StatusCodes.Status400BadRequest);
                     }
 
                     // Approve company
@@ -539,13 +544,36 @@ public static class CompanyEndpoints
                 catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
-                    return ApiResponseFactory.Error($"Error approving company: {ex.Message}", StatusCodes.Status500InternalServerError);
+                    return ApiResponseFactory.Error($"Error approving company: {ex.Message}",
+                        StatusCodes.Status500InternalServerError);
                 }
             });
 
+        app.MapGet("/companies/pending",
+            [Authorize(Roles = "globalAdmin")] async (
+                ApplicationDbContext db
+            ) =>
+            {
+                try
+                {
+                    var pendingCompanies = await db.Companies.IgnoreQueryFilters()
+                        .Where(c => !c.IsApproved)
+                        .Select(c => new
+                        {
+                            c.Id,
+                            c.Name,
+                            c.IsApproved
+                        })
+                        .ToListAsync();
 
-       
-
+                    return ApiResponseFactory.Success(pendingCompanies, StatusCodes.Status200OK);
+                }
+                catch (Exception ex)
+                {
+                    return ApiResponseFactory.Error($"Error fetching pending companies: {ex.Message}",
+                        StatusCodes.Status500InternalServerError);
+                }
+            });
 
         return app;
     }
