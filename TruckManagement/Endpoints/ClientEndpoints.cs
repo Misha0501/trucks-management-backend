@@ -640,6 +640,52 @@ namespace TruckManagement.Routes
                         );
                     }
                 });
+            
+            app.MapPut("/clients/{id:guid}/approve",
+                [Authorize(Roles = "globalAdmin")]
+                async (Guid id, ApplicationDbContext db) =>
+                {
+                    await using var transaction = await db.Database.BeginTransactionAsync();
+
+                    try
+                    {
+                        // 1️⃣ Validate if the provided ID exists
+                        var client = await db.Clients
+                            .IgnoreQueryFilters() // ✅ Ensure we fetch unapproved clients
+                            .FirstOrDefaultAsync(c => c.Id == id);
+
+                        if (client == null)
+                        {
+                            return ApiResponseFactory.Error("Client not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        // 2️⃣ Check if the client is already approved
+                        if (client.IsApproved)
+                        {
+                            return ApiResponseFactory.Error("Client is already approved.", StatusCodes.Status400BadRequest);
+                        }
+
+                        // 3️⃣ Approve the client
+                        client.IsApproved = true;
+                        await db.SaveChangesAsync();
+
+                        // 4️⃣ Commit the transaction
+                        await transaction.CommitAsync();
+
+                        return ApiResponseFactory.Success("Client approved successfully.", StatusCodes.Status200OK);
+                    }
+                    catch (Exception ex)
+                    {
+                        // 5️⃣ Rollback transaction and handle errors
+                        await transaction.RollbackAsync();
+                        Console.WriteLine($"Error approving client: {ex.Message}");
+
+                        return ApiResponseFactory.Error(
+                            "An error occurred while approving the client.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+                });
         }
     }
 }
