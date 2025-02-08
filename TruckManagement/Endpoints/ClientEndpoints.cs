@@ -135,6 +135,7 @@ namespace TruckManagement.Routes
                             PhoneNumber = c.PhoneNumber,
                             Email = c.Email,
                             Remark = c.Remark,
+                            IsApproved = c.IsApproved,
                             Company = new CompanyDto
                             {
                                 Id = c.Company.Id,
@@ -267,6 +268,7 @@ namespace TruckManagement.Routes
                         PhoneNumber = c.PhoneNumber,
                         Email = c.Email,
                         Remark = c.Remark,
+                        IsApproved = c.IsApproved,
                         Company = new CompanyDto
                         {
                             Id = c.Company.Id,
@@ -709,6 +711,7 @@ namespace TruckManagement.Routes
                                 c.Email,
                                 c.Remark,
                                 c.CompanyId,
+                                c.IsApproved,
                                 CompanyName = c.Company.Name // Include related company name
                             })
                             .ToListAsync();
