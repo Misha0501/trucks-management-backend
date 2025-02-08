@@ -354,7 +354,8 @@ namespace TruckManagement.Routes
                             PhoneNumber = request.PhoneNumber,
                             Email = request.Email,
                             Remark = request.Remark,
-                            CompanyId = request.CompanyId
+                            CompanyId = request.CompanyId,
+                            IsApproved = isGlobalAdmin
                         };
 
                         db.Clients.Add(newClient);
@@ -373,7 +374,8 @@ namespace TruckManagement.Routes
                             newClient.PhoneNumber,
                             newClient.Email,
                             newClient.Remark,
-                            newClient.CompanyId
+                            newClient.CompanyId,
+                            newClient.IsApproved
                         }, StatusCodes.Status201Created);
                     }
                     catch (Exception ex)
