@@ -705,7 +705,7 @@ namespace TruckManagement.Routes
                         // 1️⃣ Fetch all pending clients (not approved)
                         var pendingClients = await db.Clients
                             .IgnoreQueryFilters() // ✅ Fetch clients even if query filters hide unapproved ones
-                            .Where(c => !c.IsApproved)
+                            .Where(c => !c.IsApproved && !c.IsDeleted)
                             .Select(c => new
                             {
                                 c.Id,
