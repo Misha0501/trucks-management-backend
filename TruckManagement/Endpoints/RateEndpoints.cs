@@ -161,6 +161,109 @@ namespace TruckManagement.Endpoints
                     }
                 }
             );
+            app.MapGet("/rates/{clientId:guid}",
+                [Authorize(Roles = "globalAdmin, customerAdmin, employer, customer, customerAccountant")]
+                async (
+                    Guid clientId,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    try
+                    {
+                        var userId = userManager.GetUserId(currentUser);
+                        if (string.IsNullOrEmpty(userId))
+                        {
+                            return ApiResponseFactory.Error("User not authenticated.",
+                                StatusCodes.Status401Unauthorized);
+                        }
+
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                        bool isContactPerson =
+                            !isGlobalAdmin; // Applies to customerAdmin, employer, customer, customerAccountant
+
+                        // Base query: NO IgnoreQueryFilters() for global admin, everyone gets the same filtered view
+                        var rateQuery = db.Rates.Where(r => r.ClientId == clientId);
+
+                        if (isContactPerson)
+                        {
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "No contact person profile found. You are not authorized.",
+                                    StatusCodes.Status403Forbidden
+                                );
+                            }
+
+                            var associatedCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Select(cpc => cpc.CompanyId)
+                                .Distinct()
+                                .ToList();
+
+                            var associatedClientIds = contactPerson.ContactPersonClientCompanies
+                                .Where(cpc => cpc.ClientId.HasValue)
+                                .Select(cpc => cpc.ClientId.Value)
+                                .Distinct()
+                                .ToList();
+
+                            var clientData = await db.Clients
+                                .Where(c => c.Id == clientId)
+                                .Select(c => new { c.Id, c.CompanyId })
+                                .FirstOrDefaultAsync();
+
+                            if (clientData == null)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "Client does not exist or is not accessible.",
+                                    StatusCodes.Status404NotFound
+                                );
+                            }
+
+                            bool userIsAssociatedWithClientCompany =
+                                associatedCompanyIds.Contains(clientData.CompanyId);
+                            bool userIsDirectlyAssociatedWithClient = associatedClientIds.Contains(clientData.Id);
+
+                            if (!userIsAssociatedWithClientCompany && !userIsDirectlyAssociatedWithClient)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "You are not authorized to view rates for this client.",
+                                    StatusCodes.Status403Forbidden
+                                );
+                            }
+                        }
+
+                        var ratesForClient = await rateQuery
+                            .Include(r => r.Client)
+                            .ThenInclude(c => c.Company)
+                            .Select(r => new
+                            {
+                                r.Id,
+                                r.Name,
+                                r.Value,
+                                r.ClientId,
+                                ClientName = r.Client.Name,
+                                r.CompanyId,
+                                CompanyName = r.Company.Name
+                            })
+                            .ToListAsync();
+
+                        return ApiResponseFactory.Success(ratesForClient, StatusCodes.Status200OK);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Error fetching rates for client {clientId}: {ex.Message}");
+                        return ApiResponseFactory.Error(
+                            "An error occurred while retrieving the client rates.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+                }
+            );
         }
     }
 }
