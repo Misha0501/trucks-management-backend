@@ -68,5 +68,6 @@ app.RegisterClientsRoutes();
 app.MapDriversEndpoints();
 app.MapContactPersonsEndpoints();
 app.MapSurchargeEndpoints();
+app.MapRateEndpoints();
 
 app.Run();
