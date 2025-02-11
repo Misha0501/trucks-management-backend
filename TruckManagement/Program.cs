@@ -69,5 +69,6 @@ app.MapDriversEndpoints();
 app.MapContactPersonsEndpoints();
 app.MapSurchargeEndpoints();
 app.MapRateEndpoints();
+app.MapUnitEndpoints();
 
 app.Run();
