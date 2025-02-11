@@ -95,28 +95,27 @@ public static class UnitRoutes
             });
 
         app.MapGet("/units/{id}", async (string id, ApplicationDbContext db) =>
+        {
+            if (!Guid.TryParse(id, out Guid unitGuid))
             {
-                if (!Guid.TryParse(id, out Guid unitGuid))
-                {
-                    return ApiResponseFactory.Error("Invalid unit ID format.", StatusCodes.Status400BadRequest);
-                }
+                return ApiResponseFactory.Error("Invalid unit ID format.", StatusCodes.Status400BadRequest);
+            }
 
-                var unit = await db.Units
-                    .Where(u => u.Id == unitGuid)
-                    .Select(u => new { u.Id, u.Value })
-                    .FirstOrDefaultAsync();
+            var unit = await db.Units
+                .Where(u => u.Id == unitGuid)
+                .Select(u => new { u.Id, u.Value })
+                .FirstOrDefaultAsync();
 
-                if (unit == null)
-                {
-                    return ApiResponseFactory.Error("Unit not found.", StatusCodes.Status404NotFound);
-                }
+            if (unit == null)
+            {
+                return ApiResponseFactory.Error("Unit not found.", StatusCodes.Status404NotFound);
+            }
 
-                return ApiResponseFactory.Success(unit, StatusCodes.Status200OK);
-            });
-        
+            return ApiResponseFactory.Success(unit, StatusCodes.Status200OK);
+        });
+
         app.MapDelete("/units/{id}",
-            [Authorize(Roles = "globalAdmin")]
-            async (string id, ApplicationDbContext db) =>
+            [Authorize(Roles = "globalAdmin")] async (string id, ApplicationDbContext db) =>
             {
                 if (!Guid.TryParse(id, out Guid unitGuid))
                 {
