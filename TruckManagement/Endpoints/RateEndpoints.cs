@@ -57,7 +57,7 @@ namespace TruckManagement.Endpoints
                         }
 
                         bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
-                        
+
                         // Fetch and validate client
                         var client = await db.Clients
                             .FirstOrDefaultAsync(c => c.Id == clientGuid);
@@ -140,18 +140,34 @@ namespace TruckManagement.Endpoints
                     }
                 }
             );
-            
-            app.MapGet("/rates/{clientId:guid}",
+
+            app.MapGet("/rates/{clientId}",
                 [Authorize(Roles = "globalAdmin, customerAdmin, employer, customer, customerAccountant")]
                 async (
-                    Guid clientId,
+                    string clientId,
                     ApplicationDbContext db,
                     UserManager<ApplicationUser> userManager,
-                    ClaimsPrincipal currentUser
+                    ClaimsPrincipal currentUser,
+                    [FromQuery] int pageNumber = 1,
+                    [FromQuery] int pageSize = 10
                 ) =>
                 {
                     try
                     {
+                        // Validate GUID format
+                        if (!Guid.TryParse(clientId, out var clientGuid))
+                        {
+                            return ApiResponseFactory.Error("Invalid client ID format.",
+                                StatusCodes.Status400BadRequest);
+                        }
+
+                        // Validate pagination parameters
+                        if (pageNumber < 1 || pageSize < 1)
+                        {
+                            return ApiResponseFactory.Error("Invalid pagination parameters.",
+                                StatusCodes.Status400BadRequest);
+                        }
+
                         var userId = userManager.GetUserId(currentUser);
                         if (string.IsNullOrEmpty(userId))
                         {
@@ -164,7 +180,7 @@ namespace TruckManagement.Endpoints
                             !isGlobalAdmin; // Applies to customerAdmin, employer, customer, customerAccountant
 
                         // Base query: NO IgnoreQueryFilters() for global admin, everyone gets the same filtered view
-                        var rateQuery = db.Rates.Where(r => r.ClientId == clientId);
+                        var rateQuery = db.Rates.Where(r => r.ClientId == clientGuid);
 
                         if (isContactPerson)
                         {
@@ -192,7 +208,7 @@ namespace TruckManagement.Endpoints
                                 .ToList();
 
                             var clientData = await db.Clients
-                                .Where(c => c.Id == clientId)
+                                .Where(c => c.Id == clientGuid)
                                 .Select(c => new { c.Id, c.CompanyId })
                                 .FirstOrDefaultAsync();
 
@@ -217,9 +233,17 @@ namespace TruckManagement.Endpoints
                             }
                         }
 
+                        // Get total count of rates for pagination
+                        var totalRates = await rateQuery.CountAsync();
+                        var totalPages = (int)Math.Ceiling((double)totalRates / pageSize);
+
+                        // Paginate the rates
                         var ratesForClient = await rateQuery
                             .Include(r => r.Client)
                             .ThenInclude(c => c.Company)
+                            .OrderBy(r => r.Name) // Sort rates alphabetically
+                            .Skip((pageNumber - 1) * pageSize)
+                            .Take(pageSize)
                             .Select(r => new
                             {
                                 r.Id,
@@ -232,7 +256,17 @@ namespace TruckManagement.Endpoints
                             })
                             .ToListAsync();
 
-                        return ApiResponseFactory.Success(ratesForClient, StatusCodes.Status200OK);
+                        // Construct response
+                        var responseData = new
+                        {
+                            totalRates,
+                            totalPages,
+                            pageNumber,
+                            pageSize,
+                            rates = ratesForClient
+                        };
+
+                        return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
                     }
                     catch (Exception ex)
                     {
@@ -244,7 +278,6 @@ namespace TruckManagement.Endpoints
                     }
                 }
             );
-            
         }
     }
 }
