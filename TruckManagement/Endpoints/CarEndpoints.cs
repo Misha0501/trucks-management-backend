@@ -350,6 +350,81 @@ namespace TruckManagement.Endpoints
                             StatusCodes.Status500InternalServerError);
                     }
                 });
+
+            app.MapDelete("/cars/{id}",
+                [Authorize(Roles = "globalAdmin, customerAdmin")]
+                async (
+                    string id,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    try
+                    {
+                        if (!Guid.TryParse(id, out var carGuid))
+                        {
+                            return ApiResponseFactory.Error("Invalid car ID format.", StatusCodes.Status400BadRequest);
+                        }
+
+                        var userId = userManager.GetUserId(currentUser);
+                        if (string.IsNullOrEmpty(userId))
+                        {
+                            return ApiResponseFactory.Error("User not authenticated.",
+                                StatusCodes.Status401Unauthorized);
+                        }
+
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                        bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+                        if (!isGlobalAdmin && !isCustomerAdmin)
+                        {
+                            return ApiResponseFactory.Error("You are not authorized to delete cars.",
+                                StatusCodes.Status403Forbidden);
+                        }
+
+                        var car = await db.Cars
+                            .FirstOrDefaultAsync(c => c.Id == carGuid);
+                        if (car == null)
+                        {
+                            return ApiResponseFactory.Error("Car not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        if (!isGlobalAdmin)
+                        {
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "No contact person profile found. You are not authorized.",
+                                    StatusCodes.Status403Forbidden);
+                            }
+
+                            var associatedCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Select(cpc => cpc.CompanyId)
+                                .Distinct()
+                                .ToList();
+
+                            if (!associatedCompanyIds.Contains(car.CompanyId))
+                            {
+                                return ApiResponseFactory.Error("You are not authorized to delete this car.",
+                                    StatusCodes.Status403Forbidden);
+                            }
+                        }
+
+                        db.Cars.Remove(car);
+                        await db.SaveChangesAsync();
+
+                        return ApiResponseFactory.Success("Car deleted successfully.", StatusCodes.Status200OK);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Error deleting car: {ex.Message}");
+                        return ApiResponseFactory.Error("An unexpected error occurred while deleting the car.",
+                            StatusCodes.Status500InternalServerError);
+                    }
+                });
         }
     }
 }
