@@ -113,5 +113,27 @@ public static class UnitRoutes
 
                 return ApiResponseFactory.Success(unit, StatusCodes.Status200OK);
             });
+        
+        app.MapDelete("/units/{id}",
+            [Authorize(Roles = "globalAdmin")]
+            async (string id, ApplicationDbContext db) =>
+            {
+                if (!Guid.TryParse(id, out Guid unitGuid))
+                {
+                    return ApiResponseFactory.Error("Invalid unit ID format.", StatusCodes.Status400BadRequest);
+                }
+
+                var unit = await db.Units.FindAsync(unitGuid);
+
+                if (unit == null)
+                {
+                    return ApiResponseFactory.Error("Unit not found.", StatusCodes.Status404NotFound);
+                }
+
+                db.Units.Remove(unit);
+                await db.SaveChangesAsync();
+
+                return ApiResponseFactory.Success("Unit deleted successfully.", StatusCodes.Status200OK);
+            });
     }
 }
