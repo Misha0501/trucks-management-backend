@@ -63,7 +63,7 @@ public static class UnitRoutes
             });
 
         app.MapGet("/units",
-            [Authorize(Roles = "globalAdmin")] async (
+            async (
                 ApplicationDbContext db,
                 [FromQuery] int pageNumber = 1,
                 [FromQuery] int pageSize = 10
@@ -94,8 +94,7 @@ public static class UnitRoutes
                 }, StatusCodes.Status200OK);
             });
 
-        app.MapGet("/units/{id}",
-            [Authorize(Roles = "globalAdmin")] async (string id, ApplicationDbContext db) =>
+        app.MapGet("/units/{id}", async (string id, ApplicationDbContext db) =>
             {
                 if (!Guid.TryParse(id, out Guid unitGuid))
                 {
