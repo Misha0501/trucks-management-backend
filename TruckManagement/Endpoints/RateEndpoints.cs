@@ -29,8 +29,7 @@ namespace TruckManagement.Endpoints
                         // Validate basic fields
                         if (request == null || string.IsNullOrWhiteSpace(request.Name) ||
                             request.Value <= 0 ||
-                            string.IsNullOrWhiteSpace(request.ClientId) ||
-                            string.IsNullOrWhiteSpace(request.CompanyId))
+                            string.IsNullOrWhiteSpace(request.ClientId))
                         {
                             return ApiResponseFactory.Error(
                                 "Invalid payload. Name, Value, ClientId, and CompanyId are required.",
@@ -47,14 +46,6 @@ namespace TruckManagement.Endpoints
                             );
                         }
 
-                        if (!Guid.TryParse(request.CompanyId, out var companyGuid))
-                        {
-                            return ApiResponseFactory.Error(
-                                "Invalid CompanyId format.",
-                                StatusCodes.Status400BadRequest
-                            );
-                        }
-
                         // Check user identity
                         var userId = userManager.GetUserId(currentUser);
                         if (string.IsNullOrEmpty(userId))
@@ -66,19 +57,7 @@ namespace TruckManagement.Endpoints
                         }
 
                         bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
-
-                        // Fetch and validate company
-                        var company = await db.Companies
-                            .FirstOrDefaultAsync(c => c.Id == companyGuid);
-
-                        if (company == null)
-                        {
-                            return ApiResponseFactory.Error(
-                                "Specified company does not exist.",
-                                StatusCodes.Status400BadRequest
-                            );
-                        }
-
+                        
                         // Fetch and validate client
                         var client = await db.Clients
                             .FirstOrDefaultAsync(c => c.Id == clientGuid);
@@ -117,7 +96,7 @@ namespace TruckManagement.Endpoints
                                 .AnyAsync(c => c.Id == clientGuid && associatedCompanyIds.Contains(c.CompanyId));
 
                             // Final validation
-                            if (!associatedCompanyIds.Contains(companyGuid) || !clientBelongsToAssociatedCompany)
+                            if (!clientBelongsToAssociatedCompany)
                             {
                                 return ApiResponseFactory.Error(
                                     "You are not authorized to create a rate for this company or client.",
@@ -133,7 +112,7 @@ namespace TruckManagement.Endpoints
                             Name = request.Name,
                             Value = request.Value,
                             ClientId = clientGuid,
-                            CompanyId = companyGuid
+                            CompanyId = client.CompanyId,
                         };
 
                         db.Rates.Add(rate);
@@ -161,6 +140,7 @@ namespace TruckManagement.Endpoints
                     }
                 }
             );
+            
             app.MapGet("/rates/{clientId:guid}",
                 [Authorize(Roles = "globalAdmin, customerAdmin, employer, customer, customerAccountant")]
                 async (
@@ -264,6 +244,7 @@ namespace TruckManagement.Endpoints
                     }
                 }
             );
+            
         }
     }
 }

@@ -5,6 +5,5 @@ namespace TruckManagement.DTOs
         public string Name { get; set; } = string.Empty;
         public decimal Value { get; set; }
         public string ClientId { get; set; } = string.Empty; // As string
-        public string CompanyId { get; set; } = string.Empty; // As string
     }
 }
