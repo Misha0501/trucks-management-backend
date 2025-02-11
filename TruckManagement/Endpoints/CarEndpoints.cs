@@ -425,6 +425,85 @@ namespace TruckManagement.Endpoints
                             StatusCodes.Status500InternalServerError);
                     }
                 });
+            app.MapGet("/cars/{id}",
+                [Authorize(Roles = "globalAdmin, customerAdmin, employer, customer, customerAccountant")]
+                async (
+                    string id,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    try
+                    {
+                        if (!Guid.TryParse(id, out var carGuid))
+                        {
+                            return ApiResponseFactory.Error("Invalid car ID format.", StatusCodes.Status400BadRequest);
+                        }
+
+                        var userId = userManager.GetUserId(currentUser);
+                        if (string.IsNullOrEmpty(userId))
+                        {
+                            return ApiResponseFactory.Error("User not authenticated.",
+                                StatusCodes.Status401Unauthorized);
+                        }
+
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                        bool isContactPerson = !isGlobalAdmin; // Covers all other roles in the list
+
+                        var carQuery = db.Cars.AsQueryable();
+
+                        if (isContactPerson)
+                        {
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "No contact person profile found. You are not authorized.",
+                                    StatusCodes.Status403Forbidden);
+                            }
+
+                            var associatedCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Select(cpc => cpc.CompanyId)
+                                .Distinct()
+                                .ToList();
+
+                            carQuery = carQuery.Where(c => associatedCompanyIds.Contains(c.CompanyId));
+                        }
+
+                        var car = await carQuery
+                            .Include(c => c.Company)
+                            .FirstOrDefaultAsync(c => c.Id == carGuid);
+
+                        if (car == null)
+                        {
+                            return ApiResponseFactory.Error("Car not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        var responseData = new
+                        {
+                            car.Id,
+                            car.LicensePlate,
+                            car.Remark,
+                            Company = new
+                            {
+                                id = car.CompanyId,
+                                name = car.Company.Name
+                            }
+                        };
+
+                        return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Error retrieving car details: {ex.Message}");
+                        return ApiResponseFactory.Error("An unexpected error occurred while fetching car details.",
+                            StatusCodes.Status500InternalServerError);
+                    }
+                });
         }
     }
 }
