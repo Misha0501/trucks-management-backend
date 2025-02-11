@@ -134,5 +134,48 @@ public static class UnitRoutes
 
                 return ApiResponseFactory.Success("Unit deleted successfully.", StatusCodes.Status200OK);
             });
+
+        app.MapPut("/units/{id}",
+            [Authorize(Roles = "globalAdmin")]
+            async (string id, [FromBody] UpdateUnitRequest request, ApplicationDbContext db) =>
+            {
+                try
+                {
+                    if (!Guid.TryParse(id, out Guid unitGuid))
+                    {
+                        return ApiResponseFactory.Error("Invalid unit ID format.", StatusCodes.Status400BadRequest);
+                    }
+
+                    if (request == null || string.IsNullOrWhiteSpace(request.Value))
+                    {
+                        return ApiResponseFactory.Error("Unit value is required.", StatusCodes.Status400BadRequest);
+                    }
+
+                    var unit = await db.Units.FindAsync(unitGuid);
+                    if (unit == null)
+                    {
+                        return ApiResponseFactory.Error("Unit not found.", StatusCodes.Status404NotFound);
+                    }
+
+                    unit.Value = request.Value;
+                    await db.SaveChangesAsync();
+
+                    var responseData = new
+                    {
+                        unit.Id,
+                        unit.Value
+                    };
+
+                    return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Error updating unit: {ex.Message}");
+                    return ApiResponseFactory.Error(
+                        "An unexpected error occurred while updating the unit.",
+                        StatusCodes.Status500InternalServerError
+                    );
+                }
+            });
     }
 }
