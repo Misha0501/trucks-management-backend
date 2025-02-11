@@ -278,6 +278,150 @@ namespace TruckManagement.Endpoints
                     }
                 }
             );
+            app.MapPut("/rates/{id}",
+                [Authorize(Roles = "globalAdmin, customerAdmin")]
+                async (
+                    string id,
+                    [FromBody] UpdateRateRequest request,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    try
+                    {
+                        if (!Guid.TryParse(id, out Guid rateGuid))
+                        {
+                            return ApiResponseFactory.Error("Invalid rate ID format.", StatusCodes.Status400BadRequest);
+                        }
+
+                        if (request == null)
+                        {
+                            return ApiResponseFactory.Error(
+                                "Request body is missing.",
+                                StatusCodes.Status400BadRequest
+                            );
+                        }
+
+                        // Ensure at least one updatable field is set
+                        if (string.IsNullOrWhiteSpace(request.Name) && !request.Value.HasValue)
+                        {
+                            return ApiResponseFactory.Error(
+                                "Nothing to update (Name or Value must be provided).",
+                                StatusCodes.Status400BadRequest
+                            );
+                        }
+
+                        var userId = userManager.GetUserId(currentUser);
+                        if (string.IsNullOrEmpty(userId))
+                        {
+                            return ApiResponseFactory.Error(
+                                "User not authenticated.",
+                                StatusCodes.Status401Unauthorized
+                            );
+                        }
+
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+
+                        // Fetch the Rate with its client & company
+                        var rate = await db.Rates
+                            .Include(r => r.Client)
+                            .ThenInclude(c => c.Company)
+                            .FirstOrDefaultAsync(r => r.Id == rateGuid);
+
+                        if (rate == null)
+                        {
+                            return ApiResponseFactory.Error(
+                                "Rate not found.",
+                                StatusCodes.Status404NotFound
+                            );
+                        }
+
+                        // If not global admin, do ownership checks
+                        if (!isGlobalAdmin)
+                        {
+                            var isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+                            if (!isCustomerAdmin)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "You are not authorized to edit this rate.",
+                                    StatusCodes.Status403Forbidden
+                                );
+                            }
+
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "No contact person profile found. You are not authorized.",
+                                    StatusCodes.Status403Forbidden
+                                );
+                            }
+
+                            // Gather all companies the user is associated with
+                            var associatedCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Select(cpc => cpc.CompanyId)
+                                .Distinct()
+                                .ToList();
+
+                            // Client's owning company
+                            var clientCompanyId = rate.Client.CompanyId;
+
+                            if (!associatedCompanyIds.Contains(clientCompanyId))
+                            {
+                                return ApiResponseFactory.Error(
+                                    "You are not authorized to edit a rate whose client is outside your company.",
+                                    StatusCodes.Status403Forbidden
+                                );
+                            }
+                        }
+
+                        // Update fields if provided
+                        if (!string.IsNullOrWhiteSpace(request.Name))
+                        {
+                            rate.Name = request.Name;
+                        }
+
+                        if (request.Value.HasValue)
+                        {
+                            if (request.Value.Value <= 0)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "Value must be greater than zero.",
+                                    StatusCodes.Status400BadRequest
+                                );
+                            }
+
+                            rate.Value = request.Value.Value;
+                        }
+
+                        await db.SaveChangesAsync();
+
+                        var responseData = new
+                        {
+                            rate.Id,
+                            rate.Name,
+                            rate.Value,
+                            ClientId = rate.ClientId,
+                            ClientName = rate.Client.Name,
+                            CompanyId = rate.CompanyId,
+                            CompanyName = rate.Client.Company.Name
+                        };
+
+                        return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Error updating rate: {ex.Message}");
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while updating the rate.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+                });
         }
     }
 }
