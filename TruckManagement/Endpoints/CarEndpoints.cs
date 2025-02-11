@@ -135,7 +135,7 @@ namespace TruckManagement.Endpoints
                         );
                     }
                 });
-            
+
             app.MapGet("/cars",
                 [Authorize(Roles = "globalAdmin, customerAdmin, employer, customer, customerAccountant")]
                 async (
@@ -223,6 +223,131 @@ namespace TruckManagement.Endpoints
                             "An unexpected error occurred while listing cars.",
                             StatusCodes.Status500InternalServerError
                         );
+                    }
+                });
+
+            app.MapPut("/cars/{id}",
+                [Authorize(Roles = "globalAdmin, customerAdmin")]
+                async (
+                    string id,
+                    [FromBody] UpdateCarRequest request,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    try
+                    {
+                        if (!Guid.TryParse(id, out var carGuid))
+                        {
+                            return ApiResponseFactory.Error("Invalid car ID format.", StatusCodes.Status400BadRequest);
+                        }
+
+                        var userId = userManager.GetUserId(currentUser);
+                        if (string.IsNullOrEmpty(userId))
+                        {
+                            return ApiResponseFactory.Error("User not authenticated.",
+                                StatusCodes.Status401Unauthorized);
+                        }
+
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                        bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+                        if (!isGlobalAdmin && !isCustomerAdmin)
+                        {
+                            return ApiResponseFactory.Error("You are not authorized to edit cars.",
+                                StatusCodes.Status403Forbidden);
+                        }
+
+                        var car = await db.Cars
+                            .Include(c => c.Company)
+                            .FirstOrDefaultAsync(c => c.Id == carGuid);
+                        if (car == null)
+                        {
+                            return ApiResponseFactory.Error("Car not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        if (!isGlobalAdmin)
+                        {
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "No contact person profile found. You are not authorized.",
+                                    StatusCodes.Status403Forbidden);
+                            }
+
+                            var associatedCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Select(cpc => cpc.CompanyId)
+                                .Distinct()
+                                .ToList();
+
+                            if (!associatedCompanyIds.Contains(car.CompanyId))
+                            {
+                                return ApiResponseFactory.Error("You are not authorized to edit this car.",
+                                    StatusCodes.Status403Forbidden);
+                            }
+
+                            if (!string.IsNullOrWhiteSpace(request.CompanyId))
+                            {
+                                if (!Guid.TryParse(request.CompanyId, out var newCompanyGuid))
+                                {
+                                    return ApiResponseFactory.Error("Invalid new company ID format.",
+                                        StatusCodes.Status400BadRequest);
+                                }
+
+                                if (!associatedCompanyIds.Contains(newCompanyGuid))
+                                {
+                                    return ApiResponseFactory.Error(
+                                        "You are not authorized to assign this car to a company you're not associated with.",
+                                        StatusCodes.Status403Forbidden);
+                                }
+
+                                car.CompanyId = newCompanyGuid;
+                            }
+                        }
+                        else
+                        {
+                            if (!string.IsNullOrWhiteSpace(request.CompanyId))
+                            {
+                                if (!Guid.TryParse(request.CompanyId, out var newCompanyGuid))
+                                {
+                                    return ApiResponseFactory.Error("Invalid new company ID format.",
+                                        StatusCodes.Status400BadRequest);
+                                }
+
+                                car.CompanyId = newCompanyGuid;
+                            }
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(request.LicensePlate))
+                        {
+                            car.LicensePlate = request.LicensePlate;
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(request.Remark))
+                        {
+                            car.Remark = request.Remark;
+                        }
+
+                        await db.SaveChangesAsync();
+
+                        var responseData = new
+                        {
+                            car.Id,
+                            car.LicensePlate,
+                            car.Remark,
+                            car.CompanyId
+                        };
+
+                        return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Error editing car: {ex.Message}");
+                        return ApiResponseFactory.Error("An unexpected error occurred while editing the car.",
+                            StatusCodes.Status500InternalServerError);
                     }
                 });
         }
