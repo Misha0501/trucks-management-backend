@@ -422,6 +422,100 @@ namespace TruckManagement.Endpoints
                         );
                     }
                 });
+            
+            app.MapDelete("/rates/{id}",
+                [Authorize(Roles = "globalAdmin, customerAdmin")]
+                async (
+                    string id,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    try
+                    {
+                        // Validate ID format
+                        if (!Guid.TryParse(id, out Guid rateGuid))
+                        {
+                            return ApiResponseFactory.Error("Invalid rate ID format.", StatusCodes.Status400BadRequest);
+                        }
+
+                        var userId = userManager.GetUserId(currentUser);
+                        if (string.IsNullOrEmpty(userId))
+                        {
+                            return ApiResponseFactory.Error("User not authenticated.",
+                                StatusCodes.Status401Unauthorized);
+                        }
+
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+
+                        // Fetch the rate with client + company
+                        var rate = await db.Rates
+                            .Include(r => r.Client)
+                            .ThenInclude(c => c.Company)
+                            .FirstOrDefaultAsync(r => r.Id == rateGuid);
+
+                        if (rate == null)
+                        {
+                            return ApiResponseFactory.Error("Rate not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        // If user is not global admin, check if user is a customer admin
+                        if (!isGlobalAdmin)
+                        {
+                            bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+                            if (!isCustomerAdmin)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "You are not authorized to delete this rate.",
+                                    StatusCodes.Status403Forbidden
+                                );
+                            }
+
+                            // Check if contact person is associated with the client's company
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "No contact person profile found. You are not authorized.",
+                                    StatusCodes.Status403Forbidden
+                                );
+                            }
+
+                            // Gather user-associated company IDs
+                            var associatedCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Select(cpc => cpc.CompanyId)
+                                .Distinct()
+                                .ToList();
+
+                            var clientCompanyId = rate.Client.CompanyId;
+                            if (!associatedCompanyIds.Contains(clientCompanyId))
+                            {
+                                return ApiResponseFactory.Error(
+                                    "You are not authorized to delete a rate owned by a client outside your company.",
+                                    StatusCodes.Status403Forbidden
+                                );
+                            }
+                        }
+
+                        // Delete the rate
+                        db.Rates.Remove(rate);
+                        await db.SaveChangesAsync();
+
+                        return ApiResponseFactory.Success("Rate deleted successfully.", StatusCodes.Status200OK);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Error deleting rate: {ex.Message}");
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while deleting the rate.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+                });
         }
     }
 }
