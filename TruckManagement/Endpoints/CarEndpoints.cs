@@ -26,8 +26,8 @@ namespace TruckManagement.Endpoints
                 {
                     try
                     {
-                        if (request == null 
-                            || string.IsNullOrWhiteSpace(request.LicensePlate) 
+                        if (request == null
+                            || string.IsNullOrWhiteSpace(request.LicensePlate)
                             || string.IsNullOrWhiteSpace(request.CompanyId))
                         {
                             return ApiResponseFactory.Error(
@@ -131,6 +131,96 @@ namespace TruckManagement.Endpoints
                         Console.Error.WriteLine($"Error creating car: {ex.Message}");
                         return ApiResponseFactory.Error(
                             "An unexpected error occurred while creating the car.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+                });
+            
+            app.MapGet("/cars",
+                [Authorize(Roles = "globalAdmin, customerAdmin, employer, customer, customerAccountant")]
+                async (
+                    [FromQuery] string? companyId,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    try
+                    {
+                        if (string.IsNullOrWhiteSpace(companyId))
+                        {
+                            return ApiResponseFactory.Error(
+                                "Query parameter 'companyId' is required.",
+                                StatusCodes.Status400BadRequest
+                            );
+                        }
+
+                        if (!Guid.TryParse(companyId, out Guid companyGuid))
+                        {
+                            return ApiResponseFactory.Error(
+                                "Invalid 'companyId' format.",
+                                StatusCodes.Status400BadRequest
+                            );
+                        }
+
+                        var userId = userManager.GetUserId(currentUser);
+                        if (string.IsNullOrEmpty(userId))
+                        {
+                            return ApiResponseFactory.Error(
+                                "User not authenticated.",
+                                StatusCodes.Status401Unauthorized
+                            );
+                        }
+
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+
+                        // Only skip checks if user is global admin
+                        if (!isGlobalAdmin)
+                        {
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "No contact person profile found. You are not authorized.",
+                                    StatusCodes.Status403Forbidden
+                                );
+                            }
+
+                            var associatedCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Select(cpc => cpc.CompanyId)
+                                .Distinct()
+                                .ToList();
+
+                            if (!associatedCompanyIds.Contains(companyGuid))
+                            {
+                                return ApiResponseFactory.Error(
+                                    "You are not authorized to view cars of this company.",
+                                    StatusCodes.Status403Forbidden
+                                );
+                            }
+                        }
+
+                        var cars = await db.Cars
+                            .Where(c => c.CompanyId == companyGuid)
+                            .Select(c => new
+                            {
+                                c.Id,
+                                c.LicensePlate,
+                                c.Remark,
+                                c.CompanyId
+                            })
+                            .ToListAsync();
+
+                        return ApiResponseFactory.Success(cars, StatusCodes.Status200OK);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Error listing cars: {ex.Message}");
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while listing cars.",
                             StatusCodes.Status500InternalServerError
                         );
                     }
