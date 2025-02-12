@@ -452,6 +452,98 @@ namespace TruckManagement.Endpoints
                         );
                     }
                 });
+            
+            // GET /charters/{id}
+            app.MapGet("/charters/{id}",
+                [Authorize(Roles = "globalAdmin, customerAdmin")]
+                async (
+                    string id,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    try
+                    {
+                        // Validate the provided ID
+                        if (!Guid.TryParse(id, out var charterGuid))
+                        {
+                            return ApiResponseFactory.Error("Invalid charter ID format.", StatusCodes.Status400BadRequest);
+                        }
+            
+                        var userId = userManager.GetUserId(currentUser);
+                        if (string.IsNullOrEmpty(userId))
+                        {
+                            return ApiResponseFactory.Error("User not authenticated.", StatusCodes.Status401Unauthorized);
+                        }
+            
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+            
+                        // Fetch the charter, including related entities
+                        var charter = await db.Charters
+                            .Include(c => c.Client)
+                            .ThenInclude(cl => cl.Company) // Ensure we get the owning company
+                            .FirstOrDefaultAsync(c => c.Id == charterGuid);
+            
+                        if (charter == null)
+                        {
+                            return ApiResponseFactory.Error("Charter not found.", StatusCodes.Status404NotFound);
+                        }
+            
+                        // If user is not a global admin, ensure they are associated with the company owning the client
+                        if (!isGlobalAdmin)
+                        {
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+            
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "No contact person profile found. You are not authorized.",
+                                    StatusCodes.Status403Forbidden
+                                );
+                            }
+            
+                            // Gather user's associated companies
+                            var associatedCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Select(cpc => cpc.CompanyId)
+                                .Distinct()
+                                .ToList();
+            
+                            // Ensure the user is associated with the **client’s company**
+                            if (!associatedCompanyIds.Contains(charter.Client.CompanyId))
+                            {
+                                return ApiResponseFactory.Error(
+                                    "You are not authorized to view this charter.",
+                                    StatusCodes.Status403Forbidden
+                                );
+                            }
+                        }
+            
+                        // Return response with charter details
+                        var responseData = new
+                        {
+                            charter.Id,
+                            charter.Name,
+                            charter.ClientId,
+                            ClientName = charter.Client.Name,
+                            charter.CompanyId,
+                            CompanyName = charter.Client.Company.Name, // Derived from Client
+                            charter.Remark
+                        };
+            
+                        return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Error retrieving charter details: {ex.Message}");
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while fetching the charter details.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+                });
         }
     }
 }
