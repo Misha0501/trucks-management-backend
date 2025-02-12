@@ -28,23 +28,15 @@ namespace TruckManagement.Endpoints
                     {
                         if (request == null
                             || string.IsNullOrWhiteSpace(request.Name)
-                            || string.IsNullOrWhiteSpace(request.CompanyId)
                             || string.IsNullOrWhiteSpace(request.ClientId))
                         {
                             return ApiResponseFactory.Error(
-                                "Name, CompanyId, and ClientId are required.",
+                                "Name and ClientId are required.",
                                 StatusCodes.Status400BadRequest
                             );
                         }
 
-                        if (!Guid.TryParse(request.CompanyId, out var companyGuid))
-                        {
-                            return ApiResponseFactory.Error(
-                                "Invalid CompanyId format.",
-                                StatusCodes.Status400BadRequest
-                            );
-                        }
-
+                        // Validate clientId format
                         if (!Guid.TryParse(request.ClientId, out var clientGuid))
                         {
                             return ApiResponseFactory.Error(
@@ -64,18 +56,9 @@ namespace TruckManagement.Endpoints
 
                         bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
 
-                        // Check if the provided company exists
-                        var company = await db.Companies.FirstOrDefaultAsync(c => c.Id == companyGuid);
-                        if (company == null)
-                        {
-                            return ApiResponseFactory.Error(
-                                "The specified company does not exist.",
-                                StatusCodes.Status400BadRequest
-                            );
-                        }
-
-                        // Check if the provided client exists and belongs to the same company
-                        var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == clientGuid);
+                        // Check if the client exists
+                        var client = await db.Clients
+                            .FirstOrDefaultAsync(c => c.Id == clientGuid);
                         if (client == null)
                         {
                             return ApiResponseFactory.Error(
@@ -84,15 +67,10 @@ namespace TruckManagement.Endpoints
                             );
                         }
 
-                        if (client.CompanyId != companyGuid)
-                        {
-                            return ApiResponseFactory.Error(
-                                "This client does not belong to the provided company.",
-                                StatusCodes.Status400BadRequest
-                            );
-                        }
+                        // The company's ID is derived from this client
+                        var derivedCompanyId = client.CompanyId;
 
-                        // If not global admin, confirm user is associated with the provided company
+                        // If not global admin, verify user is associated with this derived company
                         if (!isGlobalAdmin)
                         {
                             var contactPerson = await db.ContactPersons
@@ -107,17 +85,17 @@ namespace TruckManagement.Endpoints
                                 );
                             }
 
-                            // Gather all associated company IDs for the contact person
+                            // Gather user's associated companies
                             var associatedCompanyIds = contactPerson.ContactPersonClientCompanies
                                 .Select(cpc => cpc.CompanyId)
                                 .Distinct()
                                 .ToList();
 
-                            // Ensure user is associated with the same company
-                            if (!associatedCompanyIds.Contains(companyGuid))
+                            // Ensure user is associated with the derived company
+                            if (!associatedCompanyIds.Contains(derivedCompanyId))
                             {
                                 return ApiResponseFactory.Error(
-                                    "You are not authorized to create a charter in this company.",
+                                    "You are not authorized to create a charter for this client's company.",
                                     StatusCodes.Status403Forbidden
                                 );
                             }
@@ -127,8 +105,8 @@ namespace TruckManagement.Endpoints
                         {
                             Id = Guid.NewGuid(),
                             Name = request.Name,
-                            CompanyId = companyGuid,
                             ClientId = clientGuid,
+                            CompanyId = derivedCompanyId,
                             Remark = request.Remark
                         };
 
@@ -139,8 +117,8 @@ namespace TruckManagement.Endpoints
                         {
                             charter.Id,
                             charter.Name,
-                            charter.CompanyId,
                             charter.ClientId,
+                            charter.CompanyId,
                             charter.Remark
                         };
 
