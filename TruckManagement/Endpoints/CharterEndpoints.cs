@@ -483,6 +483,7 @@ namespace TruckManagement.Endpoints
 
                         // Fetch the charter, including related entities
                         var charter = await db.Charters
+                            .Include(c => c.Company)
                             .Include(c => c.Client)
                             .ThenInclude(cl => cl.Company) // Ensure we get the owning company
                             .FirstOrDefaultAsync(c => c.Id == charterGuid);
@@ -514,7 +515,7 @@ namespace TruckManagement.Endpoints
                                 .ToList();
 
                             // Ensure the user is associated with the **client’s company**
-                            if (!associatedCompanyIds.Contains(charter.Client.CompanyId))
+                            if (!associatedCompanyIds.Contains(charter.CompanyId))
                             {
                                 return ApiResponseFactory.Error(
                                     "You are not authorized to view this charter.",
@@ -531,7 +532,7 @@ namespace TruckManagement.Endpoints
                             charter.ClientId,
                             ClientName = charter.Client.Name,
                             charter.CompanyId,
-                            CompanyName = charter.Client.Company.Name, // Derived from Client
+                            CompanyName = charter.Company.Name,
                             charter.Remark
                         };
 
