@@ -26,8 +26,8 @@ namespace TruckManagement.Endpoints
                 {
                     try
                     {
-                        if (request == null 
-                            || string.IsNullOrWhiteSpace(request.Name) 
+                        if (request == null
+                            || string.IsNullOrWhiteSpace(request.Name)
                             || string.IsNullOrWhiteSpace(request.CompanyId)
                             || string.IsNullOrWhiteSpace(request.ClientId))
                         {
@@ -83,6 +83,7 @@ namespace TruckManagement.Endpoints
                                 StatusCodes.Status400BadRequest
                             );
                         }
+
                         if (client.CompanyId != companyGuid)
                         {
                             return ApiResponseFactory.Error(
@@ -154,7 +155,7 @@ namespace TruckManagement.Endpoints
                         );
                     }
                 });
-            
+
             app.MapGet("/charters",
                 [Authorize(Roles = "globalAdmin, customerAdmin, employer, customer, customerAccountant")]
                 async (
@@ -305,6 +306,170 @@ namespace TruckManagement.Endpoints
                         Console.Error.WriteLine($"Error fetching charters: {ex.Message}");
                         return ApiResponseFactory.Error(
                             "An unexpected error occurred while listing charters.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+                });
+
+            app.MapPut("/charters/{id}",
+                [Authorize(Roles = "globalAdmin, customerAdmin")]
+                async (
+                    string id,
+                    [FromBody] UpdateCharterRequest request,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    try
+                    {
+                        if (!Guid.TryParse(id, out var charterGuid))
+                        {
+                            return ApiResponseFactory.Error("Invalid charter ID format.",
+                                StatusCodes.Status400BadRequest);
+                        }
+
+                        var userId = userManager.GetUserId(currentUser);
+                        if (string.IsNullOrEmpty(userId))
+                        {
+                            return ApiResponseFactory.Error("User not authenticated.",
+                                StatusCodes.Status401Unauthorized);
+                        }
+
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                        bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+                        if (!isGlobalAdmin && !isCustomerAdmin)
+                        {
+                            return ApiResponseFactory.Error("You are not authorized to edit charters.",
+                                StatusCodes.Status403Forbidden);
+                        }
+
+                        var charter = await db.Charters
+                            .Include(ch => ch.Client)
+                            .ThenInclude(cl => cl.Company)
+                            .FirstOrDefaultAsync(ch => ch.Id == charterGuid);
+
+                        if (charter == null)
+                        {
+                            return ApiResponseFactory.Error("Charter not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        if (!isGlobalAdmin)
+                        {
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "No contact person profile found. You are not authorized.",
+                                    StatusCodes.Status403Forbidden);
+                            }
+
+                            var associatedCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Select(cpc => cpc.CompanyId)
+                                .Distinct()
+                                .ToList();
+
+                            // If user doesn't provide a new ClientId, check old one
+                            if (string.IsNullOrWhiteSpace(request.ClientId))
+                            {
+                                if (!associatedCompanyIds.Contains(charter.Client.CompanyId))
+                                {
+                                    return ApiResponseFactory.Error(
+                                        "You are not authorized to edit a charter outside your company's clients.",
+                                        StatusCodes.Status403Forbidden
+                                    );
+                                }
+                            }
+                            else
+                            {
+                                // If the user wants to assign a new client
+                                if (!Guid.TryParse(request.ClientId, out var newClientGuid))
+                                {
+                                    return ApiResponseFactory.Error("Invalid new ClientId format.",
+                                        StatusCodes.Status400BadRequest);
+                                }
+
+                                var newClient = await db.Clients
+                                    .Include(cl => cl.Company)
+                                    .FirstOrDefaultAsync(cl => cl.Id == newClientGuid);
+
+                                if (newClient == null)
+                                {
+                                    return ApiResponseFactory.Error("The specified new client does not exist.",
+                                        StatusCodes.Status400BadRequest);
+                                }
+
+                                // Ensure user can access the new client's company
+                                if (!associatedCompanyIds.Contains(newClient.CompanyId))
+                                {
+                                    return ApiResponseFactory.Error(
+                                        "You are not authorized to assign the charter to a client from a company you do not belong to.",
+                                        StatusCodes.Status403Forbidden
+                                    );
+                                }
+
+                                // Update the charter's client & company
+                                charter.ClientId = newClientGuid;
+                                charter.CompanyId = newClient.CompanyId;
+                            }
+                        }
+                        else
+                        {
+                            // If user is global admin and provided a new client, just do the normal check
+                            if (!string.IsNullOrWhiteSpace(request.ClientId))
+                            {
+                                if (!Guid.TryParse(request.ClientId, out var newClientGuid))
+                                {
+                                    return ApiResponseFactory.Error("Invalid new ClientId format.",
+                                        StatusCodes.Status400BadRequest);
+                                }
+
+                                var newClient = await db.Clients
+                                    .Include(cl => cl.Company)
+                                    .FirstOrDefaultAsync(cl => cl.Id == newClientGuid);
+
+                                if (newClient == null)
+                                {
+                                    return ApiResponseFactory.Error("The specified new client does not exist.",
+                                        StatusCodes.Status400BadRequest);
+                                }
+
+                                charter.ClientId = newClientGuid;
+                                charter.CompanyId = newClient.CompanyId;
+                            }
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(request.Name))
+                        {
+                            charter.Name = request.Name;
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(request.Remark))
+                        {
+                            charter.Remark = request.Remark;
+                        }
+
+                        await db.SaveChangesAsync();
+
+                        var responseData = new
+                        {
+                            charter.Id,
+                            charter.Name,
+                            charter.ClientId,
+                            charter.CompanyId,
+                            charter.Remark
+                        };
+
+                        return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Error updating charter: {ex.Message}");
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while updating the charter.",
                             StatusCodes.Status500InternalServerError
                         );
                     }
