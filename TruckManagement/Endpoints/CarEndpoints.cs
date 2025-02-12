@@ -142,7 +142,9 @@ namespace TruckManagement.Endpoints
                     [FromQuery] string? companyId,
                     ApplicationDbContext db,
                     UserManager<ApplicationUser> userManager,
-                    ClaimsPrincipal currentUser
+                    ClaimsPrincipal currentUser,
+                    [FromQuery] int pageNumber = 1,
+                    [FromQuery] int pageSize = 10
                 ) =>
                 {
                     try
@@ -174,7 +176,7 @@ namespace TruckManagement.Endpoints
 
                         bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
 
-                        // Only skip checks if user is global admin
+                        // Only enforce authorization if user is not a global admin
                         if (!isGlobalAdmin)
                         {
                             var contactPerson = await db.ContactPersons
@@ -203,8 +205,15 @@ namespace TruckManagement.Endpoints
                             }
                         }
 
+                        var totalCars = await db.Cars
+                            .Where(c => c.CompanyId == companyGuid)
+                            .CountAsync();
+
                         var cars = await db.Cars
                             .Where(c => c.CompanyId == companyGuid)
+                            .OrderBy(c => c.LicensePlate)
+                            .Skip((pageNumber - 1) * pageSize)
+                            .Take(pageSize)
                             .Select(c => new
                             {
                                 c.Id,
@@ -214,7 +223,18 @@ namespace TruckManagement.Endpoints
                             })
                             .ToListAsync();
 
-                        return ApiResponseFactory.Success(cars, StatusCodes.Status200OK);
+                        var totalPages = (int)Math.Ceiling((double)totalCars / pageSize);
+
+                        var responseData = new
+                        {
+                            totalCars,
+                            totalPages,
+                            pageNumber,
+                            pageSize,
+                            cars
+                        };
+
+                        return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
                     }
                     catch (Exception ex)
                     {
@@ -225,6 +245,7 @@ namespace TruckManagement.Endpoints
                         );
                     }
                 });
+
 
             app.MapPut("/cars/{id}",
                 [Authorize(Roles = "globalAdmin, customerAdmin")]
