@@ -533,13 +533,15 @@ namespace TruckManagement.Seeding
                 {
                     Id = Guid.NewGuid(),
                     Name = "MorningDelivery",
-                    Remark = "Deliver goods in the morning"
+                    Remark = "Deliver goods in the morning",
+                    CompanyId = defaultCompanyId
                 };
                 var ride2 = new Ride
                 {
                     Id = Guid.Parse("CCCCCCCC-CCCC-CCCC-CCCC-CCCCCCCCCCCC"),
                     Name = "EveningTransport",
-                    Remark = "Transport goods in the evening"
+                    Remark = "Transport goods in the evening",                    
+                    CompanyId = defaultCompanyId
                 };
                 dbContext.Rides.AddRange(ride1, ride2);
             }
