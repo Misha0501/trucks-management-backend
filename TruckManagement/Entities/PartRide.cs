@@ -49,5 +49,9 @@ namespace TruckManagement.Entities
 
         public Guid CharterId { get; set; }
         public Charter Charter { get; set; } = default!;
+        
+        // Navigation to approvals and comments
+        public ICollection<PartRideApproval> Approvals { get; set; } = new List<PartRideApproval>();
+        public ICollection<PartRideComment> Comments { get; set; } = new List<PartRideComment>();
     }
 }

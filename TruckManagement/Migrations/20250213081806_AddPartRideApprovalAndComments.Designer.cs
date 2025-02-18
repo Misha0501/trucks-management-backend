@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TruckManagement.Data;
@@ -11,9 +12,11 @@ using TruckManagement.Data;
 namespace TruckManagement.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250213081806_AddPartRideApprovalAndComments")]
+    partial class AddPartRideApprovalAndComments
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -593,7 +596,7 @@ namespace TruckManagement.Migrations
                     b.HasIndex("PartRideId", "RoleId")
                         .IsUnique();
 
-                    b.ToTable("PartRideApprovals");
+                    b.ToTable("PartRideApproval");
                 });
 
             modelBuilder.Entity("TruckManagement.Entities.PartRideComment", b =>
@@ -625,7 +628,7 @@ namespace TruckManagement.Migrations
 
                     b.HasIndex("PartRideId");
 
-                    b.ToTable("PartRideComments");
+                    b.ToTable("PartRideComment");
                 });
 
             modelBuilder.Entity("TruckManagement.Entities.Rate", b =>

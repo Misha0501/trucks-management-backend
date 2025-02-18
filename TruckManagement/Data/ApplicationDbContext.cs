@@ -23,6 +23,8 @@ namespace TruckManagement.Data
         public DbSet<Ride> Rides { get; set; }
         public DbSet<Charter> Charters { get; set; }
         public DbSet<PartRide> PartRides { get; set; }
+        public DbSet<PartRideApproval> PartRideApprovals { get; set; }
+        public DbSet<PartRideComment> PartRideComments { get; set; }  
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -34,7 +36,7 @@ namespace TruckManagement.Data
             builder.Entity<ApplicationUser>().HasQueryFilter(u => !u.IsDeleted && u.IsApproved);
             builder.Entity<Driver>().HasQueryFilter(d => !d.IsDeleted);
             builder.Entity<ContactPerson>().HasQueryFilter(cp => !cp.IsDeleted);
-            
+
             // Apply matching filters to dependent entities
             builder.Entity<Car>().HasQueryFilter(c => !c.Company.IsDeleted);
             builder.Entity<Charter>().HasQueryFilter(ch => !ch.Client.IsDeleted && !ch.Company.IsDeleted);
@@ -92,6 +94,41 @@ namespace TruckManagement.Data
                 .WithOne(cp => cp.User)
                 .HasForeignKey<ContactPerson>(cp => cp.AspNetUserId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Approvals
+            builder.Entity<PartRideApproval>(entity =>
+            {
+                // one-to-many from PartRide to Approvals
+                entity.HasOne(pa => pa.PartRide)
+                    .WithMany(pr => pr.Approvals)
+                    .HasForeignKey(pa => pa.PartRideId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                // link PartRideApproval -> ApplicationRole
+                entity.HasOne(pa => pa.Role)
+                    .WithMany() // no navigation in ApplicationRole
+                    .HasForeignKey(pa => pa.RoleId)
+                    .IsRequired();
+
+                // Index perhaps
+                entity.HasIndex(pa => new { pa.PartRideId, pa.RoleId }).IsUnique();
+            });
+
+            // Comments
+            builder.Entity<PartRideComment>(entity =>
+            {
+                // one-to-many from PartRide to Comments
+                entity.HasOne(pc => pc.PartRide)
+                    .WithMany(pr => pr.Comments)
+                    .HasForeignKey(pc => pc.PartRideId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                // If you link AuthorRole
+                entity.HasOne(pc => pc.AuthorRole)
+                    .WithMany()
+                    .HasForeignKey(pc => pc.AuthorRoleId)
+                    .IsRequired(false);
+            });
         }
     }
 }
