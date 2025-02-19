@@ -185,7 +185,7 @@ public static class RideEndpoints
                         associatedCompanyIds = contactPerson.ContactPersonClientCompanies
                             .Select(cpc => cpc.CompanyId)
                             .Where(id => id.HasValue) // Remove nulls
-                            .Select(id => id.Value)   // Convert to non-nullable Guid
+                            .Select(id => id.Value) // Convert to non-nullable Guid
                             .Distinct()
                             .ToList();
 
@@ -253,6 +253,117 @@ public static class RideEndpoints
                     Console.Error.WriteLine($"Error updating ride: {ex.Message}");
                     return ApiResponseFactory.Error("An unexpected error occurred while updating the ride.",
                         StatusCodes.Status500InternalServerError);
+                }
+            });
+
+        app.MapGet("/rides",
+            [Authorize(Roles = "globalAdmin, customerAdmin, employer")]
+            async (
+                ApplicationDbContext db,
+                UserManager<ApplicationUser> userManager,
+                ClaimsPrincipal currentUser,
+                [FromQuery] int pageNumber = 1,
+                [FromQuery] int pageSize = 10
+            ) =>
+            {
+                try
+                {
+                    var userId = userManager.GetUserId(currentUser);
+                    if (string.IsNullOrEmpty(userId))
+                    {
+                        return ApiResponseFactory.Error(
+                            "User not authenticated.",
+                            StatusCodes.Status401Unauthorized
+                        );
+                    }
+
+                    bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                    bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+                    bool isEmployer = currentUser.IsInRole("employer");
+                    bool isContactPerson = isCustomerAdmin || isEmployer;
+
+                    var rideQuery = db.Rides.AsQueryable();
+
+                    if (isContactPerson)
+                    {
+                        var contactPerson = await db.ContactPersons
+                            .Include(cp => cp.ContactPersonClientCompanies)
+                            .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                        if (contactPerson == null)
+                        {
+                            return ApiResponseFactory.Error(
+                                "No contact person profile found. You are not authorized.",
+                                StatusCodes.Status403Forbidden
+                            );
+                        }
+
+                        // Convert associatedCompanyIds (from ContactPersonClientCompanies) to List<Guid>
+                        var associatedCompanyIds = contactPerson.ContactPersonClientCompanies
+                            .Select(cpc => cpc.CompanyId)
+                            .Where(g => g.HasValue) // Filter out nulls
+                            .Select(g => g.Value) // Convert to Guid
+                            .Distinct()
+                            .ToList();
+
+                        // Convert associatedClientIds similarly
+                        var associatedClientIds = contactPerson.ContactPersonClientCompanies
+                            .Select(cpc => cpc.ClientId)
+                            .Where(cid => cid.HasValue)
+                            .Select(cid => cid.Value)
+                            .Distinct()
+                            .ToList();
+                        
+                        var ownedCompanyIdsFromClients = await db.Clients
+                            .Where(c => associatedClientIds.Contains(c.Id))
+                            .Select(c => c.CompanyId)
+                            .Distinct()
+                            .ToListAsync();
+                        
+                        // Concatenate the two lists explicitly as IEnumerable<Guid>
+                        var accessibleCompanyIds = associatedCompanyIds
+                            .Concat<Guid>(ownedCompanyIdsFromClients)
+                            .Distinct()
+                            .ToList();
+
+                        rideQuery = rideQuery.Where(r => accessibleCompanyIds.Contains(r.CompanyId));
+                    }
+
+                    var totalRides = await rideQuery.CountAsync();
+                    var totalPages = (int)Math.Ceiling((double)totalRides / pageSize);
+
+                    var pagedRides = await rideQuery
+                        .OrderBy(r => r.Name)
+                        .Skip((pageNumber - 1) * pageSize)
+                        .Take(pageSize)
+                        .Select(r => new
+                        {
+                            r.Id,
+                            r.Name,
+                            r.CompanyId,
+                            CompanyName = r.Company.Name,
+                            r.Remark
+                        })
+                        .ToListAsync();
+
+                    var responseData = new
+                    {
+                        totalRides,
+                        totalPages,
+                        pageNumber,
+                        pageSize,
+                        data = pagedRides
+                    };
+
+                    return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Error listing rides: {ex.Message}");
+                    return ApiResponseFactory.Error(
+                        "An unexpected error occurred while listing rides.",
+                        StatusCodes.Status500InternalServerError
+                    );
                 }
             });
 
