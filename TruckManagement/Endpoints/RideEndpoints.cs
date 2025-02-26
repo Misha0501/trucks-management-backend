@@ -366,8 +366,85 @@ public static class RideEndpoints
                     );
                 }
             });
+        
+         app.MapGet("/rides/{id}",
+                [Authorize(Roles = "globalAdmin, customerAdmin, employer, customer, customerAccountant")]
+                async (
+                    string id,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    try
+                    {
+                        // Validate ride ID format
+                        if (!Guid.TryParse(id, out Guid rideGuid))
+                        {
+                            return ApiResponseFactory.Error("Invalid ride ID format.", StatusCodes.Status400BadRequest);
+                        }
 
+                        // Build base query for rides
+                        var rideQuery = db.Rides.AsQueryable();
 
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+
+                        // If not a global admin, restrict rides to those within the user's associated companies.
+                        if (!isGlobalAdmin)
+                        {
+                            var userId = userManager.GetUserId(currentUser);
+                            if (string.IsNullOrEmpty(userId))
+                            {
+                                return ApiResponseFactory.Error("User not authenticated.", StatusCodes.Status401Unauthorized);
+                            }
+
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error("No contact person profile found. You are not authorized.", StatusCodes.Status403Forbidden);
+                            }
+
+                            // Retrieve all companies the contact person is associated with
+                            var associatedCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Select(cpc => cpc.CompanyId)
+                                .Distinct()
+                                .ToList();
+
+                            // Restrict rides to those whose CompanyId is in the user's associated companies
+                            rideQuery = rideQuery.Where(r => associatedCompanyIds.Contains(r.CompanyId));
+                        }
+
+                        // Retrieve the ride details along with the Company
+                        var ride = await rideQuery
+                            .Include(r => r.Company)
+                            .FirstOrDefaultAsync(r => r.Id == rideGuid);
+
+                        if (ride == null)
+                        {
+                            return ApiResponseFactory.Error("Ride not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        var responseData = new
+                        {
+                            ride.Id,
+                            ride.Name,
+                            ride.Remark,
+                            ride.CompanyId,
+                            CompanyName = ride.Company.Name
+                        };
+
+                        return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Error retrieving ride details: {ex.Message}");
+                        return ApiResponseFactory.Error("An unexpected error occurred while fetching ride details.", StatusCodes.Status500InternalServerError);
+                    }
+                });
+         
         return app;
     }
 }
