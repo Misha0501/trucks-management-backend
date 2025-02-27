@@ -7,5 +7,6 @@ namespace TruckManagement.Entities
         public string? Remark { get; set; }
         public Guid CompanyId { get; set; }
         public Company Company { get; set; } = default!;
+        public ICollection<PartRide> PartRides { get; set; } = new List<PartRide>();
     }
 }
