@@ -313,13 +313,13 @@ public static class RideEndpoints
                             .Select(cid => cid.Value)
                             .Distinct()
                             .ToList();
-                        
+
                         var ownedCompanyIdsFromClients = await db.Clients
                             .Where(c => associatedClientIds.Contains(c.Id))
                             .Select(c => c.CompanyId)
                             .Distinct()
                             .ToListAsync();
-                        
+
                         // Concatenate the two lists explicitly as IEnumerable<Guid>
                         var accessibleCompanyIds = associatedCompanyIds
                             .Concat<Guid>(ownedCompanyIdsFromClients)
@@ -366,85 +366,115 @@ public static class RideEndpoints
                     );
                 }
             });
-        
-         app.MapGet("/rides/{id}",
-                [Authorize(Roles = "globalAdmin, customerAdmin, employer, customer, customerAccountant")]
-                async (
-                    string id,
-                    ApplicationDbContext db,
-                    UserManager<ApplicationUser> userManager,
-                    ClaimsPrincipal currentUser
-                ) =>
+
+        app.MapGet("/rides/{id}",
+            [Authorize(Roles = "globalAdmin, customerAdmin, employer, customer, customerAccountant")]
+            async (
+                string id,
+                ApplicationDbContext db,
+                UserManager<ApplicationUser> userManager,
+                ClaimsPrincipal currentUser
+            ) =>
+            {
+                try
                 {
-                    try
+                    // Validate ride ID format
+                    if (!Guid.TryParse(id, out Guid rideGuid))
                     {
-                        // Validate ride ID format
-                        if (!Guid.TryParse(id, out Guid rideGuid))
-                        {
-                            return ApiResponseFactory.Error("Invalid ride ID format.", StatusCodes.Status400BadRequest);
-                        }
-
-                        // Build base query for rides
-                        var rideQuery = db.Rides.AsQueryable();
-
-                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
-
-                        // If not a global admin, restrict rides to those within the user's associated companies.
-                        if (!isGlobalAdmin)
-                        {
-                            var userId = userManager.GetUserId(currentUser);
-                            if (string.IsNullOrEmpty(userId))
-                            {
-                                return ApiResponseFactory.Error("User not authenticated.", StatusCodes.Status401Unauthorized);
-                            }
-
-                            var contactPerson = await db.ContactPersons
-                                .Include(cp => cp.ContactPersonClientCompanies)
-                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
-
-                            if (contactPerson == null)
-                            {
-                                return ApiResponseFactory.Error("No contact person profile found. You are not authorized.", StatusCodes.Status403Forbidden);
-                            }
-
-                            // Retrieve all companies the contact person is associated with
-                            var associatedCompanyIds = contactPerson.ContactPersonClientCompanies
-                                .Select(cpc => cpc.CompanyId)
-                                .Distinct()
-                                .ToList();
-
-                            // Restrict rides to those whose CompanyId is in the user's associated companies
-                            rideQuery = rideQuery.Where(r => associatedCompanyIds.Contains(r.CompanyId));
-                        }
-
-                        // Retrieve the ride details along with the Company
-                        var ride = await rideQuery
-                            .Include(r => r.Company)
-                            .FirstOrDefaultAsync(r => r.Id == rideGuid);
-
-                        if (ride == null)
-                        {
-                            return ApiResponseFactory.Error("Ride not found.", StatusCodes.Status404NotFound);
-                        }
-
-                        var responseData = new
-                        {
-                            ride.Id,
-                            ride.Name,
-                            ride.Remark,
-                            ride.CompanyId,
-                            CompanyName = ride.Company.Name
-                        };
-
-                        return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
+                        return ApiResponseFactory.Error("Invalid ride ID format.", StatusCodes.Status400BadRequest);
                     }
-                    catch (Exception ex)
+
+                    // Build base query for rides
+                    var rideQuery = db.Rides.AsQueryable();
+
+                    bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+
+                    // If not a global admin, restrict rides to those within the user's associated companies.
+                    if (!isGlobalAdmin)
                     {
-                        Console.Error.WriteLine($"Error retrieving ride details: {ex.Message}");
-                        return ApiResponseFactory.Error("An unexpected error occurred while fetching ride details.", StatusCodes.Status500InternalServerError);
+                        var userId = userManager.GetUserId(currentUser);
+                        if (string.IsNullOrEmpty(userId))
+                        {
+                            return ApiResponseFactory.Error("User not authenticated.",
+                                StatusCodes.Status401Unauthorized);
+                        }
+
+                        var contactPerson = await db.ContactPersons
+                            .Include(cp => cp.ContactPersonClientCompanies)
+                            .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                        if (contactPerson == null)
+                        {
+                            return ApiResponseFactory.Error("No contact person profile found. You are not authorized.",
+                                StatusCodes.Status403Forbidden);
+                        }
+
+                        // Retrieve all companies the contact person is associated with
+                        var associatedCompanyIds = contactPerson.ContactPersonClientCompanies
+                            .Select(cpc => cpc.CompanyId)
+                            .Distinct()
+                            .ToList();
+
+                        // Restrict rides to those whose CompanyId is in the user's associated companies
+                        rideQuery = rideQuery.Where(r => associatedCompanyIds.Contains(r.CompanyId));
                     }
-                });
-         
+
+                    // Retrieve the ride details along with the Company and PartRides
+                    var ride = await rideQuery
+                        .Include(r => r.Company)
+                        .Include(r => r.PartRides)
+                        .ThenInclude(pr => pr.Car) // Include Car details
+                        .Include(r => r.PartRides)
+                        .ThenInclude(pr => pr.Driver) // Include Driver details
+                        .Include(r => r.PartRides)
+                        .ThenInclude(pr => pr.Client) // Include Client details
+                        .FirstOrDefaultAsync(r => r.Id == rideGuid);
+
+                    if (ride == null)
+                    {
+                        return ApiResponseFactory.Error("Ride not found.", StatusCodes.Status404NotFound);
+                    }
+
+                    var responseData = new
+                    {
+                        ride.Id,
+                        ride.Name,
+                        ride.Remark,
+                        ride.CompanyId,
+                        CompanyName = ride.Company.Name,
+                        PartRides = ride.PartRides.Select(pr => new
+                        {
+                            pr.Id,
+                            pr.Date,
+                            pr.Start,
+                            pr.End,
+                            pr.Rest,
+                            pr.Kilometers,
+                            pr.Costs,
+                            pr.Employer,
+                            pr.Day,
+                            pr.WeekNumber,
+                            pr.Hours,
+                            pr.DecimalHours,
+                            pr.CostsDescription,
+                            pr.Turnover,
+                            pr.Remark,
+                            Car = pr.Car != null ? new { pr.Car.Id, pr.Car.LicensePlate } : null,
+                            Driver = pr.Driver != null ? new { pr.Driver.Id, pr.Driver.AspNetUserId } : null,
+                            Client = pr.Client != null ? new { pr.Client.Id, pr.Client.Name } : null
+                        }).ToList()
+                    };
+
+                    return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Error retrieving ride details: {ex.Message}");
+                    return ApiResponseFactory.Error("An unexpected error occurred while fetching ride details.",
+                        StatusCodes.Status500InternalServerError);
+                }
+            });
+
         return app;
     }
 }
