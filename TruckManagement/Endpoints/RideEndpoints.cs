@@ -475,6 +475,89 @@ public static class RideEndpoints
                 }
             });
 
+        app.MapDelete("/rides/{id}",
+            [Authorize(Roles = "globalAdmin, customerAdmin")]
+            async (
+                string id,
+                ApplicationDbContext db,
+                UserManager<ApplicationUser> userManager,
+                ClaimsPrincipal currentUser
+            ) =>
+            {
+                try
+                {
+                    // Validate ride ID format
+                    if (!Guid.TryParse(id, out Guid rideGuid))
+                    {
+                        return ApiResponseFactory.Error("Invalid ride ID format.", StatusCodes.Status400BadRequest);
+                    }
+
+                    var ride = await db.Rides
+                        .Include(r => r.PartRides) // Check for related PartRides
+                        .FirstOrDefaultAsync(r => r.Id == rideGuid);
+
+                    if (ride == null)
+                    {
+                        return ApiResponseFactory.Error("Ride not found.", StatusCodes.Status404NotFound);
+                    }
+
+                    // Authorization: Non-global admins must be part of the ride's company
+                    bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+
+                    if (!isGlobalAdmin)
+                    {
+                        var userId = userManager.GetUserId(currentUser);
+                        if (string.IsNullOrEmpty(userId))
+                        {
+                            return ApiResponseFactory.Error("User not authenticated.",
+                                StatusCodes.Status401Unauthorized);
+                        }
+
+                        var contactPerson = await db.ContactPersons
+                            .Include(cp => cp.ContactPersonClientCompanies)
+                            .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                        if (contactPerson == null)
+                        {
+                            return ApiResponseFactory.Error("No contact person profile found. You are not authorized.",
+                                StatusCodes.Status403Forbidden);
+                        }
+
+                        var associatedCompanyIds = contactPerson.ContactPersonClientCompanies
+                            .Select(cpc => cpc.CompanyId)
+                            .Distinct()
+                            .ToList();
+
+                        if (!associatedCompanyIds.Contains(ride.CompanyId))
+                        {
+                            return ApiResponseFactory.Error("You are not authorized to delete this ride.",
+                                StatusCodes.Status403Forbidden);
+                        }
+                    }
+
+                    // Prevent deletion if PartRides exist
+                    if (ride.PartRides.Any())
+                    {
+                        return ApiResponseFactory.Error(
+                            "Cannot delete the ride as it has associated PartRides.",
+                            StatusCodes.Status400BadRequest
+                        );
+                    }
+
+                    // Delete the ride
+                    db.Rides.Remove(ride);
+                    await db.SaveChangesAsync();
+
+                    return ApiResponseFactory.Success("Ride deleted successfully.", StatusCodes.Status200OK);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Error deleting ride: {ex.Message}");
+                    return ApiResponseFactory.Error("An unexpected error occurred while deleting the ride.",
+                        StatusCodes.Status500InternalServerError);
+                }
+            });
+        
         return app;
     }
 }
