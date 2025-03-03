@@ -41,7 +41,8 @@ public static class AuthEndpoints
                 Postcode = req.Postcode,
                 City = req.City,
                 Country = req.Country,
-                Remark = req.Remark
+                Remark = req.Remark,
+                IsApproved = true
             };
 
             var createUserResult = await userManager.CreateAsync(user, req.Password);
