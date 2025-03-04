@@ -425,7 +425,7 @@ public static class RideEndpoints
                         .Include(r => r.PartRides)
                         .ThenInclude(pr => pr.Car) // Include Car details
                         .Include(r => r.PartRides)
-                        .ThenInclude(pr => pr.Driver) // Include Driver details
+                        .ThenInclude(pr => pr.Driver).ThenInclude(driver => driver.User) // Include Driver details
                         .Include(r => r.PartRides)
                         .ThenInclude(pr => pr.Client) // Include Client details
                         .FirstOrDefaultAsync(r => r.Id == rideGuid);
@@ -460,7 +460,7 @@ public static class RideEndpoints
                             pr.Turnover,
                             pr.Remark,
                             Car = pr.Car != null ? new { pr.Car.Id, pr.Car.LicensePlate } : null,
-                            Driver = pr.Driver != null ? new { pr.Driver.Id, pr.Driver.AspNetUserId } : null,
+                            Driver = pr.Driver != null ? new { pr.Driver.Id, pr.Driver.AspNetUserId, pr.Driver?.User?.FirstName, pr.Driver?.User?.LastName  } : null,
                             Client = pr.Client != null ? new { pr.Client.Id, pr.Client.Name } : null
                         }).ToList()
                     };
