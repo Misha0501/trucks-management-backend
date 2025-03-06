@@ -1060,6 +1060,128 @@ public static class PartRideEndpoints
                     );
                 }
             });
+
+        app.MapDelete("/partrides/{id}",
+            [Authorize(Roles = "globalAdmin, customerAdmin, employer, customer, customerAccountant, driver")]
+            async (
+                string id,
+                ApplicationDbContext db,
+                UserManager<ApplicationUser> userManager,
+                ClaimsPrincipal currentUser
+            ) =>
+            {
+                try
+                {
+                    // Validate PartRide ID
+                    if (!Guid.TryParse(id, out Guid partRideGuid))
+                    {
+                        return ApiResponseFactory.Error(
+                            "Invalid PartRide ID format.",
+                            StatusCodes.Status400BadRequest
+                        );
+                    }
+
+                    // Load existing PartRide
+                    var existingPartRide = await db.PartRides
+                        .FirstOrDefaultAsync(pr => pr.Id == partRideGuid);
+
+                    if (existingPartRide == null)
+                    {
+                        return ApiResponseFactory.Error("PartRide not found.", StatusCodes.Status404NotFound);
+                    }
+
+                    // Get current user info
+                    var userId = userManager.GetUserId(currentUser);
+                    if (string.IsNullOrEmpty(userId))
+                    {
+                        return ApiResponseFactory.Error(
+                            "User not authenticated.",
+                            StatusCodes.Status401Unauthorized
+                        );
+                    }
+
+                    bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                    bool isDriver = currentUser.IsInRole("driver");
+
+                    // If user is global admin, can delete any PartRide
+                    if (!isGlobalAdmin)
+                    {
+                        // If user is driver, can only delete if the PartRide belongs to them
+                        if (isDriver)
+                        {
+                            var driverEntity = await db.Drivers
+                                .FirstOrDefaultAsync(d => d.AspNetUserId == userId && !d.IsDeleted);
+                            if (driverEntity == null)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "You are not registered as a driver. Contact your administrator.",
+                                    StatusCodes.Status403Forbidden
+                                );
+                            }
+
+                            if (!existingPartRide.DriverId.HasValue ||
+                                existingPartRide.DriverId.Value != driverEntity.Id)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "Drivers can only delete their own PartRides.",
+                                    StatusCodes.Status403Forbidden
+                                );
+                            }
+                        }
+                        else
+                        {
+                            // Otherwise, user is a contact-person role (customerAdmin, employer, etc.)
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "No contact person profile found. You are not authorized.",
+                                    StatusCodes.Status403Forbidden
+                                );
+                            }
+
+                            // Gather user's associated companies
+                            var associatedCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Select(cpc => cpc.CompanyId)
+                                .Distinct()
+                                .ToList();
+
+                            // PartRide must belong to one of these companies
+                            if (!existingPartRide.CompanyId.HasValue ||
+                                !associatedCompanyIds.Contains(existingPartRide.CompanyId.Value))
+                            {
+                                return ApiResponseFactory.Error(
+                                    "You are not authorized to delete this PartRide.",
+                                    StatusCodes.Status403Forbidden
+                                );
+                            }
+                        }
+                    }
+
+                    // If there's a need to ensure no child references exist,
+                    // or handle soft-deletion logic, you can do it here.
+                    // For now, assume direct removal is fine.
+
+                    db.PartRides.Remove(existingPartRide);
+                    await db.SaveChangesAsync();
+
+                    return ApiResponseFactory.Success(
+                        "PartRide deleted successfully.",
+                        StatusCodes.Status200OK
+                    );
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Error deleting PartRide: {ex.Message}");
+                    return ApiResponseFactory.Error(
+                        "An unexpected error occurred while deleting the PartRide.",
+                        StatusCodes.Status500InternalServerError
+                    );
+                }
+            });
     }
 
     private static Guid? TryParseGuid(string? input)
