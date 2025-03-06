@@ -925,6 +925,141 @@ public static class PartRideEndpoints
                     );
                 }
             });
+
+        app.MapGet("/partrides/{id}",
+            [Authorize(Roles = "globalAdmin, customerAdmin, employer, customer, customerAccountant, driver")]
+            async (
+                string id,
+                ApplicationDbContext db,
+                UserManager<ApplicationUser> userManager,
+                ClaimsPrincipal currentUser
+            ) =>
+            {
+                try
+                {
+                    // Validate the PartRide ID
+                    if (!Guid.TryParse(id, out Guid partRideGuid))
+                    {
+                        return ApiResponseFactory.Error("Invalid PartRide ID format.", StatusCodes.Status400BadRequest);
+                    }
+
+                    // Find the PartRide
+                    var partRide = await db.PartRides
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(pr => pr.Id == partRideGuid);
+
+                    if (partRide == null)
+                    {
+                        return ApiResponseFactory.Error("PartRide not found.", StatusCodes.Status404NotFound);
+                    }
+
+                    var userId = userManager.GetUserId(currentUser);
+                    if (string.IsNullOrEmpty(userId))
+                    {
+                        return ApiResponseFactory.Error("User not authenticated.", StatusCodes.Status401Unauthorized);
+                    }
+
+                    bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                    bool isDriver = currentUser.IsInRole("driver");
+
+                    // If user is global admin, they can see all part rides
+                    if (!isGlobalAdmin)
+                    {
+                        // If user is a driver, they can only view if DriverId == their own
+                        if (isDriver)
+                        {
+                            var driverEntity = await db.Drivers
+                                .FirstOrDefaultAsync(d => d.AspNetUserId == userId && !d.IsDeleted);
+
+                            if (driverEntity == null)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "You are not registered as a driver. Contact your administrator.",
+                                    StatusCodes.Status403Forbidden
+                                );
+                            }
+
+                            // Check if the PartRide's DriverId matches this driver's ID
+                            if (!partRide.DriverId.HasValue || partRide.DriverId.Value != driverEntity.Id)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "Drivers can only view their own PartRides.",
+                                    StatusCodes.Status403Forbidden
+                                );
+                            }
+                        }
+                        else
+                        {
+                            // If user is not driver nor global admin, they must be contact-person-based (customerAdmin, employer, customer, customerAccountant)
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "No contact person profile found. You are not authorized.",
+                                    StatusCodes.Status403Forbidden
+                                );
+                            }
+
+                            var associatedCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Select(cpc => cpc.CompanyId)
+                                .Distinct()
+                                .ToList();
+
+                            // Check if the PartRide belongs to a company the user is associated with
+                            if (!partRide.CompanyId.HasValue ||
+                                !associatedCompanyIds.Contains(partRide.CompanyId.Value))
+                            {
+                                return ApiResponseFactory.Error(
+                                    "You are not authorized to view this PartRide.",
+                                    StatusCodes.Status403Forbidden
+                                );
+                            }
+                        }
+                    }
+
+                    // Build the response
+                    var responseData = new
+                    {
+                        partRide.Id,
+                        partRide.Date,
+                        partRide.Start,
+                        partRide.End,
+                        partRide.Rest,
+                        partRide.Kilometers,
+                        partRide.Costs,
+                        partRide.Employer,
+                        partRide.ClientId,
+                        partRide.CompanyId,
+                        partRide.Day,
+                        partRide.WeekNumber,
+                        partRide.Hours,
+                        partRide.DecimalHours,
+                        partRide.CostsDescription,
+                        partRide.Turnover,
+                        partRide.Remark,
+                        partRide.DriverId,
+                        partRide.CarId,
+                        partRide.RateId,
+                        partRide.SurchargeId,
+                        partRide.CharterId,
+                        partRide.UnitId,
+                        partRide.RideId
+                    };
+
+                    return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Error fetching PartRide detail: {ex.Message}");
+                    return ApiResponseFactory.Error(
+                        "An unexpected error occurred while retrieving the PartRide detail.",
+                        StatusCodes.Status500InternalServerError
+                    );
+                }
+            });
     }
 
     private static Guid? TryParseGuid(string? input)
