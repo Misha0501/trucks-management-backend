@@ -659,6 +659,177 @@ public static class PartRideEndpoints
                     );
                 }
             });
+
+        // GET /partrides?companyId=&clientId=&driverId=&carId=&weekNumber=&turnoverMin=&turnoverMax=&decimalHoursMin=&decimalHoursMax=&pageNumber=1&pageSize=10
+        app.MapGet("/partrides",
+            [Authorize(Roles = "globalAdmin, customerAdmin, employer, customer, customerAccountant")]
+            async (
+                [FromQuery] string? companyId,
+                [FromQuery] string? clientId,
+                [FromQuery] string? driverId,
+                [FromQuery] string? carId,
+                [FromQuery] int? weekNumber,
+                [FromQuery] decimal? turnoverMin,
+                [FromQuery] decimal? turnoverMax,
+                [FromQuery] double? decimalHoursMin,
+                [FromQuery] double? decimalHoursMax,
+                ApplicationDbContext db,
+                UserManager<ApplicationUser> userManager,
+                ClaimsPrincipal currentUser,
+                [FromQuery] int pageNumber = 1,
+                [FromQuery] int pageSize = 10
+            ) =>
+            {
+                try
+                {
+                    if (pageNumber < 1) pageNumber = 1;
+                    if (pageSize < 1) pageSize = 10;
+
+                    var userId = userManager.GetUserId(currentUser);
+                    if (string.IsNullOrEmpty(userId))
+                    {
+                        return ApiResponseFactory.Error("User not authenticated.", StatusCodes.Status401Unauthorized);
+                    }
+
+                    bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+
+                    // Start the base query
+                    IQueryable<PartRide> query = db.PartRides.AsNoTracking();
+
+                    // If not global admin, restrict to user’s accessible companies
+                    if (!isGlobalAdmin)
+                    {
+                        var contactPerson = await db.ContactPersons
+                            .Include(cp => cp.ContactPersonClientCompanies)
+                            .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                        if (contactPerson == null)
+                        {
+                            return ApiResponseFactory.Error(
+                                "No contact person profile found. You are not authorized.",
+                                StatusCodes.Status403Forbidden
+                            );
+                        }
+
+                        var directCompanyIds = contactPerson.ContactPersonClientCompanies
+                            .Select(cpc => cpc.CompanyId)
+                            .Distinct()
+                            .ToList();
+                        
+                        // Filter the query by accessible companies
+                        query = query.Where(pr =>
+                            pr.CompanyId.HasValue && directCompanyIds.Contains(pr.CompanyId.Value));
+                    }
+
+                    // Now apply optional filters
+                    // companyId
+                    if (!string.IsNullOrWhiteSpace(companyId) && Guid.TryParse(companyId, out var companyGuid))
+                    {
+                        query = query.Where(pr => pr.CompanyId == companyGuid);
+                    }
+
+                    // clientId
+                    if (!string.IsNullOrWhiteSpace(clientId) && Guid.TryParse(clientId, out var clientGuid))
+                    {
+                        query = query.Where(pr => pr.ClientId == clientGuid);
+                    }
+
+                    // driverId
+                    if (!string.IsNullOrWhiteSpace(driverId) && Guid.TryParse(driverId, out var driverGuid))
+                    {
+                        query = query.Where(pr => pr.DriverId == driverGuid);
+                    }
+
+                    // carId
+                    if (!string.IsNullOrWhiteSpace(carId) && Guid.TryParse(carId, out var carGuid))
+                    {
+                        query = query.Where(pr => pr.CarId == carGuid);
+                    }
+
+                    // weekNumber
+                    if (weekNumber.HasValue && weekNumber.Value > 0)
+                    {
+                        query = query.Where(pr => pr.WeekNumber == weekNumber.Value);
+                    }
+
+                    // turnoverMin
+                    if (turnoverMin.HasValue)
+                    {
+                        query = query.Where(pr => pr.Turnover >= turnoverMin.Value);
+                    }
+
+                    // turnoverMax
+                    if (turnoverMax.HasValue)
+                    {
+                        query = query.Where(pr => pr.Turnover <= turnoverMax.Value);
+                    }
+
+                    // decimalHoursMin
+                    if (decimalHoursMin.HasValue)
+                    {
+                        query = query.Where(pr => pr.DecimalHours >= decimalHoursMin.Value);
+                    }
+
+                    // decimalHoursMax
+                    if (decimalHoursMax.HasValue)
+                    {
+                        query = query.Where(pr => pr.DecimalHours <= decimalHoursMax.Value);
+                    }
+
+                    // Count total
+                    var totalCount = await query.CountAsync();
+
+                    // Apply pagination
+                    var totalPages = (int)System.Math.Ceiling(totalCount / (double)pageSize);
+
+                    // Fetch data
+                    var partRides = await query
+                        .OrderByDescending(pr => pr.Date)
+                        .Skip((pageNumber - 1) * pageSize)
+                        .Take(pageSize)
+                        .Select(pr => new
+                        {
+                            pr.Id,
+                            pr.Date,
+                            pr.Start,
+                            pr.End,
+                            pr.Rest,
+                            pr.Kilometers,
+                            pr.Costs,
+                            pr.Employer,
+                            pr.ClientId,
+                            pr.CompanyId,
+                            pr.Day,
+                            pr.WeekNumber,
+                            pr.Hours,
+                            pr.DecimalHours,
+                            pr.CostsDescription,
+                            pr.Turnover,
+                            pr.Remark
+                        })
+                        .ToListAsync();
+
+                    // Build response
+                    var responseData = new
+                    {
+                        totalCount,
+                        totalPages,
+                        pageNumber,
+                        pageSize,
+                        data = partRides
+                    };
+
+                    return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Error fetching PartRides: {ex.Message}");
+                    return ApiResponseFactory.Error(
+                        "An unexpected error occurred while retrieving part rides.",
+                        StatusCodes.Status500InternalServerError
+                    );
+                }
+            });
     }
 
     private static Guid? TryParseGuid(string? input)
