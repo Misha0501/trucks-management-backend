@@ -73,5 +73,6 @@ app.MapUnitEndpoints();
 app.MapCarEndpoints();
 app.MapCharterEndpoints();
 app.MapRideEndpoints();
+app.MapPartRideEndpoints();
 
 app.Run();
