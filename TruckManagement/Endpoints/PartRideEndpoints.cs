@@ -661,8 +661,8 @@ public static class PartRideEndpoints
             });
 
         // GET /partrides?companyId=&clientId=&driverId=&carId=&weekNumber=&turnoverMin=&turnoverMax=&decimalHoursMin=&decimalHoursMax=&pageNumber=1&pageSize=10
-        app.MapGet("/partrides",
-            [Authorize(Roles = "globalAdmin, customerAdmin, employer, customer, customerAccountant")]
+            app.MapGet("/partrides",
+            [Authorize(Roles = "globalAdmin, customerAdmin, employer, customer, customerAccountant, driver")]
             async (
                 [FromQuery] string? companyId,
                 [FromQuery] string? clientId,
@@ -688,101 +688,107 @@ public static class PartRideEndpoints
                     var userId = userManager.GetUserId(currentUser);
                     if (string.IsNullOrEmpty(userId))
                     {
-                        return ApiResponseFactory.Error("User not authenticated.", StatusCodes.Status401Unauthorized);
+                        return ApiResponseFactory.Error(
+                            "User not authenticated.",
+                            StatusCodes.Status401Unauthorized
+                        );
                     }
 
                     bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                    bool isDriver = currentUser.IsInRole("driver");
 
-                    // Start the base query
+                    // Start with all PartRides
                     IQueryable<PartRide> query = db.PartRides.AsNoTracking();
 
-                    // If not global admin, restrict to user’s accessible companies
                     if (!isGlobalAdmin)
                     {
-                        var contactPerson = await db.ContactPersons
-                            .Include(cp => cp.ContactPersonClientCompanies)
-                            .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
-
-                        if (contactPerson == null)
+                        // Attempt to load the user’s "Driver" entity
+                        Guid? driverGuidOfUser = null;
+                        if (isDriver)
                         {
-                            return ApiResponseFactory.Error(
-                                "No contact person profile found. You are not authorized.",
-                                StatusCodes.Status403Forbidden
-                            );
+                            // We can add `.IgnoreQueryFilters()` if there's a global filter on drivers
+                            var driverEntity = await db.Drivers
+                                .AsNoTracking()
+                                .FirstOrDefaultAsync(d => d.AspNetUserId == userId && !d.IsDeleted);
+
+                            if (driverEntity != null)
+                            {
+                                driverGuidOfUser = driverEntity.Id;
+                            }
                         }
 
-                        var directCompanyIds = contactPerson.ContactPersonClientCompanies
-                            .Select(cpc => cpc.CompanyId)
-                            .Distinct()
-                            .ToList();
-                        
-                        // Filter the query by accessible companies
-                        query = query.Where(pr =>
-                            pr.CompanyId.HasValue && directCompanyIds.Contains(pr.CompanyId.Value));
+                        // Attempt to load the user’s "ContactPerson" entity (for other roles)
+                        bool isContactPersonRole = currentUser.IsInRole("customerAdmin") 
+                                                   || currentUser.IsInRole("employer") 
+                                                   || currentUser.IsInRole("customer") 
+                                                   || currentUser.IsInRole("customerAccountant");
+
+                        var directCompanyIds = new List<Guid?>();
+                        if (isContactPersonRole)
+                        {
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                            if (contactPerson == null)
+                            {
+                                // if user is purely driver, this might be okay,
+                                // but if user is supposed to have contactPerson roles, we throw 403
+                                if (!isDriver)
+                                {
+                                    return ApiResponseFactory.Error(
+                                        "No contact person profile found. You are not authorized.",
+                                        StatusCodes.Status403Forbidden
+                                    );
+                                }
+                            }
+                            else
+                            {
+                                directCompanyIds = contactPerson.ContactPersonClientCompanies
+                                    .Select(cpc => cpc.CompanyId)
+                                    .Distinct()
+                                    .ToList();
+                            }
+                        }
+
+                        // Combine conditions: 
+                        // If user is a driver only, they see PartRides with their DriverId
+                        // If user also has contactPerson roles, they can also see rides from directCompanyIds
+                        if (driverGuidOfUser.HasValue)
+                        {
+                            // Merge driver logic with direct companies
+                            // If user is purely driver with no direct companies, directCompanyIds is empty => fallback is driver logic
+                            query = query.Where(pr =>
+                                (pr.DriverId.HasValue && pr.DriverId.Value == driverGuidOfUser.Value)
+                                || (pr.CompanyId.HasValue && directCompanyIds.Contains(pr.CompanyId.Value))
+                            );
+                        }
+                        else
+                        {
+                            // Not globalAdmin, not driver => must be contactPerson-based
+                            query = query.Where(pr =>
+                                pr.CompanyId.HasValue && directCompanyIds.Contains(pr.CompanyId.Value)
+                            );
+                        }
                     }
 
-                    // Now apply optional filters
-                    // companyId
-                    if (!string.IsNullOrWhiteSpace(companyId) && Guid.TryParse(companyId, out var companyGuid))
-                    {
-                        query = query.Where(pr => pr.CompanyId == companyGuid);
-                    }
+                    // Apply additional filters from the query string
+                    query = ApplyPartRideFilters(
+                        query,
+                        companyId,
+                        clientId,
+                        driverId,
+                        carId,
+                        weekNumber,
+                        turnoverMin,
+                        turnoverMax,
+                        decimalHoursMin,
+                        decimalHoursMax
+                    );
 
-                    // clientId
-                    if (!string.IsNullOrWhiteSpace(clientId) && Guid.TryParse(clientId, out var clientGuid))
-                    {
-                        query = query.Where(pr => pr.ClientId == clientGuid);
-                    }
+                    int totalCount = await query.CountAsync();
+                    int totalPages = (int)System.Math.Ceiling(totalCount / (double)pageSize);
 
-                    // driverId
-                    if (!string.IsNullOrWhiteSpace(driverId) && Guid.TryParse(driverId, out var driverGuid))
-                    {
-                        query = query.Where(pr => pr.DriverId == driverGuid);
-                    }
-
-                    // carId
-                    if (!string.IsNullOrWhiteSpace(carId) && Guid.TryParse(carId, out var carGuid))
-                    {
-                        query = query.Where(pr => pr.CarId == carGuid);
-                    }
-
-                    // weekNumber
-                    if (weekNumber.HasValue && weekNumber.Value > 0)
-                    {
-                        query = query.Where(pr => pr.WeekNumber == weekNumber.Value);
-                    }
-
-                    // turnoverMin
-                    if (turnoverMin.HasValue)
-                    {
-                        query = query.Where(pr => pr.Turnover >= turnoverMin.Value);
-                    }
-
-                    // turnoverMax
-                    if (turnoverMax.HasValue)
-                    {
-                        query = query.Where(pr => pr.Turnover <= turnoverMax.Value);
-                    }
-
-                    // decimalHoursMin
-                    if (decimalHoursMin.HasValue)
-                    {
-                        query = query.Where(pr => pr.DecimalHours >= decimalHoursMin.Value);
-                    }
-
-                    // decimalHoursMax
-                    if (decimalHoursMax.HasValue)
-                    {
-                        query = query.Where(pr => pr.DecimalHours <= decimalHoursMax.Value);
-                    }
-
-                    // Count total
-                    var totalCount = await query.CountAsync();
-
-                    // Apply pagination
-                    var totalPages = (int)System.Math.Ceiling(totalCount / (double)pageSize);
-
-                    // Fetch data
                     var partRides = await query
                         .OrderByDescending(pr => pr.Date)
                         .Skip((pageNumber - 1) * pageSize)
@@ -805,11 +811,12 @@ public static class PartRideEndpoints
                             pr.DecimalHours,
                             pr.CostsDescription,
                             pr.Turnover,
-                            pr.Remark
+                            pr.Remark,
+                            pr.DriverId,
+                            pr.CarId
                         })
                         .ToListAsync();
 
-                    // Build response
                     var responseData = new
                     {
                         totalCount,
@@ -854,5 +861,65 @@ public static class PartRideEndpoints
             CalendarWeekRule.FirstFourDayWeek,
             DayOfWeek.Monday
         );
+    }
+    private static IQueryable<PartRide> ApplyPartRideFilters(
+        IQueryable<PartRide> query,
+        string? companyId,
+        string? clientId,
+        string? driverId,
+        string? carId,
+        int? weekNumber,
+        decimal? turnoverMin,
+        decimal? turnoverMax,
+        double? decimalHoursMin,
+        double? decimalHoursMax
+    )
+    {
+        if (!string.IsNullOrWhiteSpace(companyId) && Guid.TryParse(companyId, out var companyGuid))
+        {
+            query = query.Where(pr => pr.CompanyId == companyGuid);
+        }
+
+        if (!string.IsNullOrWhiteSpace(clientId) && Guid.TryParse(clientId, out var clientGuid))
+        {
+            query = query.Where(pr => pr.ClientId == clientGuid);
+        }
+
+        if (!string.IsNullOrWhiteSpace(driverId) && Guid.TryParse(driverId, out var driverGuid))
+        {
+            query = query.Where(pr => pr.DriverId == driverGuid);
+        }
+
+        if (!string.IsNullOrWhiteSpace(carId) && Guid.TryParse(carId, out var carGuid))
+        {
+            query = query.Where(pr => pr.CarId == carGuid);
+        }
+
+        if (weekNumber.HasValue && weekNumber.Value > 0)
+        {
+            query = query.Where(pr => pr.WeekNumber == weekNumber.Value);
+        }
+
+        if (turnoverMin.HasValue)
+        {
+            query = query.Where(pr => pr.Turnover >= turnoverMin.Value);
+        }
+
+        if (turnoverMax.HasValue)
+        {
+            query = query.Where(pr => pr.Turnover <= turnoverMax.Value);
+        }
+
+        if (decimalHoursMin.HasValue)
+        {
+            query = query.Where(pr => pr.DecimalHours >= decimalHoursMin.Value);
+        }
+
+        if (decimalHoursMax.HasValue)
+        {
+            query = query.Where(pr => pr.DecimalHours <= decimalHoursMax.Value);
+        }
+
+        return query;
     }
 }
