@@ -891,8 +891,20 @@ public static class PartRideEndpoints
                             pr.Kilometers,
                             pr.Costs,
                             pr.Employer,
-                            pr.ClientId,
-                            pr.CompanyId,
+                            Client = pr.Client != null
+                                ? new
+                                {
+                                    pr.Client.Id,
+                                    pr.Client.Name
+                                }
+                                : null,
+                            Company = pr.Company != null
+                                ? new
+                                {
+                                    pr.Company.Id,
+                                    pr.Company.Name
+                                }
+                                : null,
                             pr.Day,
                             pr.WeekNumber,
                             pr.Hours,
@@ -900,7 +912,13 @@ public static class PartRideEndpoints
                             pr.CostsDescription,
                             pr.Turnover,
                             pr.Remark,
-                            pr.DriverId,
+                            Driver = pr.Driver != null
+                                ? new
+                                {
+                                    pr.Driver.Id,
+                                    pr.Driver.AspNetUserId
+                                }
+                                : null,
                             pr.CarId
                         })
                         .ToListAsync();
@@ -946,6 +964,10 @@ public static class PartRideEndpoints
                     // Find the PartRide
                     var partRide = await db.PartRides
                         .AsNoTracking()
+                        .Include(pr => pr.Driver)
+                        .ThenInclude(d => d.User) 
+                        .Include(pr => pr.Company)
+                        .Include(pr => pr.Client)
                         .FirstOrDefaultAsync(pr => pr.Id == partRideGuid);
 
                     if (partRide == null)
@@ -1031,8 +1053,16 @@ public static class PartRideEndpoints
                         partRide.Kilometers,
                         partRide.Costs,
                         partRide.Employer,
-                        partRide.ClientId,
-                        partRide.CompanyId,
+                        Client = partRide.Client != null ? new 
+                        {
+                            partRide.Client.Id,
+                            partRide.Client.Name
+                        } : null,
+                        Company = partRide.Company != null ? new 
+                        {
+                            partRide.Company.Id,
+                            partRide.Company.Name
+                        } : null,
                         partRide.Day,
                         partRide.WeekNumber,
                         partRide.Hours,
@@ -1040,7 +1070,11 @@ public static class PartRideEndpoints
                         partRide.CostsDescription,
                         partRide.Turnover,
                         partRide.Remark,
-                        partRide.DriverId,
+                        Driver = partRide.Driver != null ? new 
+                        {
+                            partRide.Driver.Id,
+                            partRide.Driver.AspNetUserId
+                        } : null,
                         partRide.CarId,
                         partRide.RateId,
                         partRide.SurchargeId,
