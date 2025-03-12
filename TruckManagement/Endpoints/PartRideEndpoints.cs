@@ -343,9 +343,25 @@ public static class PartRideEndpoints
 
                     db.PartRides.Add(newPartRide);
                     await db.SaveChangesAsync();
+                    
+                    // Convert Start and End time to decimal hours
+                    double startTimeDecimal = request.Start.TotalHours;
+                    double endTimeDecimal = request.End.TotalHours;
 
+                    // Calculate total break using the provided function
+                    double totalBreak = CalculateTotalBreak(
+                        breakScheduleOn: true, // Always true as per your request
+                        startTime: startTimeDecimal,
+                        endTime: endTimeDecimal,
+                        hourCode: "", // Assuming empty as no information provided
+                        timeForTimeCode: "tvt", // Assuming empty as no information provided
+                        sickHours: 0.0, // Assuming no sick hours
+                        holidayHours: 0.0 // Assuming no holiday hours
+                    );
+                    
                     var responseData = new
                     {
+                        totalBreak = totalBreak,
                         newPartRide.Id,
                         newPartRide.Date,
                         newPartRide.Start,
@@ -965,7 +981,7 @@ public static class PartRideEndpoints
                     var partRide = await db.PartRides
                         .AsNoTracking()
                         .Include(pr => pr.Driver)
-                        .ThenInclude(d => d.User) 
+                        .ThenInclude(d => d.User)
                         .Include(pr => pr.Company)
                         .Include(pr => pr.Client)
                         .FirstOrDefaultAsync(pr => pr.Id == partRideGuid);
@@ -1053,16 +1069,20 @@ public static class PartRideEndpoints
                         partRide.Kilometers,
                         partRide.Costs,
                         partRide.Employer,
-                        Client = partRide.Client != null ? new 
-                        {
-                            partRide.Client.Id,
-                            partRide.Client.Name
-                        } : null,
-                        Company = partRide.Company != null ? new 
-                        {
-                            partRide.Company.Id,
-                            partRide.Company.Name
-                        } : null,
+                        Client = partRide.Client != null
+                            ? new
+                            {
+                                partRide.Client.Id,
+                                partRide.Client.Name
+                            }
+                            : null,
+                        Company = partRide.Company != null
+                            ? new
+                            {
+                                partRide.Company.Id,
+                                partRide.Company.Name
+                            }
+                            : null,
                         partRide.Day,
                         partRide.WeekNumber,
                         partRide.Hours,
@@ -1070,11 +1090,13 @@ public static class PartRideEndpoints
                         partRide.CostsDescription,
                         partRide.Turnover,
                         partRide.Remark,
-                        Driver = partRide.Driver != null ? new 
-                        {
-                            partRide.Driver.Id,
-                            partRide.Driver.AspNetUserId
-                        } : null,
+                        Driver = partRide.Driver != null
+                            ? new
+                            {
+                                partRide.Driver.Id,
+                                partRide.Driver.AspNetUserId
+                            }
+                            : null,
                         partRide.CarId,
                         partRide.RateId,
                         partRide.SurchargeId,
@@ -1301,5 +1323,54 @@ public static class PartRideEndpoints
         }
 
         return query;
+    }
+    
+    public static double CalculateTotalBreak(
+        bool breakScheduleOn,   
+        double startTime,         
+        double endTime,           
+        string hourCode,            
+        string timeForTimeCode,   
+        double sickHours,         
+        double holidayHours       
+    )
+    {
+        // 1) In Excel: IF(Admin!E$20="ja", ...) => only proceed if breakScheduleOn == "ja"
+        if (!breakScheduleOn)
+            return 0.0;
+
+        // 2) If endTime is 0 => same as Excel's "G6=0 or blank"
+        if (endTime == 0.0)
+            return 0.0;
+
+        // 3) If codeE6 == timeForTimeCode (e.g. "tvt") or (sick + holiday) > 0 => break is 0
+        if (hourCode == timeForTimeCode || (sickHours + holidayHours) > 0)
+            return 0.0;
+
+        // 4) Determine time difference across midnight if needed
+        double difference;
+        if (endTime < startTime)
+        {
+            difference = 24.0 - startTime + endTime;
+        }
+        else
+        {
+            difference = endTime - startTime;
+        }
+
+        // 5) Return the break value based on the bracket
+        //   Excel logic: >=4.5 & <7.5 => 0.5, >=7.5 & <10.5 => 1, etc.
+        if (difference >= 4.5 && difference < 7.5)
+            return 0.5;
+        else if (difference >= 7.5 && difference < 10.5)
+            return 1.0;
+        else if (difference >= 10.5 && difference < 13.5)
+            return 1.5;
+        else if (difference >= 13.5 && difference < 16.5)
+            return 2.0;
+        else if (difference >= 16.5)
+            return 2.5;
+        else
+            return 0.0;
     }
 }
