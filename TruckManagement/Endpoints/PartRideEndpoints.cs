@@ -343,10 +343,19 @@ public static class PartRideEndpoints
 
                     db.PartRides.Add(newPartRide);
                     await db.SaveChangesAsync();
-                    
+
                     // Convert Start and End time to decimal hours
                     double startTimeDecimal = request.Start.TotalHours;
                     double endTimeDecimal = request.End.TotalHours;
+
+                    // TODO: provide hour code in the request
+                    double sickHours = CalculateSickHours(
+                        hourCode: "zie", 
+                        holidayName: "", 
+                        weeklyPercentage: 100.0,
+                        startTime: startTimeDecimal,
+                        endTime: endTimeDecimal
+                    );
 
                     // Calculate total break using the provided function
                     double totalBreak = CalculateTotalBreak(
@@ -355,10 +364,10 @@ public static class PartRideEndpoints
                         endTime: endTimeDecimal,
                         hourCode: "", // Assuming empty as no information provided
                         timeForTimeCode: "tvt", // Assuming empty as no information provided
-                        sickHours: 0.0, // Assuming no sick hours
+                        sickHours: sickHours, // Assuming no sick hours
                         holidayHours: 0.0 // Assuming no holiday hours
                     );
-                    
+
                     var responseData = new
                     {
                         totalBreak = totalBreak,
@@ -1324,15 +1333,15 @@ public static class PartRideEndpoints
 
         return query;
     }
-    
+
     public static double CalculateTotalBreak(
-        bool breakScheduleOn,   
-        double startTime,         
-        double endTime,           
-        string hourCode,            
-        string timeForTimeCode,   
-        double sickHours,         
-        double holidayHours       
+        bool breakScheduleOn,
+        double startTime,
+        double endTime,
+        string hourCode,
+        string timeForTimeCode,
+        double sickHours,
+        double holidayHours
     )
     {
         // 1) In Excel: IF(Admin!E$20="ja", ...) => only proceed if breakScheduleOn == "ja"
@@ -1372,5 +1381,50 @@ public static class PartRideEndpoints
             return 2.5;
         else
             return 0.0;
+    }
+
+    public static double CalculateSickHours(
+        string hourCode, // E6: e.g. "1", "2", "vak", "zie", "C128", "tvt", etc.
+        string holidayName, // AM6: the name of a holiday (empty if not a holiday)
+        double weeklyPercentage, // G2: e.g. 100 for full-time, 50 for half-time, etc.
+        double startTime, // Start time of the shift
+        double endTime // End time of the shift
+    )
+    {
+        string SICK_CODE = "zie";
+        // 1) Compute the length of this shift in hours, handling midnight crossover:
+        double shiftHours;
+        if (endTime < startTime)
+        {
+            // crosses midnight
+            shiftHours = 24.0 - startTime + endTime;
+        }
+        else
+        {
+            // same-day
+            shiftHours = endTime - startTime;
+        }
+
+        // 2) If code is "sick" => count these hours as "sick hours"
+        //    Or if there's a non-empty holiday name => treat as holiday hours.
+        //    (We multiply by weeklyPercentage/100.0 to scale for part-time workers.)
+
+        double scaledHours = shiftHours * (weeklyPercentage / 100.0);
+
+        if (hourCode == SICK_CODE)
+        {
+            // E6 code matches the "sick" code => fill AP with sick hours
+            return scaledHours;
+        }
+        else if (!string.IsNullOrWhiteSpace(holidayName))
+        {
+            // AM6 has a holiday name => treat these as holiday hours
+            return scaledHours;
+        }
+        else
+        {
+            // Neither sick nor holiday => no hours go into AP
+            return 0.0;
+        }
     }
 }
