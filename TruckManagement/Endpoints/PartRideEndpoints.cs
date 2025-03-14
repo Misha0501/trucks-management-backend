@@ -48,13 +48,13 @@ public static class PartRideEndpoints
                     }
 
                     // Validate Start < End
-                    if (request.End < request.Start)
-                    {
-                        return ApiResponseFactory.Error(
-                            "'End' time cannot be before 'Start' time.",
-                            StatusCodes.Status400BadRequest
-                        );
-                    }
+                    // if (request.End < request.Start)
+                    // {
+                    //     return ApiResponseFactory.Error(
+                    //         "'End' time cannot be before 'Start' time.",
+                    //         StatusCodes.Status400BadRequest
+                    //     );
+                    // }
 
                     // Attempt to parse other GUIDs
                     Guid? rideGuid = TryParseGuid(request.RideId);
@@ -302,13 +302,13 @@ public static class PartRideEndpoints
                     // Calculate decimal hours: (End - Start) - Rest
                     var rawTime = (request.End - request.Start).TotalHours;
                     var decimalHours = rawTime - request.Rest.TotalHours;
-                    if (decimalHours < 0)
-                    {
-                        return ApiResponseFactory.Error(
-                            "Computed total hours is negative. Check Start/End/Rest times.",
-                            StatusCodes.Status400BadRequest
-                        );
-                    }
+                    // if (decimalHours < 0)
+                    // {
+                    //     return ApiResponseFactory.Error(
+                    //         "Computed total hours is negative. Check Start/End/Rest times.",
+                    //         StatusCodes.Status400BadRequest
+                    //     );
+                    // }
 
                     var newPartRide = new PartRide
                     {
@@ -357,6 +357,17 @@ public static class PartRideEndpoints
                         isHoliday: false
                     );
                     
+                    double untaxedAllowanceSingleDay = CalculateUntaxedAllowanceSingleDay(
+                        hourCode: "Eendaagserit",
+                        singleDayTripCode: "Eendaagserit",
+                        startTime: startTimeDecimal,
+                        endTime: endTimeDecimal,
+                        untaxedAllowanceNormalDayPartial: untaxedAllowanceNormalDayPartial,
+                        dayRateBefore18: 0.77,
+                        eveningRateAfter18: 3.52,
+                        lumpSumIf12h: 14.63
+                        );
+                    
                     double sickHours = CalculateSickHours(
                         hourCode: "", 
                         holidayName: "", 
@@ -386,6 +397,7 @@ public static class PartRideEndpoints
                     {
                         totalBreak = totalBreak,
                         untaxedAllowanceNormalDayPartial,
+                        untaxedAllowanceSingleDay,
                         newPartRide.Id,
                         newPartRide.Date,
                         newPartRide.Start,
@@ -1524,4 +1536,70 @@ public static class PartRideEndpoints
 
         return totalAllowance;
     }
+    
+    public static double CalculateUntaxedAllowanceSingleDay(
+    string hourCode,                        // E6, e.g. "1", "vak", "C123", etc.
+    string singleDayTripCode,               // C123 ("Eendaagserit")
+    double startTime,                       // F6
+    double endTime,                         // G6
+    double untaxedAllowanceNormalDayPartial,// AG6 result, i.e. same-day partial logic
+    double dayRateBefore18,                 // AB6
+    double eveningRateAfter18,              // AD6
+    double lumpSumIf12h                     // AC6, TDonbelast for 12+ hours (cross-midnight)
+)
+{
+    // 1) If the code is not "Eendaagserit", Excel returns "" => we do 0
+    if (hourCode != singleDayTripCode)
+        return 0.0;
+
+    // 2) If start+end = 0 => no times => 0
+    if ((startTime + endTime) == 0.0)
+        return 0.0;
+
+    // 3) Check if crossing midnight
+    if (endTime > startTime)
+    {
+        // Same-day scenario => if shift < 4 => 0, else => use the partial normal-day result (AG6)
+        double shiftLength = endTime - startTime;
+        if (shiftLength < 4.0)
+            return 0.0;
+        else
+            return untaxedAllowanceNormalDayPartial;
+    }
+    else
+    {
+        // 4) Cross-midnight scenario (endTime <= startTime)
+        //    - If F6 < 14 => ((18 - F6) + G6)*AB6 + (6 * AD6)
+        //    - Else check total shift (24 - F6 + G6).
+        double result = 0.0;
+
+        if (startTime < 14.0)
+        {
+            // ((18 - F6) + G6)*AB6 + (6*AD6)
+            double hoursBefore18PlusMorning = (18.0 - startTime) + endTime;
+            result = hoursBefore18PlusMorning * dayRateBefore18 
+                   + (6.0 * eveningRateAfter18);
+        }
+        else
+        {
+            // F6 >= 14 => we do (24 - F6 + G6) => X
+            double totalShift = (24.0 - startTime) + endTime;
+            if (totalShift < 4.0)
+            {
+                result = 0.0;
+            }
+            else if (totalShift < 12.0)
+            {
+                result = totalShift * dayRateBefore18;
+            }
+            else
+            {
+                // totalShift >= 12 => add AC6 lumpsum
+                result = (totalShift * dayRateBefore18) + lumpSumIf12h;
+            }
+        }
+
+        return result;
+    }
+}
 }
