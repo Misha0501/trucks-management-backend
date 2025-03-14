@@ -349,9 +349,23 @@ public static class PartRideEndpoints
                     double endTimeDecimal = request.End.TotalHours;
 
                     // TODO: provide hour code in the request
+                    double untaxedAllowanceNormalDayPartial = CalculateUntaxedAllowanceNormalDayPartial(
+                        startOfShift: startTimeDecimal,
+                        endOfShift: endTimeDecimal,
+                        dayRateBefore18: 0.77,
+                        eveningRateAfter18: 3.52,
+                        isHoliday: false
+                    );
+                    
                     double sickHours = CalculateSickHours(
-                        hourCode: "zie", 
+                        hourCode: "", 
                         holidayName: "", 
+                        weeklyPercentage: 100.0,
+                        startTime: startTimeDecimal,
+                        endTime: endTimeDecimal
+                    );
+                    double holidayHours = CalculateHolidayHours(
+                        hourCode: "vak",
                         weeklyPercentage: 100.0,
                         startTime: startTimeDecimal,
                         endTime: endTimeDecimal
@@ -365,12 +379,13 @@ public static class PartRideEndpoints
                         hourCode: "", // Assuming empty as no information provided
                         timeForTimeCode: "tvt", // Assuming empty as no information provided
                         sickHours: sickHours, // Assuming no sick hours
-                        holidayHours: 0.0 // Assuming no holiday hours
+                        holidayHours: holidayHours // Assuming no holiday hours
                     );
 
                     var responseData = new
                     {
                         totalBreak = totalBreak,
+                        untaxedAllowanceNormalDayPartial,
                         newPartRide.Id,
                         newPartRide.Date,
                         newPartRide.Start,
@@ -1382,6 +1397,41 @@ public static class PartRideEndpoints
         else
             return 0.0;
     }
+    
+    public static double CalculateHolidayHours(
+        string hourCode,        // The code in E6 (e.g. "1","2","vak","zie","C127", etc.)
+        double weeklyPercentage,// e.g., 100 for full-time, 50 for half-time, etc. (cell G2)
+        double startTime,       // The start time (was F6)
+        double endTime          // The end time (was G6)
+    )
+    {
+        string HOLIDAY_CODE = "vak";
+        
+        // 1) Calculate the shift length, handling a possible midnight crossover:
+        double shiftHours;
+        if (endTime < startTime)
+        {
+            // crosses midnight
+            shiftHours = 24.0 - startTime + endTime;
+        }
+        else
+        {
+            // same-day
+            shiftHours = endTime - startTime;
+        }
+
+        // 2) If the hour code matches the holiday code, count all shift hours as holiday.
+        //    Multiply by weeklyPercentage/100 to account for part-time scenarios.
+        if (hourCode == HOLIDAY_CODE)
+        {
+            return shiftHours * (weeklyPercentage / 100.0);
+        }
+        else
+        {
+            // Not a holiday code => no holiday hours
+            return 0.0;
+        }
+    }
 
     public static double CalculateSickHours(
         string hourCode, // E6: e.g. "1", "2", "vak", "zie", "C128", "tvt", etc.
@@ -1426,5 +1476,52 @@ public static class PartRideEndpoints
             // Neither sick nor holiday => no hours go into AP
             return 0.0;
         }
+    }
+    
+    public static double CalculateUntaxedAllowanceNormalDayPartial(
+        double startOfShift,       // F6 in Excel
+        double endOfShift,         // G6 in Excel
+        double dayRateBefore18,    // AB6 in Excel (onbelaste vergoeding multiplier for before 18:00)
+        double eveningRateAfter18, // AD6 in Excel (onbelaste vergoeding multiplier for after 18:00)
+        bool isHoliday             // true if it's a holiday (AM has a holiday name)
+    )
+    {
+        // 1) If it's a holiday => no untaxed allowance
+        if (isHoliday)
+            return 0.0;
+
+        // 2) If shift crosses midnight => 0 here, presumably handled elsewhere
+        if (endOfShift < startOfShift)
+            return 0.0;
+
+        // 3) Calculate total shift length
+        double shiftLength = endOfShift - startOfShift;
+
+        // 4) Main logic from AG6 for same-day shift
+        double totalAllowance;
+
+        // If shift starts at or after 14:00, everything uses dayRateBefore18
+        if (startOfShift >= 14.0)
+        {
+            totalAllowance = shiftLength * dayRateBefore18;
+        }
+        else
+        {
+            // Otherwise, if shift ends at or after 18:00, split rates
+            if (endOfShift >= 18.0)
+            {
+                double hoursBefore18 = 18.0 - startOfShift;
+                double hoursAfter18 = endOfShift - 18.0;
+                totalAllowance = (hoursBefore18 * dayRateBefore18) 
+                                 + (hoursAfter18 * eveningRateAfter18);
+            }
+            else
+            {
+                // Ends before 18:00 => entire shift at dayRateBefore18
+                totalAllowance = shiftLength * dayRateBefore18;
+            }
+        }
+
+        return totalAllowance;
     }
 }
