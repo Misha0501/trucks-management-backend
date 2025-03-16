@@ -1,4 +1,4 @@
-namespace TruckManagement.Services;
+namespace TruckManagement.Utilities;
 
 public static class NightAllowanceCalculator
 {
