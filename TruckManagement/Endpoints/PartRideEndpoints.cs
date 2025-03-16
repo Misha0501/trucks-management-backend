@@ -48,316 +48,109 @@ public static class PartRideEndpoints
                         );
                     }
 
-                    // Validate Start < End
-                    // if (request.End < request.Start)
-                    // {
-                    //     return ApiResponseFactory.Error(
-                    //         "'End' time cannot be before 'Start' time.",
-                    //         StatusCodes.Status400BadRequest
-                    //     );
-                    // }
 
-                    // Attempt to parse other GUIDs
-                    Guid? rideGuid = TryParseGuid(request.RideId);
-                    Guid? carGuid = TryParseGuid(request.CarId);
-                    Guid? driverGuid = TryParseGuid(request.DriverId);
-                    Guid? rateGuid = TryParseGuid(request.RateId);
-                    Guid? surchargeGuid = TryParseGuid(request.SurchargeId);
-                    Guid? charterGuid = TryParseGuid(request.CharterId);
-                    Guid? clientGuid = TryParseGuid(request.ClientId);
-                    Guid? unitGuid = TryParseGuid(request.UnitId);
+                    // 2) Convert Start/End to decimal hours
+                    double startDecimal = request.Start.TotalHours;
+                    double endDecimal = request.End.TotalHours;
 
+                    // SHIFT crosses midnight if end <= start in decimal hours
+                    bool crossesMidnight = (endDecimal <= startDecimal);
+
+                    // 3) Validate references/roles once (driver, company, etc.)
                     var userId = userManager.GetUserId(currentUser);
                     if (string.IsNullOrEmpty(userId))
                     {
-                        return ApiResponseFactory.Error(
-                            "User not authenticated.",
-                            StatusCodes.Status401Unauthorized
-                        );
+                        return ApiResponseFactory.Error("User not authenticated.", StatusCodes.Status401Unauthorized);
                     }
 
                     bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
                     bool isDriver = currentUser.IsInRole("driver");
 
-                    Guid? driverGuidOfUser = null;
-                    if (isDriver)
+                    var validationResult = await ValidateReferencesAndRolesAsync(
+                        db, userManager, currentUser,
+                        request, userId, companyGuid,
+                        isGlobalAdmin, isDriver
+                    );
+                    if (validationResult != null)
                     {
-                        var driverEntity = await db.Drivers
-                            .FirstOrDefaultAsync(d => d.AspNetUserId == userId);
-
-                        if (driverEntity == null)
-                        {
-                            return ApiResponseFactory.Error(
-                                "You are not registered as a driver. Contact your administrator.",
-                                StatusCodes.Status403Forbidden
-                            );
-                        }
-
-                        driverGuidOfUser = driverEntity.Id;
-
-                        // Ensure the driver is creating the PartRide for themselves
-                        if (!driverGuid.HasValue || driverGuid.Value != driverGuidOfUser.Value)
-                        {
-                            return ApiResponseFactory.Error(
-                                "Drivers can only create PartRides for themselves.",
-                                StatusCodes.Status403Forbidden
-                            );
-                        }
-
-                        // Ensure the driver's company matches the provided company ID
-                        if (!driverEntity.CompanyId.HasValue || driverEntity.CompanyId.Value != companyGuid)
-                        {
-                            return ApiResponseFactory.Error(
-                                "You are not associated with this company.",
-                                StatusCodes.Status403Forbidden
-                            );
-                        }
+                        // if validation fails, it returns an error
+                        return validationResult;
                     }
 
-                    if (!isGlobalAdmin && !isDriver)
+                    // 4) Create either one or two segments
+                    var createdPartRides = new List<PartRide>();
+
+                    if (!crossesMidnight)
                     {
-                        var contactPerson = await db.ContactPersons
-                            .Include(cp => cp.ContactPersonClientCompanies)
-                            .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+                        // Single segment (no midnight crossover)
+                        var singleRide = await CreateAndSavePartRideSegment(
+                            db, request, companyGuid,
+                            request.Date, request.Start, request.End
+                        );
+                        createdPartRides.Add(singleRide);
+                    }
+                    else
+                    {
+                        // SHIFT CROSSING MIDNIGHT => 2 segments
 
-                        if (contactPerson == null)
-                        {
-                            return ApiResponseFactory.Error(
-                                "No contact person profile found. You are not authorized.",
-                                StatusCodes.Status403Forbidden
-                            );
-                        }
+                        // Segment #1: from Start -> 24:00, same date
+                        var midnight = TimeSpan.FromHours(24.0);
+                        var firstRide = await CreateAndSavePartRideSegment(
+                            db, request, companyGuid,
+                            request.Date, request.Start, midnight
+                        );
+                        createdPartRides.Add(firstRide);
 
-                        var associatedCompanyIds = contactPerson.ContactPersonClientCompanies
-                            .Select(cpc => cpc.CompanyId)
-                            .Distinct()
-                            .ToList();
-
-                        // Check if this user is associated with the posted company
-                        if (!associatedCompanyIds.Contains(companyGuid))
-                        {
-                            return ApiResponseFactory.Error(
-                                "You are not authorized to create a PartRide for this company.",
-                                StatusCodes.Status403Forbidden
-                            );
-                        }
-
-                        if (driverGuid.HasValue)
-                        {
-                            var driverEntity = await db.Drivers
-                                .IgnoreQueryFilters()
-                                .FirstOrDefaultAsync(d => d.Id == driverGuid.Value);
-                            if (driverEntity == null)
-                            {
-                                return ApiResponseFactory.Error(
-                                    "The specified driver does not exist.",
-                                    StatusCodes.Status400BadRequest
-                                );
-                            }
-
-                            if (driverEntity.CompanyId.HasValue && driverEntity.CompanyId.Value != companyGuid)
-                            {
-                                return ApiResponseFactory.Error(
-                                    "Driver's company does not match the provided companyId.",
-                                    StatusCodes.Status400BadRequest
-                                );
-                            }
-                        }
+                        // Segment #2: from 00:00 -> End, next day
+                        var secondRide = await CreateAndSavePartRideSegment(
+                            db, request, companyGuid,
+                            request.Date.AddDays(1),
+                            TimeSpan.Zero,
+                            request.End
+                        );
+                        createdPartRides.Add(secondRide);
                     }
 
-                    // Similarly, check each optional foreign key
-                    if (rideGuid.HasValue)
+                    // 5) Return everything in one response
+                    var responseData = createdPartRides.Select(pr => new
                     {
-                        var rideEntity = await db.Rides
-                            .IgnoreQueryFilters()
-                            .FirstOrDefaultAsync(r => r.Id == rideGuid.Value);
-                        if (rideEntity == null)
-                        {
-                            return ApiResponseFactory.Error(
-                                "The specified ride does not exist.",
-                                StatusCodes.Status400BadRequest
-                            );
-                        }
+                        pr.Id,
+                        pr.Date,
+                        pr.Start,
+                        pr.End,
+                        pr.Rest,
+                        pr.Kilometers,
+                        pr.Costs,
+                        pr.Employer,
+                        pr.ClientId,
+                        pr.DriverId,
+                        pr.CompanyId,
+                        pr.Day,
+                        pr.WeekNumber,
+                        pr.Hours,
+                        pr.DecimalHours,
+                        pr.CostsDescription,
+                        pr.Turnover,
+                        pr.Remark
+                    }).ToList();
 
-                        if (rideEntity.CompanyId != companyGuid)
-                        {
-                            return ApiResponseFactory.Error(
-                                "Ride's company does not match the provided companyId.",
-                                StatusCodes.Status400BadRequest
-                            );
-                        }
-                    }
+                    return ApiResponseFactory.Success(responseData, StatusCodes.Status201Created);
 
-                    if (rateGuid.HasValue)
-                    {
-                        var rateEntity = await db.Rates
-                            .IgnoreQueryFilters()
-                            .FirstOrDefaultAsync(r => r.Id == rateGuid.Value);
-                        if (rateEntity == null)
-                        {
-                            return ApiResponseFactory.Error(
-                                "The specified rate does not exist.",
-                                StatusCodes.Status400BadRequest
-                            );
-                        }
-
-                        if (rateEntity.CompanyId != companyGuid)
-                        {
-                            return ApiResponseFactory.Error(
-                                "Rate's company does not match the provided companyId.",
-                                StatusCodes.Status400BadRequest
-                            );
-                        }
-                    }
-
-                    if (surchargeGuid.HasValue)
-                    {
-                        var surchargeEntity = await db.Surcharges
-                            .IgnoreQueryFilters()
-                            .FirstOrDefaultAsync(s => s.Id == surchargeGuid.Value);
-                        if (surchargeEntity == null)
-                        {
-                            return ApiResponseFactory.Error(
-                                "The specified surcharge does not exist.",
-                                StatusCodes.Status400BadRequest
-                            );
-                        }
-
-                        if (surchargeEntity.CompanyId != companyGuid)
-                        {
-                            return ApiResponseFactory.Error(
-                                "Surcharge's company does not match the provided companyId.",
-                                StatusCodes.Status400BadRequest
-                            );
-                        }
-                    }
-
-                    if (charterGuid.HasValue)
-                    {
-                        var charterEntity = await db.Charters
-                            .IgnoreQueryFilters()
-                            .FirstOrDefaultAsync(c => c.Id == charterGuid.Value);
-                        if (charterEntity == null)
-                        {
-                            return ApiResponseFactory.Error(
-                                "The specified charter does not exist.",
-                                StatusCodes.Status400BadRequest
-                            );
-                        }
-
-                        if (charterEntity.CompanyId != companyGuid)
-                        {
-                            return ApiResponseFactory.Error(
-                                "Charter's company does not match the provided companyId.",
-                                StatusCodes.Status400BadRequest
-                            );
-                        }
-                    }
-
-                    // If a client is specified, ensure it belongs to the same company
-                    if (clientGuid.HasValue)
-                    {
-                        var clientEntity = await db.Clients
-                            .IgnoreQueryFilters()
-                            .FirstOrDefaultAsync(c => c.Id == clientGuid.Value);
-
-                        if (clientEntity == null)
-                        {
-                            return ApiResponseFactory.Error(
-                                "The specified client does not exist.",
-                                StatusCodes.Status400BadRequest
-                            );
-                        }
-
-                        if (clientEntity.CompanyId != companyGuid)
-                        {
-                            return ApiResponseFactory.Error(
-                                "Client's company does not match the provided companyId.",
-                                StatusCodes.Status400BadRequest
-                            );
-                        }
-                    }
-
-                    if (carGuid.HasValue)
-                    {
-                        var carEntity = await db.Cars
-                            .IgnoreQueryFilters()
-                            .FirstOrDefaultAsync(c => c.Id == carGuid.Value);
-                        if (carEntity == null)
-                        {
-                            return ApiResponseFactory.Error(
-                                "The specified car does not exist.",
-                                StatusCodes.Status400BadRequest
-                            );
-                        }
-
-                        if (carEntity.CompanyId != companyGuid)
-                        {
-                            return ApiResponseFactory.Error(
-                                "Car's company does not match the provided companyId.",
-                                StatusCodes.Status400BadRequest
-                            );
-                        }
-                    }
-
-                    // Calculate decimal hours: (End - Start) - Rest
-                    var rawTime = (request.End - request.Start).TotalHours;
-                    var decimalHours = rawTime - request.Rest.TotalHours;
-                    // if (decimalHours < 0)
-                    // {
-                    //     return ApiResponseFactory.Error(
-                    //         "Computed total hours is negative. Check Start/End/Rest times.",
-                    //         StatusCodes.Status400BadRequest
-                    //     );
-                    // }
-
-                    var newPartRide = new PartRide
-                    {
-                        Id = Guid.NewGuid(),
-                        RideId = rideGuid,
-                        Date = request.Date,
-                        Start = request.Start,
-                        End = request.End,
-                        Rest = request.Rest,
-                        Kilometers = request.Kilometers,
-                        CarId = carGuid,
-                        DriverId = driverGuid,
-                        Costs = request.Costs,
-                        Employer = request.Employer,
-                        ClientId = clientGuid,
-                        Day = request.Date.Day,
-                        // You can also compute week number here, or use request.WeekNumber directly
-                        WeekNumber = request.WeekNumber > 0
-                            ? request.WeekNumber
-                            : GetIso8601WeekOfYear(request.Date),
-                        Hours = rawTime,
-                        DecimalHours = decimalHours,
-                        UnitId = unitGuid,
-                        RateId = rateGuid,
-                        CostsDescription = request.CostsDescription,
-                        SurchargeId = surchargeGuid,
-                        Turnover = request.Turnover,
-                        Remark = request.Remark,
-                        CompanyId = companyGuid,
-                        CharterId = charterGuid
-                    };
-
-                    db.PartRides.Add(newPartRide);
-                    await db.SaveChangesAsync();
 
                     // Convert Start and End time to decimal hours
                     double startTimeDecimal = request.Start.TotalHours;
                     double endTimeDecimal = request.End.TotalHours;
 
                     // TODO: provide hour code in the request
-                    double untaxedAllowanceNormalDayPartial = WorkHoursCalculator.CalculateUntaxedAllowanceNormalDayPartial(
-                        startOfShift: startTimeDecimal,
-                        endOfShift: endTimeDecimal,
-                        dayRateBefore18: 0.77,
-                        eveningRateAfter18: 3.52,
-                        isHoliday: false
-                    );
-                    
+                    double untaxedAllowanceNormalDayPartial =
+                        WorkHoursCalculator.CalculateUntaxedAllowanceNormalDayPartial(
+                            startOfShift: startTimeDecimal,
+                            endOfShift: endTimeDecimal,
+                            dayRateBefore18: 0.77,
+                            eveningRateAfter18: 3.52,
+                            isHoliday: false
+                        );
+
                     double untaxedAllowanceSingleDay = WorkHoursCalculator.CalculateUntaxedAllowanceSingleDay(
                         hourCode: "Eendaagserit",
                         singleDayTripCode: "Eendaagserit",
@@ -367,11 +160,11 @@ public static class PartRideEndpoints
                         dayRateBefore18: 0.77,
                         eveningRateAfter18: 3.52,
                         lumpSumIf12h: 14.63
-                        );
-                    
+                    );
+
                     double sickHours = WorkHoursCalculator.CalculateSickHours(
-                        hourCode: "", 
-                        holidayName: "", 
+                        hourCode: "",
+                        holidayName: "",
                         weeklyPercentage: 100.0,
                         startTime: startTimeDecimal,
                         endTime: endTimeDecimal
@@ -382,7 +175,7 @@ public static class PartRideEndpoints
                         startTime: startTimeDecimal,
                         endTime: endTimeDecimal
                     );
-                    
+
                     // TODO: Replace with actual config values (e.g., from settings) 
                     double nightAllowance = NightAllowanceCalculator.CalculateNightAllowance(
                         inputDate: request.Date,
@@ -410,7 +203,7 @@ public static class PartRideEndpoints
                         sickHours: sickHours, // Assuming no sick hours
                         holidayHours: holidayHours // Assuming no holiday hours
                     );
-                    
+
                     double totalHours = WorkHoursCalculator.CalculateTotalHours(
                         shiftStart: startTimeDecimal,
                         shiftEnd: endTimeDecimal,
@@ -418,33 +211,6 @@ public static class PartRideEndpoints
                         manualAdjustment: 0 // TODO: replace with manual Adjustment
                     );
                     
-                    var responseData = new
-                    {
-                        totalHours,
-                        nightAllowance,
-                        totalBreak = totalBreak,
-                        untaxedAllowanceNormalDayPartial,
-                        untaxedAllowanceSingleDay,
-                        newPartRide.Id,
-                        newPartRide.Date,
-                        newPartRide.Start,
-                        newPartRide.End,
-                        newPartRide.Rest,
-                        newPartRide.Kilometers,
-                        newPartRide.Costs,
-                        newPartRide.Employer,
-                        newPartRide.ClientId,
-                        newPartRide.CompanyId,
-                        newPartRide.Day,
-                        newPartRide.WeekNumber,
-                        newPartRide.Hours,
-                        newPartRide.DecimalHours,
-                        newPartRide.CostsDescription,
-                        newPartRide.Turnover,
-                        newPartRide.Remark
-                    };
-
-                    return ApiResponseFactory.Success(responseData, StatusCodes.Status201Created);
                 }
                 catch (Exception ex)
                 {
@@ -1387,4 +1153,314 @@ public static class PartRideEndpoints
 
         return query;
     }
+
+    /// <summary>
+    /// Validate references/roles once. If anything invalid => return IResult error,
+    /// otherwise null means valid.
+    /// 
+    /// Replicates your existing logic for checking driver, contact person, etc.
+    /// </summary>
+    private static async Task<IResult?> ValidateReferencesAndRolesAsync(
+        ApplicationDbContext db,
+        UserManager<ApplicationUser> userManager,
+        ClaimsPrincipal currentUser,
+        CreatePartRideRequest request,
+        string userId,
+        Guid companyGuid,
+        bool isGlobalAdmin,
+        bool isDriver
+    )
+    {
+        // Attempt to parse other GUIDs
+        Guid? rideGuid = TryParseGuid(request.RideId);
+        Guid? carGuid = TryParseGuid(request.CarId);
+        Guid? driverGuid = TryParseGuid(request.DriverId);
+        Guid? rateGuid = TryParseGuid(request.RateId);
+        Guid? surchargeGuid = TryParseGuid(request.SurchargeId);
+        Guid? charterGuid = TryParseGuid(request.CharterId);
+        Guid? clientGuid = TryParseGuid(request.ClientId);
+        Guid? unitGuid = TryParseGuid(request.UnitId);
+
+        // If the user is a driver => ensure the driver matches the user & company
+        if (isDriver)
+        {
+            var driverEntity = await db.Drivers.FirstOrDefaultAsync(d => d.AspNetUserId == userId);
+            if (driverEntity == null)
+            {
+                return ApiResponseFactory.Error(
+                    "You are not registered as a driver. Contact your administrator.",
+                    StatusCodes.Status403Forbidden
+                );
+            }
+
+            // Must create PartRide for themselves
+            if (!driverGuid.HasValue || driverGuid.Value != driverEntity.Id)
+            {
+                return ApiResponseFactory.Error(
+                    "Drivers can only create PartRides for themselves.",
+                    StatusCodes.Status403Forbidden
+                );
+            }
+
+            // Must match same company
+            if (!driverEntity.CompanyId.HasValue || driverEntity.CompanyId.Value != companyGuid)
+            {
+                return ApiResponseFactory.Error(
+                    "You are not associated with this company.",
+                    StatusCodes.Status403Forbidden
+                );
+            }
+        }
+
+        // If not global admin nor driver => must be contact-person-based
+        if (!isGlobalAdmin && !isDriver)
+        {
+            var contactPerson = await db.ContactPersons
+                .Include(cp => cp.ContactPersonClientCompanies)
+                .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+            if (contactPerson == null)
+            {
+                return ApiResponseFactory.Error(
+                    "No contact person profile found. You are not authorized.",
+                    StatusCodes.Status403Forbidden
+                );
+            }
+
+            var associatedCompanyIds = contactPerson.ContactPersonClientCompanies
+                .Select(cpc => cpc.CompanyId)
+                .Distinct()
+                .ToList();
+
+            if (!associatedCompanyIds.Contains(companyGuid))
+            {
+                return ApiResponseFactory.Error(
+                    "You are not authorized to create a PartRide for this company.",
+                    StatusCodes.Status403Forbidden
+                );
+            }
+
+            if (driverGuid.HasValue)
+            {
+                var driverEntity = await db.Drivers
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(d => d.Id == driverGuid.Value);
+                if (driverEntity == null)
+                {
+                    return ApiResponseFactory.Error(
+                        "The specified driver does not exist.",
+                        StatusCodes.Status400BadRequest
+                    );
+                }
+
+                if (driverEntity.CompanyId.HasValue && driverEntity.CompanyId.Value != companyGuid)
+                {
+                    return ApiResponseFactory.Error(
+                        "Driver's company does not match the provided companyId.",
+                        StatusCodes.Status400BadRequest
+                    );
+                }
+            }
+        }
+
+        // Similarly, check each optional foreign key
+        if (rideGuid.HasValue)
+        {
+            var rideEntity = await db.Rides
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(r => r.Id == rideGuid.Value);
+            if (rideEntity == null)
+            {
+                return ApiResponseFactory.Error(
+                    "The specified ride does not exist.",
+                    StatusCodes.Status400BadRequest
+                );
+            }
+
+            if (rideEntity.CompanyId != companyGuid)
+            {
+                return ApiResponseFactory.Error(
+                    "Ride's company does not match the provided companyId.",
+                    StatusCodes.Status400BadRequest
+                );
+            }
+        }
+
+        if (rateGuid.HasValue)
+        {
+            var rateEntity = await db.Rates
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(r => r.Id == rateGuid.Value);
+            if (rateEntity == null)
+            {
+                return ApiResponseFactory.Error(
+                    "The specified rate does not exist.",
+                    StatusCodes.Status400BadRequest
+                );
+            }
+
+            if (rateEntity.CompanyId != companyGuid)
+            {
+                return ApiResponseFactory.Error(
+                    "Rate's company does not match the provided companyId.",
+                    StatusCodes.Status400BadRequest
+                );
+            }
+        }
+
+        if (surchargeGuid.HasValue)
+        {
+            var surchargeEntity = await db.Surcharges
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(s => s.Id == surchargeGuid.Value);
+            if (surchargeEntity == null)
+            {
+                return ApiResponseFactory.Error(
+                    "The specified surcharge does not exist.",
+                    StatusCodes.Status400BadRequest
+                );
+            }
+
+            if (surchargeEntity.CompanyId != companyGuid)
+            {
+                return ApiResponseFactory.Error(
+                    "Surcharge's company does not match the provided companyId.",
+                    StatusCodes.Status400BadRequest
+                );
+            }
+        }
+
+        if (charterGuid.HasValue)
+        {
+            var charterEntity = await db.Charters
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(c => c.Id == charterGuid.Value);
+            if (charterEntity == null)
+            {
+                return ApiResponseFactory.Error(
+                    "The specified charter does not exist.",
+                    StatusCodes.Status400BadRequest
+                );
+            }
+
+            if (charterEntity.CompanyId != companyGuid)
+            {
+                return ApiResponseFactory.Error(
+                    "Charter's company does not match the provided companyId.",
+                    StatusCodes.Status400BadRequest
+                );
+            }
+        }
+
+        // If a client is specified, ensure it belongs to the same company
+        if (clientGuid.HasValue)
+        {
+            var clientEntity = await db.Clients
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(c => c.Id == clientGuid.Value);
+
+            if (clientEntity == null)
+            {
+                return ApiResponseFactory.Error(
+                    "The specified client does not exist.",
+                    StatusCodes.Status400BadRequest
+                );
+            }
+
+            if (clientEntity.CompanyId != companyGuid)
+            {
+                return ApiResponseFactory.Error(
+                    "Client's company does not match the provided companyId.",
+                    StatusCodes.Status400BadRequest
+                );
+            }
+        }
+
+        if (carGuid.HasValue)
+        {
+            var carEntity = await db.Cars
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(c => c.Id == carGuid.Value);
+            if (carEntity == null)
+            {
+                return ApiResponseFactory.Error(
+                    "The specified car does not exist.",
+                    StatusCodes.Status400BadRequest
+                );
+            }
+
+            if (carEntity.CompanyId != companyGuid)
+            {
+                return ApiResponseFactory.Error(
+                    "Car's company does not match the provided companyId.",
+                    StatusCodes.Status400BadRequest
+                );
+            }
+        }
+
+        return null;
+    }
+    
+    /// <summary>
+        /// Creates and saves a single PartRide segment. 
+        /// If you want to run calculations (e.g. breaks, night allowance), do it here.
+        /// </summary>
+        private static async Task<PartRide> CreateAndSavePartRideSegment(
+            ApplicationDbContext db,
+            CreatePartRideRequest request,
+            Guid companyGuid,
+            DateTime segmentDate,
+            TimeSpan segmentStart,
+            TimeSpan segmentEnd
+        )
+        {
+            // Basic shift length
+            double rawTime = (segmentEnd - segmentStart).TotalHours; 
+            double decimalHours = rawTime - request.Rest.TotalHours;
+
+            // Build the PartRide
+            var partRide = new PartRide
+            {
+                Id = Guid.NewGuid(),
+                Date = segmentDate,
+                Start = segmentStart,
+                End   = segmentEnd,
+                Rest  = request.Rest,
+                Kilometers = request.Kilometers,
+                CarId      = TryParseGuid(request.CarId),
+                DriverId   = TryParseGuid(request.DriverId),
+                Costs      = request.Costs,
+                Employer   = request.Employer,
+                ClientId   = TryParseGuid(request.ClientId),
+                Day        = segmentDate.Day,
+                WeekNumber = request.WeekNumber > 0
+                    ? request.WeekNumber
+                    : GetIso8601WeekOfYear(segmentDate),
+                Hours = rawTime,
+                DecimalHours = decimalHours,
+                UnitId = TryParseGuid(request.UnitId),
+                RateId = TryParseGuid(request.RateId),
+                CostsDescription = request.CostsDescription,
+                SurchargeId = TryParseGuid(request.SurchargeId),
+                Turnover    = request.Turnover,
+                Remark      = request.Remark,
+                CompanyId   = companyGuid,
+                CharterId   = TryParseGuid(request.CharterId),
+                RideId      = TryParseGuid(request.RideId)
+            };
+
+            // Optionally run your calculations (WorkHoursCalculator, etc.)
+            // e.g. double totalBreak = WorkHoursCalculator.CalculateTotalBreak(...);
+            // partRide.Rest = TimeSpan.FromHours(totalBreak);
+            
+            // e.g. double nightAllowance = NightAllowanceCalculator.CalculateNightAllowance(...);
+            // partRide.Turnover += nightAllowance;
+
+            // Save
+            db.PartRides.Add(partRide);
+            await db.SaveChangesAsync();
+
+            return partRide;
+        }
+    
 }
