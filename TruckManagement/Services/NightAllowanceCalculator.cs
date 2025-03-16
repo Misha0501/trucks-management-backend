@@ -93,7 +93,7 @@ public static class NightAllowanceCalculator
             nightAllowance = 0.0;
         }
 
-        return nightAllowance;
+        return Math.Round(nightAllowance, 2);
     }
 
     /// <summary>

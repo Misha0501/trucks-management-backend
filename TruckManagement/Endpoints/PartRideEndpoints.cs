@@ -1561,7 +1561,7 @@ public static class PartRideEndpoints
             }
         }
 
-        return totalAllowance;
+        return Math.Round(totalAllowance, 2);
     }
     
     public static double CalculateUntaxedAllowanceSingleDay(
@@ -1639,6 +1639,6 @@ public static class PartRideEndpoints
     {
         double totalHours = (shiftEnd - shiftStart) - breakDuration + manualAdjustment;
 
-        return totalHours;
+        return Math.Round(totalHours, 2);
     }
 }
