@@ -9,6 +9,7 @@ using TruckManagement.Data;
 using TruckManagement.DTOs;
 using TruckManagement.Entities;
 using TruckManagement.Helpers;
+using TruckManagement.Services;
 
 public static class PartRideEndpoints
 {
@@ -382,6 +383,23 @@ public static class PartRideEndpoints
                         endTime: endTimeDecimal
                     );
 
+                    // TODO: Replace with actual config values (e.g., from settings) 
+                    double nightAllowance = NightAllowanceCalculator.CalculateNightAllowance(
+                        inputDate: request.Date,
+                        startTime: startTimeDecimal,
+                        endTime: endTimeDecimal,
+                        nightStartTime: 21.0, // Replace with actual config value (e.g., from settings)
+                        nightEndTime: 5.0, // Replace with actual config value (e.g., from settings)
+                        nightHoursAllowed: true, // Assuming night allowance is enabled
+                        nightHours19Percent: false, // Placeholder: replace based on settings
+                        nightHoursInEuros: true, // Placeholder: replace based on settings
+                        someMonthDate: DateTime.UtcNow, // Placeholder: replace with reference month
+                        driverRateOne: 18.71, // Placeholder: replace with actual rate
+                        driverRateTwo: 18.71, // Placeholder: replace with actual rate
+                        nightAllowanceRate: 0.19, // Placeholder: replace with actual rate from settings
+                        nightHoursWholeHours: false // Placeholder: replace based on settings
+                    );
+
                     // Calculate total break using the provided function
                     double totalBreak = CalculateTotalBreak(
                         breakScheduleOn: true, // Always true as per your request
@@ -395,6 +413,7 @@ public static class PartRideEndpoints
 
                     var responseData = new
                     {
+                        nightAllowance,
                         totalBreak = totalBreak,
                         untaxedAllowanceNormalDayPartial,
                         untaxedAllowanceSingleDay,
