@@ -382,7 +382,7 @@ public static class PartRideEndpoints
                         startTime: startTimeDecimal,
                         endTime: endTimeDecimal
                     );
-
+                    
                     // TODO: Replace with actual config values (e.g., from settings) 
                     double nightAllowance = NightAllowanceCalculator.CalculateNightAllowance(
                         inputDate: request.Date,
@@ -410,9 +410,17 @@ public static class PartRideEndpoints
                         sickHours: sickHours, // Assuming no sick hours
                         holidayHours: holidayHours // Assuming no holiday hours
                     );
-
+                    
+                    double totalHours = CalculateTotalHours(
+                        shiftStart: startTimeDecimal,
+                        shiftEnd: endTimeDecimal,
+                        breakDuration: totalBreak,
+                        manualAdjustment: 0 // TODO: replace with manual Adjustment
+                    );
+                    
                     var responseData = new
                     {
+                        totalHours,
                         nightAllowance,
                         totalBreak = totalBreak,
                         untaxedAllowanceNormalDayPartial,
@@ -1621,4 +1629,16 @@ public static class PartRideEndpoints
         return result;
     }
 }
+    
+    public static double CalculateTotalHours(
+        double shiftStart,      // Was F7 in Excel
+        double shiftEnd,        // Was G7 in Excel
+        double breakDuration,   // Was H7 in Excel (the break)
+        double manualAdjustment // Was I7 in Excel
+    )
+    {
+        double totalHours = (shiftEnd - shiftStart) - breakDuration + manualAdjustment;
+
+        return totalHours;
+    }
 }
