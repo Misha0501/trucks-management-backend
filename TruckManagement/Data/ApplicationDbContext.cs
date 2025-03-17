@@ -24,7 +24,9 @@ namespace TruckManagement.Data
         public DbSet<Charter> Charters { get; set; }
         public DbSet<PartRide> PartRides { get; set; }
         public DbSet<PartRideApproval> PartRideApprovals { get; set; }
-        public DbSet<PartRideComment> PartRideComments { get; set; }  
+        public DbSet<PartRideComment> PartRideComments { get; set; }
+        public DbSet<HoursOption> HoursOptions { get; set; } = default!;
+        public DbSet<HoursCode> HoursCodes { get; set; } = default!;
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -129,6 +131,18 @@ namespace TruckManagement.Data
                     .HasForeignKey(pc => pc.AuthorRoleId)
                     .IsRequired(false);
             });
+            builder.Entity<PartRide>()
+                .HasOne(pr => pr.HoursOption)
+                .WithMany(ho => ho.PartRides)
+                .HasForeignKey(pr => pr.HoursOptionId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // PartRide -> HoursCode
+            builder.Entity<PartRide>()
+                .HasOne(pr => pr.HoursCode)
+                .WithMany(hc => hc.PartRides)
+                .HasForeignKey(pr => pr.HoursCodeId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

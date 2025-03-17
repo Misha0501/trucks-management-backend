@@ -258,6 +258,52 @@ namespace TruckManagement.Seeding
             }
 
             await dbContext.SaveChangesAsync();
+            
+             // 2) Seed HoursOptions
+            var hoursOptionsToSeed = new List<HoursOption>
+            {
+                new HoursOption { Id = Guid.Parse("11111111-1111-1111-1111-111111111111"), Name = "StandOver", IsActive = true },
+                new HoursOption { Id = Guid.Parse("22222222-2222-2222-2222-222222222222"), Name = "Holiday", IsActive = true },
+                new HoursOption { Id = Guid.Parse("33333333-3333-3333-3333-333333333333"), Name = "NoHoliday", IsActive = true },
+                new HoursOption { Id = Guid.Parse("44444444-4444-4444-4444-444444444444"), Name = "NoAllowance", IsActive = true },
+                new HoursOption { Id = Guid.Parse("55555555-5555-5555-5555-555555555555"), Name = "NoCommutingAllowance", IsActive = true },
+                new HoursOption { Id = Guid.Parse("66666666-6666-6666-6666-666666666666"), Name = "NoNightAllowance", IsActive = true }
+                // add more if needed
+            };
+
+            foreach (var ho in hoursOptionsToSeed)
+            {
+                if (!dbContext.HoursOptions.Any(x => x.Id == ho.Id))
+                {
+                    dbContext.HoursOptions.Add(ho);
+                }
+            }
+
+            // 3) Seed HoursCodes
+            var hoursCodesToSeed = new List<HoursCode>
+            {
+                new HoursCode { Id = Guid.Parse("AAAA1111-1111-1111-1111-111111111111"), Name = "One day ride", IsActive = true},
+                new HoursCode { Id = Guid.Parse("AAAA2222-2222-2222-2222-222222222222"), Name = "Multi-day trip departure", IsActive = true },
+                new HoursCode { Id = Guid.Parse("AAAA3333-3333-3333-3333-333333333333"), Name = "Multi-day trip intermediate day", IsActive = true },
+                new HoursCode { Id = Guid.Parse("AAAA4444-4444-4444-4444-444444444444"), Name = "Multi-day trip arrival", IsActive = true },
+                new HoursCode { Id = Guid.Parse("AAAA5555-5555-5555-5555-555555555555"), Name = "Holiday", IsActive = true },
+                new HoursCode { Id = Guid.Parse("AAAA6666-6666-6666-6666-666666666666"), Name = "Sick", IsActive = true },
+                new HoursCode { Id = Guid.Parse("AAAA7777-7777-7777-7777-777777777777"), Name = "Time for time", IsActive = true },
+                new HoursCode { Id = Guid.Parse("AAAA8888-8888-8888-8888-888888888888"), Name = "Other work", IsActive = true },
+                new HoursCode { Id = Guid.Parse("AAAA9999-9999-9999-9999-999999999999"), Name = "Course day", IsActive = true },
+                new HoursCode { Id = Guid.Parse("AAAABBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB"), Name = "Consignment", IsActive = true },
+                new HoursCode { Id = Guid.Parse("AAAACCCC-CCCC-CCCC-CCCC-CCCCCCCCCCCC"), Name = "Unpaid", IsActive = true },
+            };
+
+            foreach (var hc in hoursCodesToSeed)
+            {
+                if (!dbContext.HoursCodes.Any(x => x.Id == hc.Id))
+                {
+                    dbContext.HoursCodes.Add(hc);
+                }
+            }
+            await dbContext.SaveChangesAsync();
+            
 
             // 11) Seed Clients with hardcoded and memorable IDs
             var clientsToSeed = new List<Client>

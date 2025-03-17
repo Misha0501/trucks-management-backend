@@ -49,6 +49,24 @@ namespace TruckManagement.Entities
 
         public Guid? CharterId { get; set; }
         public Charter? Charter { get; set; } = default!;
+        public double TotalHours { get; set; }
+        public double CorrectionTotalHours { get; set; }
+        public double TaxFreeCompensation { get; set; }
+        public double StandOver { get; set; }
+        public double NightAllowance { get; set; }
+        public double KilometerReimbursement { get; set; }
+        public double ExtraKilometers { get; set; }
+        public double ConsignmentFee { get; set; }
+        public double SaturdayHours { get; set; }
+        public double SundayHolidayHours { get; set; }
+        public double VariousCompensation { get; set; }
+        // HoursOption reference
+        public Guid? HoursOptionId { get; set; }
+        public HoursOption? HoursOption { get; set; }
+
+        // HoursCode reference
+        public Guid? HoursCodeId { get; set; }
+        public HoursCode? HoursCode { get; set; }
         
         // Navigation to approvals and comments
         public ICollection<PartRideApproval> Approvals { get; set; } = new List<PartRideApproval>();
