@@ -130,86 +130,24 @@ public static class PartRideEndpoints
                         pr.DecimalHours,
                         pr.CostsDescription,
                         pr.Turnover,
-                        pr.Remark
+                        pr.Remark,
+                        pr.CorrectionTotalHours,
+                        pr.TaxFreeCompensation,
+                        pr.StandOver,
+                        pr.NightAllowance,
+                        pr.KilometerReimbursement,
+                        pr.ExtraKilometers,
+                        pr.ConsignmentFee,
+                        pr.SaturdayHours,
+                        pr.SundayHolidayHours,
+                        pr.VariousCompensation,
+                        pr.HoursOptionId,
+                        HoursOption = pr.HoursOption != null ? pr.HoursOption.Name : null,
+                        pr.HoursCodeId,
+                        HoursCode = pr.HoursCode != null ? pr.HoursCode.Name : null
                     }).ToList();
 
                     return ApiResponseFactory.Success(responseData, StatusCodes.Status201Created);
-
-
-                    // Convert Start and End time to decimal hours
-                    double startTimeDecimal = request.Start.TotalHours;
-                    double endTimeDecimal = request.End.TotalHours;
-
-                    // TODO: provide hour code in the request
-                    double untaxedAllowanceNormalDayPartial =
-                        WorkHoursCalculator.CalculateUntaxedAllowanceNormalDayPartial(
-                            startOfShift: startTimeDecimal,
-                            endOfShift: endTimeDecimal,
-                            dayRateBefore18: 0.77,
-                            eveningRateAfter18: 3.52,
-                            isHoliday: false
-                        );
-
-                    double untaxedAllowanceSingleDay = WorkHoursCalculator.CalculateUntaxedAllowanceSingleDay(
-                        hourCode: "Eendaagserit",
-                        singleDayTripCode: "Eendaagserit",
-                        startTime: startTimeDecimal,
-                        endTime: endTimeDecimal,
-                        untaxedAllowanceNormalDayPartial: untaxedAllowanceNormalDayPartial,
-                        dayRateBefore18: 0.77,
-                        eveningRateAfter18: 3.52,
-                        lumpSumIf12h: 14.63
-                    );
-
-                    double sickHours = WorkHoursCalculator.CalculateSickHours(
-                        hourCode: "",
-                        holidayName: "",
-                        weeklyPercentage: 100.0,
-                        startTime: startTimeDecimal,
-                        endTime: endTimeDecimal
-                    );
-                    double holidayHours = WorkHoursCalculator.CalculateHolidayHours(
-                        hourCode: "vak",
-                        weeklyPercentage: 100.0,
-                        startTime: startTimeDecimal,
-                        endTime: endTimeDecimal
-                    );
-
-                    // TODO: Replace with actual config values (e.g., from settings) 
-                    double nightAllowance = NightAllowanceCalculator.CalculateNightAllowance(
-                        inputDate: request.Date,
-                        startTime: startTimeDecimal,
-                        endTime: endTimeDecimal,
-                        nightStartTime: 21.0, // Replace with actual config value (e.g., from settings)
-                        nightEndTime: 5.0, // Replace with actual config value (e.g., from settings)
-                        nightHoursAllowed: true, // Assuming night allowance is enabled
-                        nightHours19Percent: false, // Placeholder: replace based on settings
-                        nightHoursInEuros: true, // Placeholder: replace based on settings
-                        someMonthDate: DateTime.UtcNow, // Placeholder: replace with reference month
-                        driverRateOne: 18.71, // Placeholder: replace with actual rate
-                        driverRateTwo: 18.71, // Placeholder: replace with actual rate
-                        nightAllowanceRate: 0.19, // Placeholder: replace with actual rate from settings
-                        nightHoursWholeHours: false // Placeholder: replace based on settings
-                    );
-
-                    // Calculate total break using the provided function
-                    double totalBreak = WorkHoursCalculator.CalculateTotalBreak(
-                        breakScheduleOn: true, // Always true as per your request
-                        startTime: startTimeDecimal,
-                        endTime: endTimeDecimal,
-                        hourCode: "", // Assuming empty as no information provided
-                        timeForTimeCode: "tvt", // Assuming empty as no information provided
-                        sickHours: sickHours, // Assuming no sick hours
-                        holidayHours: holidayHours // Assuming no holiday hours
-                    );
-
-                    double totalHours = WorkHoursCalculator.CalculateTotalHours(
-                        shiftStart: startTimeDecimal,
-                        shiftEnd: endTimeDecimal,
-                        breakDuration: totalBreak,
-                        manualAdjustment: 0 // TODO: replace with manual Adjustment
-                    );
-                    
                 }
                 catch (Exception ex)
                 {
@@ -1395,66 +1333,169 @@ public static class PartRideEndpoints
 
         return null;
     }
-    
+
     /// <summary>
-        /// Creates and saves a single PartRide segment. 
-        /// If you want to run calculations (e.g. breaks, night allowance), do it here.
-        /// </summary>
-        private static async Task<PartRide> CreateAndSavePartRideSegment(
-            ApplicationDbContext db,
-            CreatePartRideRequest request,
-            Guid companyGuid,
-            DateTime segmentDate,
-            TimeSpan segmentStart,
-            TimeSpan segmentEnd
-        )
+    /// Creates and saves a single PartRide segment. 
+    /// If you want to run calculations (e.g. breaks, night allowance), do it here.
+    /// </summary>
+    private static async Task<PartRide> CreateAndSavePartRideSegment(
+        ApplicationDbContext db,
+        CreatePartRideRequest request,
+        Guid companyGuid,
+        DateTime segmentDate,
+        TimeSpan segmentStart,
+        TimeSpan segmentEnd
+    )
+    {
+        // 1) Convert Start/End to decimal hours
+        double startTimeDecimal = segmentStart.TotalHours;
+        double endTimeDecimal = segmentEnd.TotalHours;
+
+        // 2) Compute base shift length ignoring "Rest" from the request
+        double rawTime = (endTimeDecimal - startTimeDecimal);
+        // If you allow crossing midnight in these segments, rawTime could be negative. 
+        // Typically you'd handle that outside or split into two segments.
+
+        // 3) Some basic calculations from your request:
+        //    (If you prefer reading from request directly, feel free.)
+        double dayRateBefore18 = 0.77; // Example placeholders, replace with real config
+        double eveningRateAfter18 = 3.52;
+        double weeklyPercentage = 100.0; // e.g. user is full-time
+        bool isHoliday = false; // or check your own holiday logic
+
+        // 4) RUN THE CALCULATIONS:
+
+        // 4a) Untaxed allowances
+        double untaxedAllowanceNormalDayPartial = WorkHoursCalculator.CalculateUntaxedAllowanceNormalDayPartial(
+            startOfShift: startTimeDecimal,
+            endOfShift: endTimeDecimal,
+            dayRateBefore18: dayRateBefore18,
+            eveningRateAfter18: eveningRateAfter18,
+            isHoliday: isHoliday
+        );
+
+        double untaxedAllowanceSingleDay = WorkHoursCalculator.CalculateUntaxedAllowanceSingleDay(
+            hourCode: "Eendaagserit", // Example placeholders 
+            singleDayTripCode: "Eendaagserit", // Example 
+            startTime: startTimeDecimal,
+            endTime: endTimeDecimal,
+            untaxedAllowanceNormalDayPartial: untaxedAllowanceNormalDayPartial,
+            dayRateBefore18: dayRateBefore18,
+            eveningRateAfter18: eveningRateAfter18,
+            lumpSumIf12h: 14.63 // Example lumpsum
+        );
+
+        // 4b) Sick/Holiday hours
+        double sickHours = WorkHoursCalculator.CalculateSickHours(
+            hourCode: "", // Replace with real hour code from request
+            holidayName: "", // Or request.HolidayName if you have it
+            weeklyPercentage: weeklyPercentage,
+            startTime: startTimeDecimal,
+            endTime: endTimeDecimal
+        );
+        double holidayHours = WorkHoursCalculator.CalculateHolidayHours(
+            hourCode: "vak", // Replace with real hour code from request
+            weeklyPercentage: weeklyPercentage,
+            startTime: startTimeDecimal,
+            endTime: endTimeDecimal
+        );
+
+        // 4c) Night allowance
+        double nightAllowance = NightAllowanceCalculator.CalculateNightAllowance(
+            inputDate: segmentDate,
+            startTime: startTimeDecimal,
+            endTime: endTimeDecimal,
+            nightStartTime: 21.0, // Example 
+            nightEndTime: 5.0, // Example 
+            nightHoursAllowed: true,
+            nightHours19Percent: false,
+            nightHoursInEuros: true,
+            someMonthDate: DateTime.UtcNow,
+            driverRateOne: 18.71,
+            driverRateTwo: 18.71,
+            nightAllowanceRate: 0.19,
+            nightHoursWholeHours: false
+        );
+
+        // 4d) Break calculation (TotalBreak)
+        double totalBreak = WorkHoursCalculator.CalculateTotalBreak(
+            breakScheduleOn: true, // Always true
+            startTime: startTimeDecimal,
+            endTime: endTimeDecimal,
+            hourCode: "", // or request.HourCode if you have it
+            timeForTimeCode: "tvt", // Example 
+            sickHours: sickHours,
+            holidayHours: holidayHours
+        );
+
+        // 4e) Compute final “totalHours” after subtracting the break, plus any manual adjustment
+        double manualAdjustment = 0.0; // or request.ManualAdjustment if you have that
+        double totalHours = WorkHoursCalculator.CalculateTotalHours(
+            shiftStart: startTimeDecimal,
+            shiftEnd: endTimeDecimal,
+            breakDuration: totalBreak,
+            manualAdjustment: manualAdjustment
+        );
+
+        // 4f) Decide how you combine partial vs single-day allowances:
+        //     e.g., sum them or pick the larger. We'll just sum them here:
+
+        // Build the PartRide
+        var partRide = new PartRide
         {
-            // Basic shift length
-            double rawTime = (segmentEnd - segmentStart).TotalHours; 
-            double decimalHours = rawTime - request.Rest.TotalHours;
+            Id          = Guid.NewGuid(),
+            Date        = segmentDate,
+            Start       = segmentStart,
+            End         = segmentEnd,
+            Rest        = request.Rest,
+            Kilometers  = request.Kilometers,
+            CarId       = TryParseGuid(request.CarId),
+            DriverId    = TryParseGuid(request.DriverId),
+            Costs       = request.Costs,
+            Employer    = request.Employer,
+            ClientId    = TryParseGuid(request.ClientId),
+            Day         = segmentDate.Day,
+            WeekNumber  = request.WeekNumber > 0 ? request.WeekNumber : GetIso8601WeekOfYear(segmentDate),
+            UnitId      = TryParseGuid(request.UnitId),
+            RateId      = TryParseGuid(request.RateId),
+            CostsDescription = request.CostsDescription,
+            SurchargeId = TryParseGuid(request.SurchargeId),
+            Turnover    = request.Turnover,
+            Remark      = request.Remark,
+            CompanyId   = companyGuid,
+            CharterId   = TryParseGuid(request.CharterId),
+            RideId      = TryParseGuid(request.RideId),
 
-            // Build the PartRide
-            var partRide = new PartRide
-            {
-                Id = Guid.NewGuid(),
-                Date = segmentDate,
-                Start = segmentStart,
-                End   = segmentEnd,
-                Rest  = request.Rest,
-                Kilometers = request.Kilometers,
-                CarId      = TryParseGuid(request.CarId),
-                DriverId   = TryParseGuid(request.DriverId),
-                Costs      = request.Costs,
-                Employer   = request.Employer,
-                ClientId   = TryParseGuid(request.ClientId),
-                Day        = segmentDate.Day,
-                WeekNumber = request.WeekNumber > 0
-                    ? request.WeekNumber
-                    : GetIso8601WeekOfYear(segmentDate),
-                DecimalHours = decimalHours,
-                UnitId = TryParseGuid(request.UnitId),
-                RateId = TryParseGuid(request.RateId),
-                CostsDescription = request.CostsDescription,
-                SurchargeId = TryParseGuid(request.SurchargeId),
-                Turnover    = request.Turnover,
-                Remark      = request.Remark,
-                CompanyId   = companyGuid,
-                CharterId   = TryParseGuid(request.CharterId),
-                RideId      = TryParseGuid(request.RideId)
-            };
+            // 5a) Fields that store the final hours:
+            DecimalHours        = totalHours, // old approach 
+            CorrectionTotalHours= 0, // newly introduced field
+            // 5b) Untaxed compensation fields
+            TaxFreeCompensation = untaxedAllowanceSingleDay,
+            NightAllowance      = nightAllowance,
+            // 5c) Not implementing logic for these fields yet, so default:
+            StandOver           = 0.0,
+            KilometerReimbursement = 0.0,
+            ExtraKilometers     = 0.0,
+            ConsignmentFee      = 0.0,
+            SaturdayHours       = 0.0,
+            SundayHolidayHours  = 0.0,
+            VariousCompensation = 0.0,
+            // 5d) HoursOption & HoursCode - for now assume they're set from the request
+            // HoursOptionId       = TryParseGuid(request.HoursOptionId),
+            // HoursCodeId         = TryParseGuid(request.HoursCodeId)
+        };
 
-            // Optionally run your calculations (WorkHoursCalculator, etc.)
-            // e.g. double totalBreak = WorkHoursCalculator.CalculateTotalBreak(...);
-            // partRide.Rest = TimeSpan.FromHours(totalBreak);
-            
-            // e.g. double nightAllowance = NightAllowanceCalculator.CalculateNightAllowance(...);
-            // partRide.Turnover += nightAllowance;
+        // Optionally run your calculations (WorkHoursCalculator, etc.)
+        // e.g. double totalBreak = WorkHoursCalculator.CalculateTotalBreak(...);
+        // partRide.Rest = TimeSpan.FromHours(totalBreak);
 
-            // Save
-            db.PartRides.Add(partRide);
-            await db.SaveChangesAsync();
+        // e.g. double nightAllowance = NightAllowanceCalculator.CalculateNightAllowance(...);
+        // partRide.Turnover += nightAllowance;
 
-            return partRide;
-        }
-    
+        // Save
+        db.PartRides.Add(partRide);
+        await db.SaveChangesAsync();
+
+        return partRide;
+    }
 }
