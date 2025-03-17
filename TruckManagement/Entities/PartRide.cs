@@ -27,7 +27,6 @@ namespace TruckManagement.Entities
 
         public int Day { get; set; }
         public int WeekNumber { get; set; }
-        public double Hours { get; set; }
         public double DecimalHours { get; set; }
 
         public Guid? UnitId { get; set; }

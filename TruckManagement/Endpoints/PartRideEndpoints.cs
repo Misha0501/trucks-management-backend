@@ -127,7 +127,6 @@ public static class PartRideEndpoints
                         pr.CompanyId,
                         pr.Day,
                         pr.WeekNumber,
-                        pr.Hours,
                         pr.DecimalHours,
                         pr.CostsDescription,
                         pr.Turnover,
@@ -554,7 +553,6 @@ public static class PartRideEndpoints
                     // Recompute Hours & DecimalHours
                     double totalTime = (existingPartRide.End - existingPartRide.Start).TotalHours;
                     double decimalHours = totalTime - existingPartRide.Rest.TotalHours;
-                    existingPartRide.Hours = totalTime;
                     existingPartRide.DecimalHours = decimalHours;
 
                     await db.SaveChangesAsync();
@@ -573,7 +571,6 @@ public static class PartRideEndpoints
                         existingPartRide.CompanyId,
                         existingPartRide.Day,
                         existingPartRide.WeekNumber,
-                        existingPartRide.Hours,
                         existingPartRide.DecimalHours,
                         existingPartRide.CostsDescription,
                         existingPartRide.Turnover,
@@ -752,7 +749,6 @@ public static class PartRideEndpoints
                                 : null,
                             pr.Day,
                             pr.WeekNumber,
-                            pr.Hours,
                             pr.DecimalHours,
                             pr.CostsDescription,
                             pr.Turnover,
@@ -914,7 +910,6 @@ public static class PartRideEndpoints
                             : null,
                         partRide.Day,
                         partRide.WeekNumber,
-                        partRide.Hours,
                         partRide.DecimalHours,
                         partRide.CostsDescription,
                         partRide.Turnover,
@@ -1436,7 +1431,6 @@ public static class PartRideEndpoints
                 WeekNumber = request.WeekNumber > 0
                     ? request.WeekNumber
                     : GetIso8601WeekOfYear(segmentDate),
-                Hours = rawTime,
                 DecimalHours = decimalHours,
                 UnitId = TryParseGuid(request.UnitId),
                 RateId = TryParseGuid(request.RateId),
