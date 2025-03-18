@@ -883,7 +883,9 @@ public static class PartRideEndpoints
                             ? new
                             {
                                 partRide.Driver.Id,
-                                partRide.Driver.AspNetUserId
+                                partRide.Driver.AspNetUserId,
+                                partRide.Driver.User.FirstName,
+                                partRide.Driver.User.LastName,
                             }
                             : null,
                         Car = partRide.Car != null
@@ -1452,7 +1454,7 @@ public static class PartRideEndpoints
         // 3) Some basic calculations from your request:
         //    (If you prefer reading from request directly, feel free.)
         double dayRateBefore18 = 0.77; // Example placeholders, replace with real config
-        double eveningRateAfter18 = 3.52;
+        double eveningRateAfter18 = 3.51;
         double weeklyPercentage = 100.0; // e.g. user is full-time
         bool isHoliday = false; // or check your own holiday logic
 
