@@ -890,7 +890,7 @@ public static class PartRideEndpoints
                             ? new
                             {
                                 partRide.Car.Id,
-                                partRide.Car.LicensePlate // Assuming there's a LicensePlate field
+                                partRide.Car.LicensePlate
                             }
                             : null,
                         Rate = partRide.Rate != null
