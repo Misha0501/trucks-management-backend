@@ -698,7 +698,31 @@ public static class PartRideEndpoints
                                     pr.Driver.AspNetUserId
                                 }
                                 : null,
-                            pr.CarId
+                            pr.CarId,
+                            pr.CorrectionTotalHours,
+                            pr.TaxFreeCompensation,
+                            pr.StandOver,
+                            pr.NightAllowance,
+                            pr.KilometerReimbursement,
+                            pr.ExtraKilometers,
+                            pr.ConsignmentFee,
+                            pr.SaturdayHours,
+                            pr.SundayHolidayHours,
+                            pr.VariousCompensation,
+                            HoursOption = pr.HoursOption != null
+                                ? new
+                                {
+                                    pr.HoursOption.Id,
+                                    pr.HoursOption.Name
+                                }
+                                : null,
+                            HoursCode = pr.HoursCode != null
+                                ? new
+                                {
+                                    pr.HoursCode.Id,
+                                    pr.HoursCode.Name
+                                }
+                                : null
                         })
                         .ToListAsync();
 
@@ -864,7 +888,31 @@ public static class PartRideEndpoints
                         partRide.SurchargeId,
                         partRide.CharterId,
                         partRide.UnitId,
-                        partRide.RideId
+                        partRide.RideId,
+                        partRide.CorrectionTotalHours,
+                        partRide.TaxFreeCompensation,
+                        partRide.StandOver,
+                        partRide.NightAllowance,
+                        partRide.KilometerReimbursement,
+                        partRide.ExtraKilometers,
+                        partRide.ConsignmentFee,
+                        partRide.SaturdayHours,
+                        partRide.SundayHolidayHours,
+                        partRide.VariousCompensation,
+                        HoursOption = partRide.HoursOption != null
+                            ? new
+                            {
+                                partRide.HoursOption.Id,
+                                partRide.HoursOption.Name
+                            }
+                            : null,
+                        HoursCode = partRide.HoursCode != null
+                            ? new
+                            {
+                                partRide.HoursCode.Id,
+                                partRide.HoursCode.Name
+                            }
+                            : null
                     };
 
                     return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
@@ -1443,42 +1491,42 @@ public static class PartRideEndpoints
         // Build the PartRide
         var partRide = new PartRide
         {
-            Id          = Guid.NewGuid(),
-            Date        = segmentDate,
-            Start       = segmentStart,
-            End         = segmentEnd,
-            Rest        = request.Rest,
-            Kilometers  = request.Kilometers,
-            CarId       = TryParseGuid(request.CarId),
-            DriverId    = TryParseGuid(request.DriverId),
-            Costs       = request.Costs,
-            Employer    = request.Employer,
-            ClientId    = TryParseGuid(request.ClientId),
-            Day         = segmentDate.Day,
-            WeekNumber  = request.WeekNumber > 0 ? request.WeekNumber : GetIso8601WeekOfYear(segmentDate),
-            UnitId      = TryParseGuid(request.UnitId),
-            RateId      = TryParseGuid(request.RateId),
+            Id = Guid.NewGuid(),
+            Date = segmentDate,
+            Start = segmentStart,
+            End = segmentEnd,
+            Rest = request.Rest,
+            Kilometers = request.Kilometers,
+            CarId = TryParseGuid(request.CarId),
+            DriverId = TryParseGuid(request.DriverId),
+            Costs = request.Costs,
+            Employer = request.Employer,
+            ClientId = TryParseGuid(request.ClientId),
+            Day = segmentDate.Day,
+            WeekNumber = request.WeekNumber > 0 ? request.WeekNumber : GetIso8601WeekOfYear(segmentDate),
+            UnitId = TryParseGuid(request.UnitId),
+            RateId = TryParseGuid(request.RateId),
             CostsDescription = request.CostsDescription,
             SurchargeId = TryParseGuid(request.SurchargeId),
-            Turnover    = request.Turnover,
-            Remark      = request.Remark,
-            CompanyId   = companyGuid,
-            CharterId   = TryParseGuid(request.CharterId),
-            RideId      = TryParseGuid(request.RideId),
+            Turnover = request.Turnover,
+            Remark = request.Remark,
+            CompanyId = companyGuid,
+            CharterId = TryParseGuid(request.CharterId),
+            RideId = TryParseGuid(request.RideId),
 
             // 5a) Fields that store the final hours:
-            DecimalHours        = totalHours, // old approach 
-            CorrectionTotalHours= 0, // newly introduced field
+            DecimalHours = totalHours, // old approach 
+            CorrectionTotalHours = 0, // newly introduced field
             // 5b) Untaxed compensation fields
             TaxFreeCompensation = untaxedAllowanceSingleDay,
-            NightAllowance      = nightAllowance,
+            NightAllowance = nightAllowance,
             // 5c) Not implementing logic for these fields yet, so default:
-            StandOver           = 0.0,
+            StandOver = 0.0,
             KilometerReimbursement = 0.0,
-            ExtraKilometers     = 0.0,
-            ConsignmentFee      = 0.0,
-            SaturdayHours       = 0.0,
-            SundayHolidayHours  = 0.0,
+            ExtraKilometers = 0.0,
+            ConsignmentFee = 0.0,
+            SaturdayHours = 0.0,
+            SundayHolidayHours = 0.0,
             VariousCompensation = 0.0,
             // 5d) HoursOption & HoursCode - for now assume they're set from the request
             // HoursOptionId       = TryParseGuid(request.HoursOptionId),
