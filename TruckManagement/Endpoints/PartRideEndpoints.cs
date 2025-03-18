@@ -771,6 +771,15 @@ public static class PartRideEndpoints
                         .ThenInclude(d => d.User)
                         .Include(pr => pr.Company)
                         .Include(pr => pr.Client)
+                        .Include(pr => pr.Client)
+                        .Include(pr => pr.Car)
+                        .Include(pr => pr.Rate)
+                        .Include(pr => pr.Surcharge)
+                        .Include(pr => pr.Charter)
+                        .Include(pr => pr.Unit)
+                        .Include(pr => pr.Ride)
+                        .Include(pr => pr.HoursOption)
+                        .Include(pr => pr.HoursCode)
                         .FirstOrDefaultAsync(pr => pr.Id == partRideGuid);
 
                     if (partRide == null)
@@ -870,12 +879,6 @@ public static class PartRideEndpoints
                                 partRide.Company.Name
                             }
                             : null,
-                        partRide.Day,
-                        partRide.WeekNumber,
-                        partRide.DecimalHours,
-                        partRide.CostsDescription,
-                        partRide.Turnover,
-                        partRide.Remark,
                         Driver = partRide.Driver != null
                             ? new
                             {
@@ -883,22 +886,48 @@ public static class PartRideEndpoints
                                 partRide.Driver.AspNetUserId
                             }
                             : null,
-                        partRide.CarId,
-                        partRide.RateId,
-                        partRide.SurchargeId,
-                        partRide.CharterId,
-                        partRide.UnitId,
-                        partRide.RideId,
-                        partRide.CorrectionTotalHours,
-                        partRide.TaxFreeCompensation,
-                        partRide.StandOver,
-                        partRide.NightAllowance,
-                        partRide.KilometerReimbursement,
-                        partRide.ExtraKilometers,
-                        partRide.ConsignmentFee,
-                        partRide.SaturdayHours,
-                        partRide.SundayHolidayHours,
-                        partRide.VariousCompensation,
+                        Car = partRide.Car != null
+                            ? new
+                            {
+                                partRide.Car.Id,
+                                partRide.Car.LicensePlate // Assuming there's a LicensePlate field
+                            }
+                            : null,
+                        Rate = partRide.Rate != null
+                            ? new
+                            {
+                                partRide.Rate.Id,
+                                partRide.Rate.Name
+                            }
+                            : null,
+                        Surcharge = partRide.Surcharge != null
+                            ? new
+                            {
+                                partRide.Surcharge.Id,
+                                partRide.Surcharge.Value
+                            }
+                            : null,
+                        Charter = partRide.Charter != null
+                            ? new
+                            {
+                                partRide.Charter.Id,
+                                partRide.Charter.Name
+                            }
+                            : null,
+                        Unit = partRide.Unit != null
+                            ? new
+                            {
+                                partRide.Unit.Id,
+                                partRide.Unit.Value
+                            }
+                            : null,
+                        Ride = partRide.Ride != null
+                            ? new
+                            {
+                                partRide.Ride.Id,
+                                partRide.Ride.Name
+                            }
+                            : null,
                         HoursOption = partRide.HoursOption != null
                             ? new
                             {
@@ -912,7 +941,23 @@ public static class PartRideEndpoints
                                 partRide.HoursCode.Id,
                                 partRide.HoursCode.Name
                             }
-                            : null
+                            : null,
+                        partRide.Day,
+                        partRide.WeekNumber,
+                        partRide.DecimalHours,
+                        partRide.CostsDescription,
+                        partRide.Turnover,
+                        partRide.Remark,
+                        partRide.CorrectionTotalHours,
+                        partRide.TaxFreeCompensation,
+                        partRide.StandOver,
+                        partRide.NightAllowance,
+                        partRide.KilometerReimbursement,
+                        partRide.ExtraKilometers,
+                        partRide.ConsignmentFee,
+                        partRide.SaturdayHours,
+                        partRide.SundayHolidayHours,
+                        partRide.VariousCompensation
                     };
 
                     return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
