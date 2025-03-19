@@ -7,12 +7,10 @@ namespace TruckManagement
         public DateTime? Date { get; set; }
         public TimeSpan? Start { get; set; }
         public TimeSpan? End { get; set; }
-        public TimeSpan? Rest { get; set; }
         public double? Kilometers { get; set; }
         public string? CarId { get; set; }
         public string? DriverId { get; set; }
         public decimal? Costs { get; set; }
-        public string? Employer { get; set; }
         public string? ClientId { get; set; }
         public int? Day { get; set; }
         public int? WeekNumber { get; set; }
