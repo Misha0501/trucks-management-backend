@@ -121,11 +121,9 @@ public static class PartRideEndpoints
                         pr.Rest,
                         pr.Kilometers,
                         pr.Costs,
-                        pr.Employer,
                         pr.ClientId,
                         pr.DriverId,
                         pr.CompanyId,
-                        pr.Day,
                         pr.WeekNumber,
                         pr.DecimalHours,
                         pr.CostsDescription,
@@ -456,25 +454,20 @@ public static class PartRideEndpoints
                     if (request.Date.HasValue) existingPartRide.Date = request.Date.Value;
                     if (request.Start.HasValue) existingPartRide.Start = request.Start.Value;
                     if (request.End.HasValue) existingPartRide.End = request.End.Value;
-                    if (request.Kilometers.HasValue) existingPartRide.Kilometers = request.Kilometers.Value;
-                    if (request.Costs.HasValue) existingPartRide.Costs = request.Costs.Value;
-                    if (request.Day.HasValue) existingPartRide.Day = request.Day.Value;
-                    if (request.WeekNumber.HasValue) existingPartRide.WeekNumber = request.WeekNumber.Value;
-                    if (request.Turnover.HasValue) existingPartRide.Turnover = request.Turnover.Value;
-                    if (!string.IsNullOrWhiteSpace(request.Remark))
-                        existingPartRide.Remark = request.Remark;
-                    if (!string.IsNullOrWhiteSpace(request.CostsDescription))
-                        existingPartRide.CostsDescription = request.CostsDescription;
-
-                    // Update references if new ones are provided
-                    if (newRideId.HasValue) existingPartRide.RideId = newRideId;
-                    if (newCarId.HasValue) existingPartRide.CarId = newCarId;
-                    if (newDriverId.HasValue) existingPartRide.DriverId = newDriverId; // Safe if validated above
-                    if (newRateId.HasValue) existingPartRide.RateId = newRateId;
-                    if (newSurchargeId.HasValue) existingPartRide.SurchargeId = newSurchargeId;
-                    if (newCharterId.HasValue) existingPartRide.CharterId = newCharterId;
-                    if (newClientId.HasValue) existingPartRide.ClientId = newClientId;
-                    if (newUnitId.HasValue) existingPartRide.UnitId = newUnitId;
+                    existingPartRide.Kilometers = request.Kilometers;
+                    existingPartRide.Costs = request.Costs;
+                    existingPartRide.WeekNumber = request.WeekNumber;
+                    existingPartRide.Turnover = request.Turnover;
+                    existingPartRide.Remark = request.Remark;
+                    existingPartRide.CostsDescription = request.CostsDescription;
+                    existingPartRide.RideId = newRideId;
+                    existingPartRide.CarId = newCarId;  
+                    existingPartRide.DriverId = newDriverId;
+                    existingPartRide.RateId = newRateId;
+                    existingPartRide.SurchargeId = newSurchargeId;
+                    existingPartRide.CharterId = newCharterId;
+                    existingPartRide.ClientId = newClientId;
+                    existingPartRide.UnitId = newUnitId;
 
                     // If new company is set
                     if (currentCompanyId != Guid.Empty)
@@ -524,8 +517,6 @@ public static class PartRideEndpoints
                             End = TimeSpan.FromHours(endTimeDecimal),
                             Kilometers = existingPartRide.Kilometers,
                             Costs = existingPartRide.Costs,
-                            Employer = existingPartRide.Employer,
-                            Day = existingPartRide.Day, // or compute anew
                             WeekNumber = existingPartRide.WeekNumber, // or compute anew
                             Turnover = existingPartRide.Turnover,
                             Remark = existingPartRide.Remark,
@@ -700,7 +691,6 @@ public static class PartRideEndpoints
                             pr.Rest,
                             pr.Kilometers,
                             pr.Costs,
-                            pr.Employer,
                             Client = pr.Client != null
                                 ? new
                                 {
@@ -715,7 +705,6 @@ public static class PartRideEndpoints
                                     pr.Company.Name
                                 }
                                 : null,
-                            pr.Day,
                             pr.WeekNumber,
                             pr.DecimalHours,
                             pr.CostsDescription,
@@ -894,7 +883,6 @@ public static class PartRideEndpoints
                         partRide.Rest,
                         partRide.Kilometers,
                         partRide.Costs,
-                        partRide.Employer,
                         Client = partRide.Client != null
                             ? new
                             {
@@ -974,7 +962,6 @@ public static class PartRideEndpoints
                                 partRide.HoursCode.Name
                             }
                             : null,
-                        partRide.Day,
                         partRide.WeekNumber,
                         partRide.DecimalHours,
                         partRide.CostsDescription,
@@ -1305,10 +1292,8 @@ public static class PartRideEndpoints
             pr.Rest,
             pr.Kilometers,
             pr.Costs,
-            pr.Employer,
             pr.ClientId,
             pr.CompanyId,
-            pr.Day,
             pr.WeekNumber,
             pr.DecimalHours,
             pr.CostsDescription,
@@ -1687,9 +1672,7 @@ public static class PartRideEndpoints
             CarId = TryParseGuid(request.CarId),
             DriverId = TryParseGuid(request.DriverId),
             Costs = request.Costs,
-            Employer = request.Employer,
             ClientId = TryParseGuid(request.ClientId),
-            Day = segmentDate.Day,
             WeekNumber = request.WeekNumber > 0 ? request.WeekNumber : GetIso8601WeekOfYear(segmentDate),
             UnitId = TryParseGuid(request.UnitId),
             RateId = TryParseGuid(request.RateId),

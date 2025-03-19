@@ -451,8 +451,6 @@ public static class RideEndpoints
                             pr.Rest,
                             pr.Kilometers,
                             pr.Costs,
-                            pr.Employer,
-                            pr.Day,
                             pr.WeekNumber,
                             pr.DecimalHours,
                             pr.CostsDescription,
