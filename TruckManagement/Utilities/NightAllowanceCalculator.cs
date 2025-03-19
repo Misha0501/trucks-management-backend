@@ -2,6 +2,8 @@ namespace TruckManagement.Utilities;
 
 public static class NightAllowanceCalculator
 {
+    private static double nightStartTime = 21.0;
+    private static double nightEndTime = 5.0; 
     /// <summary>
     /// Calculates the night allowance for a single shift, mimicking the logic 
     /// in "Periode_1" sheet, cell O6, using named parameters for clarity.
@@ -24,8 +26,6 @@ public static class NightAllowanceCalculator
         DateTime inputDate,
         double startTime,
         double endTime,
-        double nightStartTime,
-        double nightEndTime,
         bool nightHoursAllowed,
         bool nightHours19Percent,
         bool nightHoursInEuros,

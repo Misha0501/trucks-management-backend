@@ -1453,8 +1453,7 @@ public static class PartRideEndpoints
 
         // 3) Some basic calculations from your request:
         //    (If you prefer reading from request directly, feel free.)
-        double dayRateBefore18 = 0.77; // Example placeholders, replace with real config
-        double eveningRateAfter18 = 3.51;
+
         double weeklyPercentage = 100.0; // e.g. user is full-time
         bool isHoliday = false; // or check your own holiday logic
 
@@ -1464,8 +1463,6 @@ public static class PartRideEndpoints
         double untaxedAllowanceNormalDayPartial = WorkHoursCalculator.CalculateUntaxedAllowanceNormalDayPartial(
             startOfShift: startTimeDecimal,
             endOfShift: endTimeDecimal,
-            dayRateBefore18: dayRateBefore18,
-            eveningRateAfter18: eveningRateAfter18,
             isHoliday: isHoliday
         );
 
@@ -1475,8 +1472,6 @@ public static class PartRideEndpoints
             startTime: startTimeDecimal,
             endTime: endTimeDecimal,
             untaxedAllowanceNormalDayPartial: untaxedAllowanceNormalDayPartial,
-            dayRateBefore18: dayRateBefore18,
-            eveningRateAfter18: eveningRateAfter18,
             lumpSumIf12h: 14.63 // Example lumpsum
         );
 
@@ -1500,8 +1495,6 @@ public static class PartRideEndpoints
             inputDate: segmentDate,
             startTime: startTimeDecimal,
             endTime: endTimeDecimal,
-            nightStartTime: 21.0, // Example 
-            nightEndTime: 5.0, // Example 
             nightHoursAllowed: true,
             nightHours19Percent: false,
             nightHoursInEuros: true,

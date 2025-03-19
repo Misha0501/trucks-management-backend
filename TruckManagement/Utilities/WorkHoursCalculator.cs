@@ -2,6 +2,9 @@ namespace TruckManagement;
 
 public class WorkHoursCalculator
 {
+    static double dayRateBefore18 = 0.77; // Example placeholders, replace with real config
+    static double eveningRateAfter18 = 3.51;
+    
         public static double CalculateTotalBreak(
         bool breakScheduleOn,
         double startTime,
@@ -134,8 +137,6 @@ public class WorkHoursCalculator
     public static double CalculateUntaxedAllowanceNormalDayPartial(
         double startOfShift,       // F6 in Excel
         double endOfShift,         // G6 in Excel
-        double dayRateBefore18,    // AB6 in Excel (onbelaste vergoeding multiplier for before 18:00)
-        double eveningRateAfter18, // AD6 in Excel (onbelaste vergoeding multiplier for after 18:00)
         bool isHoliday             // true if it's a holiday (AM has a holiday name)
     )
     {
@@ -184,8 +185,6 @@ public class WorkHoursCalculator
     double startTime,                       // F6
     double endTime,                         // G6
     double untaxedAllowanceNormalDayPartial,// AG6 result, i.e. same-day partial logic
-    double dayRateBefore18,                 // AB6
-    double eveningRateAfter18,              // AD6
     double lumpSumIf12h                     // AC6, TDonbelast for 12+ hours (cross-midnight)
 )
 {
