@@ -1656,6 +1656,22 @@ public static class PartRideEndpoints
             breakDuration: totalBreak,
             manualAdjustment: manualAdjustment
         );
+        
+        double homeWorkDistance = KilometersAllowance.HomeWorkDistance(
+            kilometerAllowanceEnabled: true,
+            oneWayValue: 25,
+            minThreshold: 10,
+            maxThreshold: 35
+        );
+
+        double kilometersAllowance = KilometersAllowance.CalculateKilometersAllowance(
+            extraKilometers: request.Kilometers,
+            kilometerRate: 0.23,
+            hourCode: "Eendaagserit",
+            hourOption: "1",
+            totalHours: totalHours,
+            homeWorkDistance: homeWorkDistance
+        );
 
         // 4f) Decide how you combine partial vs single-day allowances:
         //     e.g., sum them or pick the larger. We'll just sum them here:
@@ -1692,7 +1708,7 @@ public static class PartRideEndpoints
             NightAllowance = nightAllowance,
             // 5c) Not implementing logic for these fields yet, so default:
             StandOver = 0.0,
-            KilometerReimbursement = 0.0,
+            KilometerReimbursement = kilometersAllowance,
             ExtraKilometers = 0.0,
             ConsignmentFee = 0.0,
             SaturdayHours = 0.0,
