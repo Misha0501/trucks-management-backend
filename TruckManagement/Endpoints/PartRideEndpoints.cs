@@ -809,6 +809,10 @@ public static class PartRideEndpoints
                         .Include(pr => pr.Ride)
                         .Include(pr => pr.HoursOption)
                         .Include(pr => pr.HoursCode)
+                        .Include(pr => pr.Approvals)
+                        .ThenInclude(a => a.Role)
+                        .Include(pr => pr.Approvals)
+                        .ThenInclude(a => a.ApprovedByUser)
                         .FirstOrDefaultAsync(pr => pr.Id == partRideGuid);
 
                     if (partRide == null)
@@ -882,7 +886,7 @@ public static class PartRideEndpoints
                             }
                         }
                     }
-
+                    
                     // Build the response
                     var responseData = new
                     {
@@ -986,7 +990,25 @@ public static class PartRideEndpoints
                         partRide.ConsignmentFee,
                         partRide.SaturdayHours,
                         partRide.SundayHolidayHours,
-                        partRide.VariousCompensation
+                        partRide.VariousCompensation,
+                        Approvals = partRide.Approvals.Select(a => new
+                        {
+                            a.Id,
+                            a.Status,
+                            a.UpdatedAt,
+                            a.Comments,
+                            Role = a.Role != null ? new
+                            {
+                                a.Role.Id,
+                                a.Role.Name
+                            } : null,
+                            ApprovedByUser = a.ApprovedByUser != null ? new
+                            {
+                                a.ApprovedByUser.Id,
+                                a.ApprovedByUser.FirstName,
+                                a.ApprovedByUser.LastName,
+                                a.ApprovedByUser.Email
+                            } : null                        })
                     };
 
                     return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);

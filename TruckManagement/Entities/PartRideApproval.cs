@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations.Schema;
 using TruckManagement.Enums;
 
 namespace TruckManagement.Entities
@@ -17,6 +18,9 @@ namespace TruckManagement.Entities
         // The user who actually approved
         // If you store user IDs as string, do string? ApprovedByUserId
         public string? ApprovedByUserId { get; set; }
+        
+        [ForeignKey(nameof(ApprovedByUserId))]
+        public ApplicationUser? ApprovedByUser { get; set; }
 
         // The current approval status
         public ApprovalStatus Status { get; set; } = ApprovalStatus.Pending;
