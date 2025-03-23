@@ -8,6 +8,7 @@ using TruckManagement;
 using TruckManagement.Data;
 using TruckManagement.DTOs;
 using TruckManagement.Entities;
+using TruckManagement.Enums;
 using TruckManagement.Helpers;
 using TruckManagement.Utilities;
 
@@ -57,7 +58,10 @@ public static class PartRideEndpoints
                     bool crossesMidnight = (endDecimal <= startDecimal);
 
                     // 3) Validate references/roles once (driver, company, etc.)
-                    var userId = userManager.GetUserId(currentUser);
+                    var userId = userManager.GetUserId(currentUser)!;
+
+                    var userRoles = (await userManager.GetRolesAsync(await userManager.GetUserAsync(currentUser))).ToList();
+                    
                     if (string.IsNullOrEmpty(userId))
                     {
                         return ApiResponseFactory.Error("User not authenticated.", StatusCodes.Status401Unauthorized);
@@ -85,7 +89,9 @@ public static class PartRideEndpoints
                         // Single segment (no midnight crossover)
                         var singleRide = await CreateAndSavePartRideSegment(
                             db, request, companyGuid,
-                            request.Date, request.Start, request.End
+                            request.Date, request.Start, request.End,
+                            userId,
+                            userRoles
                         );
                         createdPartRides.Add(singleRide);
                     }
@@ -97,7 +103,9 @@ public static class PartRideEndpoints
                         var midnight = TimeSpan.FromHours(24.0);
                         var firstRide = await CreateAndSavePartRideSegment(
                             db, request, companyGuid,
-                            request.Date, request.Start, midnight
+                            request.Date, request.Start, midnight,
+                            userId,
+                            userRoles
                         );
                         createdPartRides.Add(firstRide);
 
@@ -106,7 +114,9 @@ public static class PartRideEndpoints
                             db, request, companyGuid,
                             request.Date.AddDays(1),
                             TimeSpan.Zero,
-                            request.End
+                            request.End,
+                            userId,
+                            userRoles
                         );
                         createdPartRides.Add(secondRide);
                     }
@@ -461,7 +471,7 @@ public static class PartRideEndpoints
                     existingPartRide.Remark = request.Remark;
                     existingPartRide.CostsDescription = request.CostsDescription;
                     existingPartRide.RideId = newRideId;
-                    existingPartRide.CarId = newCarId;  
+                    existingPartRide.CarId = newCarId;
                     existingPartRide.DriverId = newDriverId;
                     existingPartRide.RateId = newRateId;
                     existingPartRide.SurchargeId = newSurchargeId;
@@ -1571,7 +1581,9 @@ public static class PartRideEndpoints
         Guid companyGuid,
         DateTime segmentDate,
         TimeSpan segmentStart,
-        TimeSpan segmentEnd
+        TimeSpan segmentEnd,
+        string creatingUserId,
+        List<string> creatingUserRoles
     )
     {
         // 1) Convert Start/End to decimal hours
@@ -1656,7 +1668,7 @@ public static class PartRideEndpoints
             breakDuration: totalBreak,
             manualAdjustment: manualAdjustment
         );
-        
+
         double homeWorkDistance = KilometersAllowance.HomeWorkDistance(
             kilometerAllowanceEnabled: true,
             oneWayValue: 25,
@@ -1728,6 +1740,60 @@ public static class PartRideEndpoints
 
         // Save
         db.PartRides.Add(partRide);
+        await db.SaveChangesAsync();
+
+        var driverRole = await db.Roles.FirstOrDefaultAsync(r => r.Name == "driver");
+        var contactRole = await db.Roles.FirstOrDefaultAsync(r => r.Name == "customerAdmin");
+
+        // Default: both approvals pending
+        var driverApprovalStatus = ApprovalStatus.Pending;
+        var contactApprovalStatus = ApprovalStatus.Pending;
+
+        string? driverApprover = null;
+        string? contactApprover = null;
+
+        // Logic based on creator's role
+        if (creatingUserRoles.Contains("driver"))
+        {
+            driverApprovalStatus = ApprovalStatus.Approved;
+            driverApprover = creatingUserId;
+        }
+        else if (creatingUserRoles.Contains("customerAdmin") || creatingUserRoles.Contains("customer"))
+        {
+            contactApprovalStatus = ApprovalStatus.Approved;
+            contactApprover = creatingUserId;
+        }
+        // Else: globalAdmin, employer, etc. => both remain pending
+
+        // Create driver approval
+        var driverApproval = new PartRideApproval
+        {
+            Id = Guid.NewGuid(),
+            PartRideId = partRide.Id,
+            RoleId = driverRole?.Id ?? "",
+            Status = driverApprovalStatus,
+            ApprovedByUserId = driverApprovalStatus == ApprovalStatus.Approved
+                ? driverApprover
+                : null,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        // Create contact-person approval
+        var contactApproval = new PartRideApproval
+        {
+            Id = Guid.NewGuid(),
+            PartRideId = partRide.Id,
+            RoleId = contactRole?.Id ?? "",
+            Status = contactApprovalStatus,
+            ApprovedByUserId = contactApprovalStatus == ApprovalStatus.Approved
+                ? contactApprover
+                : null,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        // Attach to PartRide and save
+        db.PartRideApprovals.Add(driverApproval);
+        db.PartRideApprovals.Add(contactApproval);
         await db.SaveChangesAsync();
 
         return partRide;
