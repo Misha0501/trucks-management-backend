@@ -1144,6 +1144,228 @@ public static class PartRideEndpoints
                     );
                 }
             });
+        
+        app.MapPost("/partrides/{partRideId}/approve",
+                [Authorize]
+                async (
+                    string partRideId,
+                    [FromBody] ApprovePartRideRequest request,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    try
+                    {
+                        if (!Guid.TryParse(partRideId, out Guid parsedRideId))
+                        {
+                            return ApiResponseFactory.Error(
+                                "Invalid PartRide ID format.",
+                                StatusCodes.Status400BadRequest
+                            );
+                        }
+
+                        var partRide = await db.PartRides
+                            .Include(pr => pr.Approvals)
+                            .FirstOrDefaultAsync(pr => pr.Id == parsedRideId);
+
+                        if (partRide == null)
+                        {
+                            return ApiResponseFactory.Error(
+                                "PartRide not found.",
+                                StatusCodes.Status404NotFound
+                            );
+                        }
+
+                        var userId = userManager.GetUserId(currentUser);
+                        if (string.IsNullOrEmpty(userId))
+                        {
+                            return ApiResponseFactory.Error(
+                                "User not authenticated.",
+                                StatusCodes.Status401Unauthorized
+                            );
+                        }
+
+                        // Get user and roles
+                        var creatingUser = await userManager.GetUserAsync(currentUser);
+                        var userRoles = await userManager.GetRolesAsync(creatingUser);
+
+                        bool isGlobalAdmin = userRoles.Contains("globalAdmin");
+                        bool isDriver = userRoles.Contains("driver");
+                        bool isCustomerAdmin = userRoles.Contains("customerAdmin");
+
+                        // If not globalAdmin, check if user is in the company
+                        if (!isGlobalAdmin)
+                        {
+                            if (!partRide.CompanyId.HasValue)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "PartRide has no associated company. Approval not allowed.",
+                                    StatusCodes.Status400BadRequest
+                                );
+                            }
+
+                            if (isDriver)
+                            {
+                                // Additional requirement: driver can only approve if they're the driver on this PartRide
+                                var driverEntity = await db.Drivers
+                                    .FirstOrDefaultAsync(d => d.AspNetUserId == userId && !d.IsDeleted);
+
+                                if (driverEntity == null)
+                                {
+                                    return ApiResponseFactory.Error(
+                                        "You are not registered as a driver. Contact your administrator.",
+                                        StatusCodes.Status403Forbidden
+                                    );
+                                }
+
+                                if (!driverEntity.CompanyId.HasValue ||
+                                    driverEntity.CompanyId.Value != partRide.CompanyId.Value)
+                                {
+                                    return ApiResponseFactory.Error(
+                                        "You are not part of this PartRide's company.",
+                                        StatusCodes.Status403Forbidden
+                                    );
+                                }
+
+                                // Check that this driver is actually the assigned driver of the PartRide
+                                if (!partRide.DriverId.HasValue || partRide.DriverId.Value != driverEntity.Id)
+                                {
+                                    return ApiResponseFactory.Error(
+                                        "Drivers can only approve PartRides where they are assigned as driver.",
+                                        StatusCodes.Status403Forbidden
+                                    );
+                                }
+                            }
+                            else
+                            {
+                                // Must be a contact person or other company-based user
+                                var contactPerson = await db.ContactPersons
+                                    .Include(cp => cp.ContactPersonClientCompanies)
+                                    .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId && !cp.IsDeleted);
+
+                                if (contactPerson == null)
+                                {
+                                    return ApiResponseFactory.Error(
+                                        "No contact person profile found. You are not authorized.",
+                                        StatusCodes.Status403Forbidden
+                                    );
+                                }
+
+                                var associatedCompanyIds = contactPerson.ContactPersonClientCompanies
+                                    .Select(c => c.CompanyId)
+                                    .Where(x => x.HasValue)
+                                    .Distinct()
+                                    .ToList();
+
+                                if (!associatedCompanyIds.Contains(partRide.CompanyId))
+                                {
+                                    return ApiResponseFactory.Error(
+                                        "You are not authorized to approve a PartRide for this company.",
+                                        StatusCodes.Status403Forbidden
+                                    );
+                                }
+                            }
+                        }
+
+                        // Confirm the user has either "driver" or "customerAdmin" or is "globalAdmin"
+                        if (!isDriver && !isCustomerAdmin && !isGlobalAdmin)
+                        {
+                            return ApiResponseFactory.Error(
+                                "Only driver, customerAdmin, or globalAdmin can approve this PartRide.",
+                                StatusCodes.Status403Forbidden
+                            );
+                        }
+
+                        // Decide which role name the user is "approving" under
+                        // If they're globalAdmin, you might pick "globalAdmin" or treat them as a special case
+                        string targetRoleName;
+                        if (isDriver)          targetRoleName = "driver";
+                        else if (isCustomerAdmin) targetRoleName = "customerAdmin";
+                        else                   targetRoleName = "globalAdmin"; // or you can skip a separate role
+
+                        var roleEntity = await db.Roles.FirstOrDefaultAsync(r => r.Name == targetRoleName);
+                        if (roleEntity == null)
+                        {
+                            return ApiResponseFactory.Error(
+                                $"Role '{targetRoleName}' not found.",
+                                StatusCodes.Status400BadRequest
+                            );
+                        }
+
+                        // Try to find an existing approval for that role
+                        var existingApproval = partRide.Approvals
+                            .OrderByDescending(a => a.UpdatedAt)
+                            .FirstOrDefault(a => a.RoleId == roleEntity.Id);
+
+                        if (existingApproval != null)
+                        {
+                            if (existingApproval.Status == ApprovalStatus.Pending)
+                            {
+                                // If it's Pending -> set it to Approved
+                                existingApproval.Status = ApprovalStatus.Approved;
+                                existingApproval.ApprovedByUserId = userId;
+                                existingApproval.Comments = request.Comments;
+                                existingApproval.UpdatedAt = DateTime.UtcNow;
+                            }
+                            else if (existingApproval.Status == ApprovalStatus.Rejected ||
+                                     existingApproval.Status == ApprovalStatus.ChangesRequested)
+                            {
+                                // Instead of overriding, create a new approval in Approved state
+                                var newApproval = new PartRideApproval
+                                {
+                                    Id = Guid.NewGuid(),
+                                    PartRideId = partRide.Id,
+                                    RoleId = roleEntity.Id,
+                                    Status = ApprovalStatus.Approved,
+                                    ApprovedByUserId = userId,
+                                    Comments = request.Comments,
+                                    UpdatedAt = DateTime.UtcNow
+                                };
+                                db.PartRideApprovals.Add(newApproval);
+                            }
+                            else
+                            {
+                                // Already Approved or some other status we don't override
+                                return ApiResponseFactory.Error(
+                                    $"Approval for role '{targetRoleName}' is already '{existingApproval.Status}'.",
+                                    StatusCodes.Status400BadRequest
+                                );
+                            }
+                        }
+                        else
+                        {
+                            // No existing approval for this role, create a new one in Approved state
+                            var newApproval = new PartRideApproval
+                            {
+                                Id = Guid.NewGuid(),
+                                PartRideId = partRide.Id,
+                                RoleId = roleEntity.Id,
+                                Status = ApprovalStatus.Approved,
+                                ApprovedByUserId = userId,
+                                Comments = request.Comments,
+                                UpdatedAt = DateTime.UtcNow
+                            };
+                            db.PartRideApprovals.Add(newApproval);
+                        }
+
+                        await db.SaveChangesAsync();
+
+                        return ApiResponseFactory.Success(
+                            "Approval recorded successfully.",
+                            StatusCodes.Status200OK
+                        );
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Error approving PartRide: {ex.Message}");
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while approving the PartRide.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+                }
+            );
     }
 
     private static Guid? TryParseGuid(string? input)
