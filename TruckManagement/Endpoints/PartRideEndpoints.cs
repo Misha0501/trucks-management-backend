@@ -1366,6 +1366,225 @@ public static class PartRideEndpoints
                     }
                 }
             );
+        
+                    app.MapPost("/partrides/{partRideId}/reject",
+                [Authorize]
+                async (
+                    string partRideId,
+                    [FromBody] RejectPartRideRequest request,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    try
+                    {
+                        if (!Guid.TryParse(partRideId, out Guid parsedRideId))
+                        {
+                            return ApiResponseFactory.Error(
+                                "Invalid PartRide ID format.",
+                                StatusCodes.Status400BadRequest
+                            );
+                        }
+
+                        var partRide = await db.PartRides
+                            .Include(pr => pr.Approvals)
+                            .FirstOrDefaultAsync(pr => pr.Id == parsedRideId);
+
+                        if (partRide == null)
+                        {
+                            return ApiResponseFactory.Error(
+                                "PartRide not found.",
+                                StatusCodes.Status404NotFound
+                            );
+                        }
+
+                        var userId = userManager.GetUserId(currentUser);
+                        if (string.IsNullOrEmpty(userId))
+                        {
+                            return ApiResponseFactory.Error(
+                                "User not authenticated.",
+                                StatusCodes.Status401Unauthorized
+                            );
+                        }
+
+                        var creatingUser = await userManager.GetUserAsync(currentUser);
+                        var userRoles = await userManager.GetRolesAsync(creatingUser);
+
+                        bool isGlobalAdmin = userRoles.Contains("globalAdmin");
+                        bool isDriver = userRoles.Contains("driver");
+                        bool isCustomerAdmin = userRoles.Contains("customerAdmin");
+
+                        if (!isGlobalAdmin)
+                        {
+                            if (!partRide.CompanyId.HasValue)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "PartRide has no associated company. Reject not allowed.",
+                                    StatusCodes.Status400BadRequest
+                                );
+                            }
+
+                            if (isDriver)
+                            {
+                                var driverEntity = await db.Drivers
+                                    .FirstOrDefaultAsync(d => d.AspNetUserId == userId && !d.IsDeleted);
+
+                                if (driverEntity == null)
+                                {
+                                    return ApiResponseFactory.Error(
+                                        "You are not registered as a driver. Contact your administrator.",
+                                        StatusCodes.Status403Forbidden
+                                    );
+                                }
+
+                                if (!driverEntity.CompanyId.HasValue ||
+                                    driverEntity.CompanyId.Value != partRide.CompanyId.Value)
+                                {
+                                    return ApiResponseFactory.Error(
+                                        "You are not part of this PartRide's company.",
+                                        StatusCodes.Status403Forbidden
+                                    );
+                                }
+
+                                // Driver can only reject if they are assigned to this PartRide
+                                if (!partRide.DriverId.HasValue || partRide.DriverId.Value != driverEntity.Id)
+                                {
+                                    return ApiResponseFactory.Error(
+                                        "Drivers can only reject PartRides where they are assigned as driver.",
+                                        StatusCodes.Status403Forbidden
+                                    );
+                                }
+                            }
+                            else
+                            {
+                                // Must be customerAdmin or other contact-person
+                                var contactPerson = await db.ContactPersons
+                                    .Include(cp => cp.ContactPersonClientCompanies)
+                                    .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId && !cp.IsDeleted);
+
+                                if (contactPerson == null)
+                                {
+                                    return ApiResponseFactory.Error(
+                                        "No contact person profile found. You are not authorized.",
+                                        StatusCodes.Status403Forbidden
+                                    );
+                                }
+
+                                var associatedCompanyIds = contactPerson.ContactPersonClientCompanies
+                                    .Select(c => c.CompanyId)
+                                    .Where(x => x.HasValue)
+                                    .Distinct()
+                                    .ToList();
+
+                                if (!associatedCompanyIds.Contains(partRide.CompanyId))
+                                {
+                                    return ApiResponseFactory.Error(
+                                        "You are not authorized to reject a PartRide for this company.",
+                                        StatusCodes.Status403Forbidden
+                                    );
+                                }
+                            }
+                        }
+
+                        // Make sure user is driver, customerAdmin, or globalAdmin
+                        if (!isDriver && !isCustomerAdmin && !isGlobalAdmin)
+                        {
+                            return ApiResponseFactory.Error(
+                                "Only driver, customerAdmin, or globalAdmin can reject this PartRide.",
+                                StatusCodes.Status403Forbidden
+                            );
+                        }
+
+                        // Determine the role name for the rejection
+                        string targetRoleName;
+                        if (isDriver)             targetRoleName = "driver";
+                        else if (isCustomerAdmin) targetRoleName = "customerAdmin";
+                        else                      targetRoleName = "globalAdmin";
+
+                        var roleEntity = await db.Roles.FirstOrDefaultAsync(r => r.Name == targetRoleName);
+                        if (roleEntity == null)
+                        {
+                            return ApiResponseFactory.Error(
+                                $"Role '{targetRoleName}' not found.",
+                                StatusCodes.Status400BadRequest
+                            );
+                        }
+
+                        // Get the "latest" approval for this role
+                        var existingApproval = partRide.Approvals
+                            .Where(a => a.RoleId == roleEntity.Id)
+                            .OrderByDescending(a => a.UpdatedAt)
+                            .FirstOrDefault();
+
+                        if (existingApproval != null)
+                        {
+                            // If Pending or ChangesRequested -> set to Rejected
+                            if (existingApproval.Status == ApprovalStatus.Pending)
+                            {
+                                existingApproval.Status = ApprovalStatus.Rejected;
+                                existingApproval.ApprovedByUserId = userId;
+                                existingApproval.Comments = request.Comments;
+                                existingApproval.UpdatedAt = DateTime.UtcNow;
+                            }
+                            else if (existingApproval.Status == ApprovalStatus.Rejected)
+                            {
+                                // Already Rejected => error or create a new record
+                                return ApiResponseFactory.Error(
+                                    $"Approval for role '{targetRoleName}' is already Rejected.",
+                                    StatusCodes.Status400BadRequest
+                                );
+                            }
+                            else
+                            {
+                                // It's Approved or some other status
+                                // If you prefer to let them create a new record in Rejected state, do so here:
+                                var newApproval = new PartRideApproval
+                                {
+                                    Id = Guid.NewGuid(),
+                                    PartRideId = partRide.Id,
+                                    RoleId = roleEntity.Id,
+                                    Status = ApprovalStatus.Rejected,
+                                    ApprovedByUserId = userId,
+                                    Comments = request.Comments,
+                                    UpdatedAt = DateTime.UtcNow
+                                };
+                                db.PartRideApprovals.Add(newApproval);
+                            }
+                        }
+                        else
+                        {
+                            // No existing record for that role => create new in Rejected
+                            var newApproval = new PartRideApproval
+                            {
+                                Id = Guid.NewGuid(),
+                                PartRideId = partRide.Id,
+                                RoleId = roleEntity.Id,
+                                Status = ApprovalStatus.Rejected,
+                                ApprovedByUserId = userId,
+                                Comments = request.Comments,
+                                UpdatedAt = DateTime.UtcNow
+                            };
+                            db.PartRideApprovals.Add(newApproval);
+                        }
+
+                        await db.SaveChangesAsync();
+
+                        return ApiResponseFactory.Success(
+                            "PartRide was rejected successfully.",
+                            StatusCodes.Status200OK
+                        );
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Error rejecting PartRide: {ex.Message}");
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while rejecting the PartRide.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+                }
+            );
     }
 
     private static Guid? TryParseGuid(string? input)

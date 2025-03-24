@@ -113,7 +113,7 @@ namespace TruckManagement.Data
                     .IsRequired();
 
                 // Index perhaps
-                entity.HasIndex(pa => new { pa.PartRideId, pa.RoleId }).IsUnique();
+                entity.HasIndex(pa => new { pa.PartRideId, pa.RoleId });
             });
 
             // Comments
