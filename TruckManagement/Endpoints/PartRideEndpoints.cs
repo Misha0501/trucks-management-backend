@@ -1014,7 +1014,8 @@ public static class PartRideEndpoints
                                     a.ApprovedByUser.Email
                                 }
                                 : null
-                        })
+                        }).OrderByDescending(a => a.UpdatedAt)
+
                     };
 
                     return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
