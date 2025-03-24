@@ -1928,7 +1928,7 @@ public static class PartRideEndpoints
         );
 
         double calculatedHolidayHours = WorkHoursCalculator.CalculateHolidayHours(
-            hourCode: "vak",
+            hourCode: "",
             weeklyPercentage: 100.0,
             startTime: startTimeDecimal,
             endTime: endTimeDecimal
@@ -1964,7 +1964,9 @@ public static class PartRideEndpoints
             breakDuration: totalBreak,
             manualAdjustment: 0
         );
-
+        TimeSpan restTimeSpan = TimeSpan.FromHours(totalBreak);
+        
+        partRide.Rest = restTimeSpan;
         partRide.DecimalHours = totalHoursCalculated;
         partRide.CorrectionTotalHours = 0; // Set to 0 or use your own logic
         partRide.TaxFreeCompensation = untaxedAllowanceSingleDay;
@@ -1974,7 +1976,7 @@ public static class PartRideEndpoints
         partRide.ExtraKilometers = 0.0;
         partRide.ConsignmentFee = 0.0;
         partRide.SaturdayHours = 0.0;
-        partRide.SundayHolidayHours = 0.0;
+        partRide.SundayHolidayHours = calculatedHolidayHours;
         partRide.VariousCompensation = 0.0;
     }
 
@@ -2315,7 +2317,7 @@ public static class PartRideEndpoints
             endTime: endTimeDecimal
         );
         double holidayHours = WorkHoursCalculator.CalculateHolidayHours(
-            hourCode: "vak", // Replace with real hour code from request
+            hourCode: "", // Replace with real hour code from request
             weeklyPercentage: weeklyPercentage,
             startTime: startTimeDecimal,
             endTime: endTimeDecimal
@@ -2346,6 +2348,7 @@ public static class PartRideEndpoints
             sickHours: sickHours,
             holidayHours: holidayHours
         );
+        TimeSpan restTimeSpan = TimeSpan.FromHours(totalBreak);
 
         // 4e) Compute final “totalHours” after subtracting the break, plus any manual adjustment
         double manualAdjustment = 0.0; // or request.ManualAdjustment if you have that
@@ -2382,7 +2385,7 @@ public static class PartRideEndpoints
             Date = segmentDate,
             Start = segmentStart,
             End = segmentEnd,
-            Rest = request.Rest,
+            Rest = restTimeSpan,
             Kilometers = request.Kilometers,
             CarId = TryParseGuid(request.CarId),
             DriverId = TryParseGuid(request.DriverId),
@@ -2411,7 +2414,7 @@ public static class PartRideEndpoints
             ExtraKilometers = 0.0,
             ConsignmentFee = 0.0,
             SaturdayHours = 0.0,
-            SundayHolidayHours = 0.0,
+            SundayHolidayHours = holidayHours,
             VariousCompensation = 0.0,
             // 5d) HoursOption & HoursCode - for now assume they're set from the request
             // HoursOptionId       = TryParseGuid(request.HoursOptionId),

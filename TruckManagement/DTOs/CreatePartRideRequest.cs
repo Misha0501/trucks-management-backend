@@ -6,7 +6,6 @@ namespace TruckManagement.DTOs
         public DateTime Date { get; set; }
         public TimeSpan Start { get; set; }
         public TimeSpan End { get; set; }
-        public TimeSpan Rest { get; set; }
         public double Kilometers { get; set; }
         public string? CarId { get; set; }
         public string? DriverId { get; set; }
