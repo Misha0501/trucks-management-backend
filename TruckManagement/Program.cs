@@ -75,5 +75,6 @@ app.MapCharterEndpoints();
 app.MapRideEndpoints();
 app.MapPartRideEndpoints();
 app.MapHoursCodeRoutes();
+app.MapHoursOptionRoutes();
 
 app.Run();

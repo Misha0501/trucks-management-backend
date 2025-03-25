@@ -9,7 +9,7 @@ using TruckManagement.Helpers;
 
 namespace TruckManagement.Endpoints
 {
-    public static class HoursCodeRoutes
+    public static class HoursCodeEndpoints
     {
         public static void MapHoursCodeRoutes(this WebApplication app)
         {
