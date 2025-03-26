@@ -1974,14 +1974,38 @@ public static class PartRideEndpoints
             breakDuration: totalBreak,
             manualAdjustment: 0
         );
+        
+        double homeWorkDistance = KilometersAllowance.HomeWorkDistance(
+            kilometerAllowanceEnabled: true,
+            oneWayValue: 25,
+            minThreshold: 10,
+            maxThreshold: 35
+        );
         TimeSpan restTimeSpan = TimeSpan.FromHours(totalBreak);
+
+        double manualAdjustment = 0.0; // or request.ManualAdjustment if you have that
+        double totalHours = WorkHoursCalculator.CalculateTotalHours(
+            shiftStart: startTimeDecimal,
+            shiftEnd: endTimeDecimal,
+            breakDuration: totalBreak,
+            manualAdjustment: manualAdjustment
+        );
+
+        double kilometersAllowance = KilometersAllowance.CalculateKilometersAllowance(
+            extraKilometers: partRide.Kilometers ?? 0,
+            kilometerRate: 0.23,
+            hourCode: "Eendaagserit",
+            hourOption: "1",
+            totalHours: totalHours,
+            homeWorkDistance: homeWorkDistance
+        );
         
         partRide.Rest = restTimeSpan;
         partRide.DecimalHours = totalHoursCalculated;
         partRide.TaxFreeCompensation = untaxedAllowanceSingleDay;
         partRide.NightAllowance = calculatedNightAllowance;
         partRide.StandOver = 0.0;
-        partRide.KilometerReimbursement = 0.0;
+        partRide.KilometerReimbursement = kilometersAllowance;
         partRide.ConsignmentFee = 0.0;
         partRide.SaturdayHours = 0.0;
         partRide.SundayHolidayHours = calculatedHolidayHours;
