@@ -1002,6 +1002,7 @@ public static class PartRideEndpoints
                         partRide.SaturdayHours,
                         partRide.SundayHolidayHours,
                         partRide.VariousCompensation,
+                        partRide.NumberOfHours,
                         Approvals = partRide.Approvals.Select(a => new
                         {
                             a.Id,
@@ -1983,7 +1984,7 @@ public static class PartRideEndpoints
         );
         TimeSpan restTimeSpan = TimeSpan.FromHours(totalBreak);
 
-        double manualAdjustment = 0.0; // or request.ManualAdjustment if you have that
+        double manualAdjustment = partRide.CorrectionTotalHours; // or request.ManualAdjustment if you have that
         double totalHours = WorkHoursCalculator.CalculateTotalHours(
             shiftStart: startTimeDecimal,
             shiftEnd: endTimeDecimal,
@@ -2009,6 +2010,7 @@ public static class PartRideEndpoints
         partRide.ConsignmentFee = 0.0;
         partRide.SaturdayHours = 0.0;
         partRide.SundayHolidayHours = calculatedHolidayHours;
+        partRide.NumberOfHours = totalHours;
     }
 
     private static object ToResponsePartRide(PartRide pr)
@@ -2382,7 +2384,7 @@ public static class PartRideEndpoints
         TimeSpan restTimeSpan = TimeSpan.FromHours(totalBreak);
 
         // 4e) Compute final “totalHours” after subtracting the break, plus any manual adjustment
-        double manualAdjustment = 0.0; // or request.ManualAdjustment if you have that
+        double manualAdjustment = request.HoursCorrection ?? 0; // or request.ManualAdjustment if you have that
         double totalHours = WorkHoursCalculator.CalculateTotalHours(
             shiftStart: startTimeDecimal,
             shiftEnd: endTimeDecimal,
@@ -2442,6 +2444,7 @@ public static class PartRideEndpoints
             ConsignmentFee = 0.0,
             SaturdayHours = 0.0,
             SundayHolidayHours = holidayHours,
+            NumberOfHours = totalHours,
             VariousCompensation = request.VariousCompensation ?? 0,
             HoursOptionId       = TryParseGuid(request.HoursOptionId),
             HoursCodeId         = TryParseGuid(request.HoursCodeId)

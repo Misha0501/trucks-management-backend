@@ -47,6 +47,7 @@ namespace TruckManagement.Entities
         public Guid? CharterId { get; set; }
         public Charter? Charter { get; set; } = default!;
         public double CorrectionTotalHours { get; set; }
+        public double? NumberOfHours { get; set; }
         public double TaxFreeCompensation { get; set; }
         public double StandOver { get; set; }
         public double NightAllowance { get; set; }
