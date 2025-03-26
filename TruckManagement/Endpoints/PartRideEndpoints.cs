@@ -145,7 +145,6 @@ public static class PartRideEndpoints
                         pr.StandOver,
                         pr.NightAllowance,
                         pr.KilometerReimbursement,
-                        pr.ExtraKilometers,
                         pr.ConsignmentFee,
                         pr.SaturdayHours,
                         pr.SundayHolidayHours,
@@ -734,7 +733,6 @@ public static class PartRideEndpoints
                             pr.StandOver,
                             pr.NightAllowance,
                             pr.KilometerReimbursement,
-                            pr.ExtraKilometers,
                             pr.ConsignmentFee,
                             pr.SaturdayHours,
                             pr.SundayHolidayHours,
@@ -987,7 +985,6 @@ public static class PartRideEndpoints
                         partRide.StandOver,
                         partRide.NightAllowance,
                         partRide.KilometerReimbursement,
-                        partRide.ExtraKilometers,
                         partRide.ConsignmentFee,
                         partRide.SaturdayHours,
                         partRide.SundayHolidayHours,
@@ -1973,7 +1970,6 @@ public static class PartRideEndpoints
         partRide.NightAllowance = calculatedNightAllowance;
         partRide.StandOver = 0.0;
         partRide.KilometerReimbursement = 0.0;
-        partRide.ExtraKilometers = 0.0;
         partRide.ConsignmentFee = 0.0;
         partRide.SaturdayHours = 0.0;
         partRide.SundayHolidayHours = calculatedHolidayHours;
@@ -2004,7 +2000,6 @@ public static class PartRideEndpoints
             pr.NightAllowance,
             pr.StandOver,
             pr.KilometerReimbursement,
-            pr.ExtraKilometers,
             pr.ConsignmentFee,
             pr.SaturdayHours,
             pr.SundayHolidayHours,
@@ -2411,7 +2406,6 @@ public static class PartRideEndpoints
             // 5c) Not implementing logic for these fields yet, so default:
             StandOver = 0.0,
             KilometerReimbursement = kilometersAllowance,
-            ExtraKilometers = 0.0,
             ConsignmentFee = 0.0,
             SaturdayHours = 0.0,
             SundayHolidayHours = holidayHours,

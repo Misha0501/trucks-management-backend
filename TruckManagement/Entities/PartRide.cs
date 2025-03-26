@@ -51,7 +51,6 @@ namespace TruckManagement.Entities
         public double StandOver { get; set; }
         public double NightAllowance { get; set; }
         public double KilometerReimbursement { get; set; }
-        public double ExtraKilometers { get; set; }
         public double ConsignmentFee { get; set; }
         public double SaturdayHours { get; set; }
         public double SundayHolidayHours { get; set; }

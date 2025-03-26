@@ -12,7 +12,6 @@ namespace TruckManagement
         public string? DriverId { get; set; }
         public decimal? Costs { get; set; }
         public string? ClientId { get; set; }
-        public int? Day { get; set; }
         public int? WeekNumber { get; set; }
         public string? UnitId { get; set; }
         public string? RateId { get; set; }
