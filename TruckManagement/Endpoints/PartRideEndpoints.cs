@@ -486,6 +486,7 @@ public static class PartRideEndpoints
                     existingPartRide.HoursCodeId = newHoursCodeId;
                     existingPartRide.HoursOptionId = newHoursOptionId;
                     existingPartRide.CorrectionTotalHours = request.HoursCorrection ?? 0;
+                    existingPartRide.VariousCompensation = request.VariousCompensation ?? 0;
 
                     // If new company is set
                     if (currentCompanyId != Guid.Empty)
@@ -541,7 +542,7 @@ public static class PartRideEndpoints
                             CostsDescription = existingPartRide.CostsDescription,
                             HoursCodeId = existingPartRide.HoursCodeId,
                             HoursOptionId = existingPartRide.HoursOptionId,
-                            VariousCompensation = request.VariousCompensation ?? 0,
+                            VariousCompensation = 0,
                             CorrectionTotalHours = 0
                         };
 
@@ -1977,7 +1978,6 @@ public static class PartRideEndpoints
         
         partRide.Rest = restTimeSpan;
         partRide.DecimalHours = totalHoursCalculated;
-        partRide.CorrectionTotalHours = 0; // Set to 0 or use your own logic
         partRide.TaxFreeCompensation = untaxedAllowanceSingleDay;
         partRide.NightAllowance = calculatedNightAllowance;
         partRide.StandOver = 0.0;
@@ -1985,7 +1985,6 @@ public static class PartRideEndpoints
         partRide.ConsignmentFee = 0.0;
         partRide.SaturdayHours = 0.0;
         partRide.SundayHolidayHours = calculatedHolidayHours;
-        partRide.VariousCompensation = 0.0;
     }
 
     private static object ToResponsePartRide(PartRide pr)
