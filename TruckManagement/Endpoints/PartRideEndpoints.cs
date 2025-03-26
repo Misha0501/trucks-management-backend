@@ -295,6 +295,8 @@ public static class PartRideEndpoints
                     Guid? newCharterId = TryParseGuid(request.CharterId);
                     Guid? newUnitId = TryParseGuid(request.UnitId);
                     Guid? newClientId = TryParseGuid(request.ClientId);
+                    Guid? newHoursCodeId = TryParseGuid(request.HoursCodeId);
+                    Guid? newHoursOptionId = TryParseGuid(request.HoursOptionId);
 
                     // If user is driver, ensure they don't reassign DriverId to someone else
                     if (isDriver && newDriverId.HasValue && newDriverId.Value != existingPartRide.DriverId)
@@ -478,6 +480,8 @@ public static class PartRideEndpoints
                     existingPartRide.CharterId = newCharterId;
                     existingPartRide.ClientId = newClientId;
                     existingPartRide.UnitId = newUnitId;
+                    existingPartRide.HoursCodeId = newHoursCodeId;
+                    existingPartRide.HoursOptionId = newHoursOptionId;
 
                     // If new company is set
                     if (currentCompanyId != Guid.Empty)
@@ -527,10 +531,13 @@ public static class PartRideEndpoints
                             End = TimeSpan.FromHours(endTimeDecimal),
                             Kilometers = existingPartRide.Kilometers,
                             Costs = existingPartRide.Costs,
-                            WeekNumber = existingPartRide.WeekNumber, // or compute anew
+                            WeekNumber = existingPartRide.WeekNumber,
                             Turnover = existingPartRide.Turnover,
                             Remark = existingPartRide.Remark,
-                            CostsDescription = existingPartRide.CostsDescription
+                            CostsDescription = existingPartRide.CostsDescription,
+                            HoursCodeId = existingPartRide.HoursCodeId,
+                            HoursOptionId = existingPartRide.HoursOptionId,
+                            VariousCompensation = request.VariousCompensation ?? 0,
                         };
 
                         // Recalculate new PartRide
@@ -2399,7 +2406,7 @@ public static class PartRideEndpoints
 
             // 5a) Fields that store the final hours:
             DecimalHours = totalHours, // old approach 
-            CorrectionTotalHours = 0, // newly introduced field
+            CorrectionTotalHours = request.HoursCorrection ?? 0, // newly introduced field
             // 5b) Untaxed compensation fields
             TaxFreeCompensation = untaxedAllowanceSingleDay,
             NightAllowance = nightAllowance,
@@ -2409,10 +2416,10 @@ public static class PartRideEndpoints
             ConsignmentFee = 0.0,
             SaturdayHours = 0.0,
             SundayHolidayHours = holidayHours,
-            VariousCompensation = 0.0,
+            VariousCompensation = request.VariousCompensation ?? 0,
             // 5d) HoursOption & HoursCode - for now assume they're set from the request
-            // HoursOptionId       = TryParseGuid(request.HoursOptionId),
-            // HoursCodeId         = TryParseGuid(request.HoursCodeId)
+            HoursOptionId       = TryParseGuid(request.HoursOptionId),
+            HoursCodeId         = TryParseGuid(request.HoursCodeId)
         };
 
         // Optionally run your calculations (WorkHoursCalculator, etc.)

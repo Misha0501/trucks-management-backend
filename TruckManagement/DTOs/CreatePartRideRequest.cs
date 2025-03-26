@@ -20,5 +20,9 @@ namespace TruckManagement.DTOs
         public string? Remark { get; set; }
         public string? CompanyId { get; set; }
         public string? CharterId { get; set; }
+        public string? HoursOptionId { get; set; }
+        public string? HoursCodeId { get; set; }
+        public double? HoursCorrection { get; set; }
+        public double? VariousCompensation { get; set; }
     }
 }
