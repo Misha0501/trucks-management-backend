@@ -92,7 +92,8 @@ public static class PartRideEndpoints
                             db, request, companyGuid,
                             request.Date, request.Start, request.End,
                             userId,
-                            userRoles
+                            userRoles,
+                            request.HoursCorrection ?? 0
                         );
                         createdPartRides.Add(singleRide);
                     }
@@ -106,7 +107,8 @@ public static class PartRideEndpoints
                             db, request, companyGuid,
                             request.Date, request.Start, midnight,
                             userId,
-                            userRoles
+                            userRoles,
+                            request.HoursCorrection ?? 0
                         );
                         createdPartRides.Add(firstRide);
 
@@ -117,7 +119,8 @@ public static class PartRideEndpoints
                             TimeSpan.Zero,
                             request.End,
                             userId,
-                            userRoles
+                            userRoles,
+                            correctionHours: 0
                         );
                         createdPartRides.Add(secondRide);
                     }
@@ -482,6 +485,7 @@ public static class PartRideEndpoints
                     existingPartRide.UnitId = newUnitId;
                     existingPartRide.HoursCodeId = newHoursCodeId;
                     existingPartRide.HoursOptionId = newHoursOptionId;
+                    existingPartRide.CorrectionTotalHours = request.HoursCorrection ?? 0;
 
                     // If new company is set
                     if (currentCompanyId != Guid.Empty)
@@ -538,6 +542,7 @@ public static class PartRideEndpoints
                             HoursCodeId = existingPartRide.HoursCodeId,
                             HoursOptionId = existingPartRide.HoursOptionId,
                             VariousCompensation = request.VariousCompensation ?? 0,
+                            CorrectionTotalHours = 0
                         };
 
                         // Recalculate new PartRide
@@ -2274,7 +2279,8 @@ public static class PartRideEndpoints
         TimeSpan segmentStart,
         TimeSpan segmentEnd,
         string creatingUserId,
-        List<string> creatingUserRoles
+        List<string> creatingUserRoles,
+        double correctionHours
     )
     {
         // 1) Convert Start/End to decimal hours
@@ -2404,35 +2410,25 @@ public static class PartRideEndpoints
             CharterId = TryParseGuid(request.CharterId),
             RideId = TryParseGuid(request.RideId),
 
-            // 5a) Fields that store the final hours:
-            DecimalHours = totalHours, // old approach 
-            CorrectionTotalHours = request.HoursCorrection ?? 0, // newly introduced field
-            // 5b) Untaxed compensation fields
+            DecimalHours = totalHours,  
+            CorrectionTotalHours = correctionHours,
             TaxFreeCompensation = untaxedAllowanceSingleDay,
             NightAllowance = nightAllowance,
-            // 5c) Not implementing logic for these fields yet, so default:
             StandOver = 0.0,
             KilometerReimbursement = kilometersAllowance,
             ConsignmentFee = 0.0,
             SaturdayHours = 0.0,
             SundayHolidayHours = holidayHours,
             VariousCompensation = request.VariousCompensation ?? 0,
-            // 5d) HoursOption & HoursCode - for now assume they're set from the request
             HoursOptionId       = TryParseGuid(request.HoursOptionId),
             HoursCodeId         = TryParseGuid(request.HoursCodeId)
         };
-
-        // Optionally run your calculations (WorkHoursCalculator, etc.)
-        // e.g. double totalBreak = WorkHoursCalculator.CalculateTotalBreak(...);
-        // partRide.Rest = TimeSpan.FromHours(totalBreak);
-
-        // e.g. double nightAllowance = NightAllowanceCalculator.CalculateNightAllowance(...);
-        // partRide.Turnover += nightAllowance;
 
         // Save
         db.PartRides.Add(partRide);
         await db.SaveChangesAsync();
 
+        // Approval creation 
         var driverRole = await db.Roles.FirstOrDefaultAsync(r => r.Name == "driver");
         var contactRole = await db.Roles.FirstOrDefaultAsync(r => r.Name == "customerAdmin");
 
