@@ -27,6 +27,7 @@ namespace TruckManagement.Data
         public DbSet<PartRideComment> PartRideComments { get; set; }
         public DbSet<HoursOption> HoursOptions { get; set; } = default!;
         public DbSet<HoursCode> HoursCodes { get; set; } = default!;
+        public DbSet<DriverCompensationSettings> DriverCompensationSettings { get; set; } = default!;
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -143,6 +144,23 @@ namespace TruckManagement.Data
                 .WithMany(hc => hc.PartRides)
                 .HasForeignKey(pr => pr.HoursCodeId)
                 .OnDelete(DeleteBehavior.Restrict);
+            
+            // Driver ↔ DriverCompensationSettings (1-to-1)
+            builder.Entity<Driver>()
+                .HasOne(d => d.DriverCompensationSettings)
+                .WithOne(dcs => dcs.Driver)
+                .HasForeignKey<DriverCompensationSettings>(dcs => dcs.DriverId)
+                .OnDelete(DeleteBehavior.Cascade); // Or Restrict if needed
+
+            builder.Entity<DriverCompensationSettings>(entity =>
+            {
+                entity.Property(x => x.DriverRatePerHour).HasColumnType("decimal(10,2)");
+                entity.Property(x => x.NightAllowanceRate).HasColumnType("decimal(5,4)");
+                entity.Property(x => x.KilometerAllowance).HasColumnType("decimal(5,3)");
+                entity.Property(x => x.HourlyRate).HasColumnType("decimal(10,2)");
+                entity.Property(x => x.Salary4Weeks).HasColumnType("decimal(10,2)");
+                entity.Property(x => x.WeeklySalary).HasColumnType("decimal(10,2)");
+            });
         }
     }
 }
