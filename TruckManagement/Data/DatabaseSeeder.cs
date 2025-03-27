@@ -96,6 +96,7 @@ namespace TruckManagement.Seeding
                     Email = adminEmail,
                     FirstName = "Admin",
                     LastName = "User",
+                    IsApproved = true
                 };
 
                 // Create user with a sample password
@@ -121,6 +122,7 @@ namespace TruckManagement.Seeding
                     Email = customerEmail,
                     FirstName = "John",
                     LastName = "Customer",
+                    IsApproved = true
                 };
 
                 var result = await userManager.CreateAsync(customerUser, "Customer@123");
@@ -144,6 +146,7 @@ namespace TruckManagement.Seeding
                     Email = customerAdminEmail,
                     FirstName = "Frank",
                     LastName = "Customer Admin",
+                    IsApproved = true,
                 };
 
                 var result = await userManager.CreateAsync(customerAdminUser, "Customer@123");
@@ -167,6 +170,7 @@ namespace TruckManagement.Seeding
                     Email = driverEmail,
                     FirstName = "Emily",
                     LastName = "Driver",
+                    IsApproved = true,
                 };
 
                 var result = await userManager.CreateAsync(driverUser, "Driver@123");
@@ -190,6 +194,7 @@ namespace TruckManagement.Seeding
                     Email = clientEmail,
                     FirstName = "Alice",
                     LastName = "Client",
+                    IsApproved = true
                 };
 
                 var result = await userManager.CreateAsync(clientUser, "Client@123");
@@ -544,6 +549,33 @@ namespace TruckManagement.Seeding
             var seededCar1Entity = dbContext.Cars.IgnoreQueryFilters().FirstOrDefault(c => c.LicensePlate == "XYZ-789");
             var seededCar2Entity = dbContext.Cars.IgnoreQueryFilters().FirstOrDefault(c => c.LicensePlate == "LMN-456");
             var seededDriverEntity = dbContext.Drivers.IgnoreQueryFilters().FirstOrDefault(d => d.AspNetUserId == driverUser.Id);
+            
+            // Seed DriverCompensationSettings for the seeded driver
+            if (seededDriverEntity != null && !dbContext.DriverCompensationSettings.Any(dcs => dcs.DriverId == seededDriverEntity.Id))
+            {
+                var settings = new DriverCompensationSettings
+                {
+                    Id = Guid.NewGuid(),
+                    DriverId = seededDriverEntity.Id,
+                    PercentageOfWork = 100,
+                    NightHoursAllowed = true,
+                    NightHours19Percent = true,
+                    DriverRatePerHour = 18.71m,
+                    NightAllowanceRate = 0.19m,
+                    KilometerAllowanceEnabled = true,
+                    KilometersOneWayValue = 25,
+                    KilometersMin = 10,
+                    KilometersMax = 35,
+                    KilometerAllowance = 0.23m,
+                    HourlyRate = 18.71m,
+                    Salary4Weeks = 2000m,
+                    WeeklySalary = 500m,
+                    DateOfEmployment = new DateTime(2023, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+                };
+
+                dbContext.DriverCompensationSettings.Add(settings);
+                await dbContext.SaveChangesAsync();
+            }
 
             // 18) Seed CarDrivers
             if (seededCar1Entity != null && seededDriverEntity != null && !dbContext.CarDrivers.IgnoreQueryFilters().Any(cd =>

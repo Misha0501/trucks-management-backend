@@ -160,6 +160,12 @@ namespace TruckManagement.Data
                 entity.Property(x => x.HourlyRate).HasColumnType("decimal(10,2)");
                 entity.Property(x => x.Salary4Weeks).HasColumnType("decimal(10,2)");
                 entity.Property(x => x.WeeklySalary).HasColumnType("decimal(10,2)");
+                // Ensure UTC conversion for DateOfEmployment
+                entity.Property(x => x.DateOfEmployment)
+                    .HasConversion(
+                        v => v, // When saving to DB (already UTC)
+                        v => DateTime.SpecifyKind(v, DateTimeKind.Utc) // When reading from DB
+                    );
             });
         }
     }
