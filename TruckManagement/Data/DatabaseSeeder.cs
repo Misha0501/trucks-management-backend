@@ -84,10 +84,10 @@ namespace TruckManagement.Seeding
 
             // Example #1: A globalAdmin user
             const string adminEmail = "admin@admin.com";
-            var adminUser =await userManager.Users
+            var adminUser = await userManager.Users
                 .IgnoreQueryFilters()
                 .SingleOrDefaultAsync(u => u.NormalizedEmail == adminEmail.ToUpper());
-            
+
             if (adminUser == null)
             {
                 adminUser = new ApplicationUser
@@ -113,7 +113,7 @@ namespace TruckManagement.Seeding
             var customerUser = await userManager.Users
                 .IgnoreQueryFilters()
                 .SingleOrDefaultAsync(u => u.NormalizedEmail == customerEmail.ToUpper());
-            
+
             if (customerUser == null)
             {
                 customerUser = new ApplicationUser
@@ -137,7 +137,7 @@ namespace TruckManagement.Seeding
             var customerAdminUser = await userManager.Users
                 .IgnoreQueryFilters()
                 .SingleOrDefaultAsync(u => u.NormalizedEmail == customerAdminEmail.ToUpper());
-            
+
             if (customerAdminUser == null)
             {
                 customerAdminUser = new ApplicationUser
@@ -161,7 +161,7 @@ namespace TruckManagement.Seeding
             var driverUser = await userManager.Users
                 .IgnoreQueryFilters()
                 .SingleOrDefaultAsync(u => u.NormalizedEmail == driverEmail.ToUpper());
-            
+
             if (driverUser == null)
             {
                 driverUser = new ApplicationUser
@@ -185,7 +185,7 @@ namespace TruckManagement.Seeding
             var clientUser = await userManager.Users
                 .IgnoreQueryFilters()
                 .SingleOrDefaultAsync(u => u.NormalizedEmail == clientEmail.ToUpper());
-            
+
             if (clientUser == null)
             {
                 clientUser = new ApplicationUser
@@ -263,16 +263,27 @@ namespace TruckManagement.Seeding
             }
 
             await dbContext.SaveChangesAsync();
-            
-             // 2) Seed HoursOptions
+
+            // 2) Seed HoursOptions
             var hoursOptionsToSeed = new List<HoursOption>
             {
-                new HoursOption { Id = Guid.Parse("11111111-1111-1111-1111-111111111111"), Name = "StandOver", IsActive = true },
-                new HoursOption { Id = Guid.Parse("22222222-2222-2222-2222-222222222222"), Name = "Holiday", IsActive = true },
-                new HoursOption { Id = Guid.Parse("33333333-3333-3333-3333-333333333333"), Name = "NoHoliday", IsActive = true },
-                new HoursOption { Id = Guid.Parse("44444444-4444-4444-4444-444444444444"), Name = "NoAllowance", IsActive = true },
-                new HoursOption { Id = Guid.Parse("55555555-5555-5555-5555-555555555555"), Name = "NoCommutingAllowance", IsActive = true },
-                new HoursOption { Id = Guid.Parse("66666666-6666-6666-6666-666666666666"), Name = "NoNightAllowance", IsActive = true }
+                new HoursOption
+                    { Id = Guid.Parse("11111111-1111-1111-1111-111111111111"), Name = "StandOver", IsActive = true },
+                new HoursOption
+                    { Id = Guid.Parse("22222222-2222-2222-2222-222222222222"), Name = "Holiday", IsActive = true },
+                new HoursOption
+                    { Id = Guid.Parse("33333333-3333-3333-3333-333333333333"), Name = "NoHoliday", IsActive = true },
+                new HoursOption
+                    { Id = Guid.Parse("44444444-4444-4444-4444-444444444444"), Name = "NoAllowance", IsActive = true },
+                new HoursOption
+                {
+                    Id = Guid.Parse("55555555-5555-5555-5555-555555555555"), Name = "NoCommutingAllowance",
+                    IsActive = true
+                },
+                new HoursOption
+                {
+                    Id = Guid.Parse("66666666-6666-6666-6666-666666666666"), Name = "NoNightAllowance", IsActive = true
+                }
                 // add more if needed
             };
 
@@ -287,17 +298,39 @@ namespace TruckManagement.Seeding
             // 3) Seed HoursCodes
             var hoursCodesToSeed = new List<HoursCode>
             {
-                new HoursCode { Id = Guid.Parse("AAAA1111-1111-1111-1111-111111111111"), Name = "One day ride", IsActive = true},
-                new HoursCode { Id = Guid.Parse("AAAA2222-2222-2222-2222-222222222222"), Name = "Multi-day trip departure", IsActive = true },
-                new HoursCode { Id = Guid.Parse("AAAA3333-3333-3333-3333-333333333333"), Name = "Multi-day trip intermediate day", IsActive = true },
-                new HoursCode { Id = Guid.Parse("AAAA4444-4444-4444-4444-444444444444"), Name = "Multi-day trip arrival", IsActive = true },
-                new HoursCode { Id = Guid.Parse("AAAA5555-5555-5555-5555-555555555555"), Name = "Holiday", IsActive = true },
-                new HoursCode { Id = Guid.Parse("AAAA6666-6666-6666-6666-666666666666"), Name = "Sick", IsActive = true },
-                new HoursCode { Id = Guid.Parse("AAAA7777-7777-7777-7777-777777777777"), Name = "Time for time", IsActive = true },
-                new HoursCode { Id = Guid.Parse("AAAA8888-8888-8888-8888-888888888888"), Name = "Other work", IsActive = true },
-                new HoursCode { Id = Guid.Parse("AAAA9999-9999-9999-9999-999999999999"), Name = "Course day", IsActive = true },
-                new HoursCode { Id = Guid.Parse("AAAABBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB"), Name = "Consignment", IsActive = true },
-                new HoursCode { Id = Guid.Parse("AAAACCCC-CCCC-CCCC-CCCC-CCCCCCCCCCCC"), Name = "Unpaid", IsActive = true },
+                new HoursCode
+                    { Id = Guid.Parse("AAAA1111-1111-1111-1111-111111111111"), Name = "One day ride", IsActive = true },
+                new HoursCode
+                {
+                    Id = Guid.Parse("AAAA2222-2222-2222-2222-222222222222"), Name = "Multi-day trip departure",
+                    IsActive = true
+                },
+                new HoursCode
+                {
+                    Id = Guid.Parse("AAAA3333-3333-3333-3333-333333333333"), Name = "Multi-day trip intermediate day",
+                    IsActive = true
+                },
+                new HoursCode
+                {
+                    Id = Guid.Parse("AAAA4444-4444-4444-4444-444444444444"), Name = "Multi-day trip arrival",
+                    IsActive = true
+                },
+                new HoursCode
+                    { Id = Guid.Parse("AAAA5555-5555-5555-5555-555555555555"), Name = "Holiday", IsActive = true },
+                new HoursCode
+                    { Id = Guid.Parse("AAAA6666-6666-6666-6666-666666666666"), Name = "Sick", IsActive = true },
+                new HoursCode
+                {
+                    Id = Guid.Parse("AAAA7777-7777-7777-7777-777777777777"), Name = "Time for time", IsActive = true
+                },
+                new HoursCode
+                    { Id = Guid.Parse("AAAA8888-8888-8888-8888-888888888888"), Name = "Other work", IsActive = true },
+                new HoursCode
+                    { Id = Guid.Parse("AAAA9999-9999-9999-9999-999999999999"), Name = "Course day", IsActive = true },
+                new HoursCode
+                    { Id = Guid.Parse("AAAABBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB"), Name = "Consignment", IsActive = true },
+                new HoursCode
+                    { Id = Guid.Parse("AAAACCCC-CCCC-CCCC-CCCC-CCCCCCCCCCCC"), Name = "Unpaid", IsActive = true },
             };
 
             foreach (var hc in hoursCodesToSeed)
@@ -307,8 +340,9 @@ namespace TruckManagement.Seeding
                     dbContext.HoursCodes.Add(hc);
                 }
             }
+
             await dbContext.SaveChangesAsync();
-            
+
 
             // 11) Seed Clients with hardcoded and memorable IDs
             var clientsToSeed = new List<Client>
@@ -357,8 +391,7 @@ namespace TruckManagement.Seeding
                     Remark = "Strategic partner",
                     CompanyId = defaultCompanyId,
                     IsApproved = true,
-                }
-                ,
+                },
                 new Client
                 {
                     Id = Guid.Parse("78777777-7777-7777-7777-777777777777"),
@@ -413,7 +446,8 @@ namespace TruckManagement.Seeding
             // Associate adminUser with the default company
             if (adminUser != null)
             {
-                var adminContact = dbContext.ContactPersons.IgnoreQueryFilters().FirstOrDefault(cp => cp.AspNetUserId == adminUser.Id);
+                var adminContact = dbContext.ContactPersons.IgnoreQueryFilters()
+                    .FirstOrDefault(cp => cp.AspNetUserId == adminUser.Id);
                 if (adminContact != null && !dbContext.ContactPersonClientCompanies.IgnoreQueryFilters().Any(cpc =>
                         cpc.ContactPersonId == adminContact.Id && cpc.CompanyId == defaultCompanyId))
                 {
@@ -429,7 +463,8 @@ namespace TruckManagement.Seeding
 
             if (customerUser != null)
             {
-                var customerContact = dbContext.ContactPersons.IgnoreQueryFilters().FirstOrDefault(cp => cp.AspNetUserId == customerUser.Id);
+                var customerContact = dbContext.ContactPersons.IgnoreQueryFilters()
+                    .FirstOrDefault(cp => cp.AspNetUserId == customerUser.Id);
                 if (customerContact != null && !dbContext.ContactPersonClientCompanies.IgnoreQueryFilters().Any(cpc =>
                         cpc.ContactPersonId == customerContact.Id &&
                         cpc.CompanyId == Guid.Parse("22222222-2222-2222-2222-222222222222")))
@@ -447,10 +482,12 @@ namespace TruckManagement.Seeding
             if (customerAdminUser != null)
             {
                 var customerAdminContact =
-                    dbContext.ContactPersons.IgnoreQueryFilters().FirstOrDefault(cp => cp.AspNetUserId == customerAdminUser.Id);
-                if (customerAdminContact != null && !dbContext.ContactPersonClientCompanies.IgnoreQueryFilters().Any(cpc =>
-                        cpc.ContactPersonId == customerAdminContact.Id &&
-                        cpc.CompanyId == Guid.Parse("22222222-2222-2222-2222-222222222222")))
+                    dbContext.ContactPersons.IgnoreQueryFilters()
+                        .FirstOrDefault(cp => cp.AspNetUserId == customerAdminUser.Id);
+                if (customerAdminContact != null && !dbContext.ContactPersonClientCompanies.IgnoreQueryFilters().Any(
+                        cpc =>
+                            cpc.ContactPersonId == customerAdminContact.Id &&
+                            cpc.CompanyId == Guid.Parse("22222222-2222-2222-2222-222222222222")))
                 {
                     dbContext.ContactPersonClientCompanies.Add(new ContactPersonClientCompany
                     {
@@ -548,10 +585,12 @@ namespace TruckManagement.Seeding
 
             var seededCar1Entity = dbContext.Cars.IgnoreQueryFilters().FirstOrDefault(c => c.LicensePlate == "XYZ-789");
             var seededCar2Entity = dbContext.Cars.IgnoreQueryFilters().FirstOrDefault(c => c.LicensePlate == "LMN-456");
-            var seededDriverEntity = dbContext.Drivers.IgnoreQueryFilters().FirstOrDefault(d => d.AspNetUserId == driverUser.Id);
-            
+            var seededDriverEntity = dbContext.Drivers.IgnoreQueryFilters()
+                .FirstOrDefault(d => d.AspNetUserId == driverUser.Id);
+
             // Seed DriverCompensationSettings for the seeded driver
-            if (seededDriverEntity != null && !dbContext.DriverCompensationSettings.Any(dcs => dcs.DriverId == seededDriverEntity.Id))
+            if (seededDriverEntity != null &&
+                !dbContext.DriverCompensationSettings.Any(dcs => dcs.DriverId == seededDriverEntity.Id))
             {
                 var settings = new DriverCompensationSettings
                 {
@@ -578,8 +617,9 @@ namespace TruckManagement.Seeding
             }
 
             // 18) Seed CarDrivers
-            if (seededCar1Entity != null && seededDriverEntity != null && !dbContext.CarDrivers.IgnoreQueryFilters().Any(cd =>
-                    cd.CarId == seededCar1Entity.Id && cd.DriverId == seededDriverEntity.Id))
+            if (seededCar1Entity != null && seededDriverEntity != null && !dbContext.CarDrivers.IgnoreQueryFilters()
+                    .Any(cd =>
+                        cd.CarId == seededCar1Entity.Id && cd.DriverId == seededDriverEntity.Id))
             {
                 var carDriver = new CarDriver
                 {
@@ -590,8 +630,9 @@ namespace TruckManagement.Seeding
                 dbContext.CarDrivers.Add(carDriver);
             }
 
-            if (seededCar2Entity != null && seededDriverEntity != null && !dbContext.CarDrivers.IgnoreQueryFilters().Any(cd =>
-                    cd.CarId == seededCar2Entity.Id && cd.DriverId == seededDriverEntity.Id))
+            if (seededCar2Entity != null && seededDriverEntity != null && !dbContext.CarDrivers.IgnoreQueryFilters()
+                    .Any(cd =>
+                        cd.CarId == seededCar2Entity.Id && cd.DriverId == seededDriverEntity.Id))
             {
                 var carDriver = new CarDriver
                 {
@@ -618,7 +659,7 @@ namespace TruckManagement.Seeding
                 {
                     Id = Guid.Parse("CCCCCCCC-CCCC-CCCC-CCCC-CCCCCCCCCCCC"),
                     Name = "EveningTransport",
-                    Remark = "Transport goods in the evening",                    
+                    Remark = "Transport goods in the evening",
                     CompanyId = defaultCompanyId
                 };
                 dbContext.Rides.AddRange(ride1, ride2);
@@ -670,7 +711,8 @@ namespace TruckManagement.Seeding
                 {
                     var seededUnit = dbContext.Units.IgnoreQueryFilters().FirstOrDefault(u => u.Value == "Hours");
                     var seededRate = dbContext.Rates.IgnoreQueryFilters().FirstOrDefault(r => r.Name == "StandardRate");
-                    var seededSurcharge = dbContext.Surcharges.IgnoreQueryFilters().FirstOrDefault(s => s.Value == 15.0m);
+                    var seededSurcharge =
+                        dbContext.Surcharges.IgnoreQueryFilters().FirstOrDefault(s => s.Value == 15.0m);
 
                     var partRide1 = new PartRide
                     {
@@ -710,7 +752,8 @@ namespace TruckManagement.Seeding
                 {
                     var seededUnit = dbContext.Units.IgnoreQueryFilters().FirstOrDefault(u => u.Value == "Hours");
                     var seededRate = dbContext.Rates.IgnoreQueryFilters().FirstOrDefault(r => r.Name == "PremiumRate");
-                    var seededSurcharge = dbContext.Surcharges.IgnoreQueryFilters().FirstOrDefault(s => s.Value == 25.0m);
+                    var seededSurcharge =
+                        dbContext.Surcharges.IgnoreQueryFilters().FirstOrDefault(s => s.Value == 25.0m);
 
                     var partRide2 = new PartRide
                     {
@@ -740,6 +783,35 @@ namespace TruckManagement.Seeding
                 }
             }
 
+            await dbContext.SaveChangesAsync();
+            // updated all drivers with DriverCompensationSettings
+            var existingDrivers = dbContext.Drivers.IgnoreQueryFilters().ToList();
+
+            foreach (var driver in existingDrivers)
+            {
+                var hasSettings = dbContext.DriverCompensationSettings.Any(s => s.DriverId == driver.Id);
+                if (!hasSettings)
+                {
+                    dbContext.DriverCompensationSettings.Add(new DriverCompensationSettings
+                    {
+                        DriverId = driver.Id,
+                        PercentageOfWork = 100,
+                        NightHoursAllowed = true,
+                        NightHours19Percent = false,
+                        DriverRatePerHour = 18.71m,
+                        NightAllowanceRate = 0.19m,
+                        KilometerAllowanceEnabled = true,
+                        KilometersOneWayValue = 25,
+                        KilometersMin = 10,
+                        KilometersMax = 35,
+                        KilometerAllowance = 0.23m,
+                        HourlyRate = 18.71m,
+                        Salary4Weeks = 2400.00m,
+                        WeeklySalary = 600.00m,
+                        DateOfEmployment = DateTime.UtcNow
+                    });
+                }
+            }
             await dbContext.SaveChangesAsync();
         }
     }
