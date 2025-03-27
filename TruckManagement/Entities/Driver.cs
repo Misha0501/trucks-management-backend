@@ -12,6 +12,6 @@ namespace TruckManagement.Entities
         public string AspNetUserId { get; set; } = default!;
         [ForeignKey(nameof(AspNetUserId))]
         public ApplicationUser User { get; set; } = default!;
-        public DriverCompensationSettings? DriverCompensationSettings { get; set; }
+        public DriverCompensationSettings DriverCompensationSettings { get; set; } = default!;
     }
 }

@@ -154,6 +154,7 @@ namespace TruckManagement.Data
 
             builder.Entity<DriverCompensationSettings>(entity =>
             {
+                entity.HasKey(x => x.DriverId); // Ensures one-to-one by using DriverId as PK
                 entity.Property(x => x.DriverRatePerHour).HasColumnType("decimal(10,2)");
                 entity.Property(x => x.NightAllowanceRate).HasColumnType("decimal(5,4)");
                 entity.Property(x => x.KilometerAllowance).HasColumnType("decimal(5,3)");
