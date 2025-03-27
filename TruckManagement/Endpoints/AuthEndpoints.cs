@@ -17,7 +17,8 @@ public static class AuthEndpoints
             RegisterRequest req,
             UserManager<ApplicationUser> userManager,
             RoleManager<ApplicationRole> roleManager,
-            ApplicationDbContext dbContext
+            ApplicationDbContext dbContext,
+            DriverCompensationService compensationService
         ) =>
         {
             // 1) Check password vs. confirmation
@@ -130,6 +131,9 @@ public static class AuthEndpoints
                     CompanyId = driverCompanyGuid
                 };
                 dbContext.Drivers.Add(driverEntity);
+                
+                // Create default DriverCompensationSettings for this driver
+                await compensationService.CreateDefaultDriverCompensationSettingsAsync(driverEntity);
             }
 
             // 7) If user is contact person => multiple companies + multiple clients

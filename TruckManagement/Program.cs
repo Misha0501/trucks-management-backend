@@ -33,6 +33,7 @@ builder.Services.AddCors(options =>
             .AllowAnyHeader();
     });
 });
+builder.Services.AddScoped<DriverCompensationService>();
 
 var app = builder.Build();
 
