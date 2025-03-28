@@ -224,7 +224,6 @@ public static class UserEndpoints
                             settings.KilometersMin,
                             settings.KilometersMax,
                             settings.KilometerAllowance,
-                            settings.HourlyRate,
                             settings.Salary4Weeks,
                             settings.WeeklySalary,
                             DateOfEmployment = settings.DateOfEmployment.ToString("yyyy-MM-dd")
@@ -334,7 +333,6 @@ public static class UserEndpoints
                     settings.KilometersMin = request.KilometersMin;
                     settings.KilometersMax = request.KilometersMax;
                     settings.KilometerAllowance = request.KilometerAllowance;
-                    settings.HourlyRate = request.HourlyRate;
                     settings.Salary4Weeks = request.Salary4Weeks;
                     settings.WeeklySalary = request.WeeklySalary;
                     settings.DateOfEmployment = DateTime.SpecifyKind(request.DateOfEmployment, DateTimeKind.Utc);

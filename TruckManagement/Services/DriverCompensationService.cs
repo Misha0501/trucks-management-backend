@@ -28,7 +28,6 @@ namespace TruckManagement.Services
                 KilometersMin = 10,
                 KilometersMax = 35,
                 KilometerAllowance = 0.23m,
-                HourlyRate = 18.71m,
                 Salary4Weeks = 2400m,
                 WeeklySalary = 600m,
                 DateOfEmployment = DateTime.UtcNow

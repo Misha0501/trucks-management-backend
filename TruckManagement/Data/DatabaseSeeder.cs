@@ -606,7 +606,6 @@ namespace TruckManagement.Seeding
                     KilometersMin = 10,
                     KilometersMax = 35,
                     KilometerAllowance = 0.23m,
-                    HourlyRate = 18.71m,
                     Salary4Weeks = 2000m,
                     WeeklySalary = 500m,
                     DateOfEmployment = new DateTime(2023, 1, 1, 0, 0, 0, DateTimeKind.Utc)
@@ -805,7 +804,6 @@ namespace TruckManagement.Seeding
                         KilometersMin = 10,
                         KilometersMax = 35,
                         KilometerAllowance = 0.23m,
-                        HourlyRate = 18.71m,
                         Salary4Weeks = 2400.00m,
                         WeeklySalary = 600.00m,
                         DateOfEmployment = DateTime.UtcNow
