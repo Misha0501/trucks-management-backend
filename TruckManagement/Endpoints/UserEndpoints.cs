@@ -123,6 +123,236 @@ public static class UserEndpoints
             })
             .RequireAuthorization();
 
+        app.MapGet("/users/{aspUserId}/driver/compensations",
+            [Authorize] async (
+                string aspUserId,
+                UserManager<ApplicationUser> userManager,
+                ClaimsPrincipal currentUser,
+                ApplicationDbContext dbContext
+            ) =>
+            {
+                try
+                {
+                    // 1) Validate aspUserId
+                    if (string.IsNullOrWhiteSpace(aspUserId))
+                    {
+                        return ApiResponseFactory.Error(
+                            "Invalid ASP user ID format.",
+                            StatusCodes.Status400BadRequest
+                        );
+                    }
+
+                    // 2) Ensure user is authenticated
+                    var currentUserId = userManager.GetUserId(currentUser);
+                    if (string.IsNullOrEmpty(currentUserId))
+                    {
+                        return ApiResponseFactory.Error(
+                            "User not authenticated.",
+                            StatusCodes.Status401Unauthorized
+                        );
+                    }
+
+                    // 3) Retrieve user roles & check if globalAdmin
+                    var currentUserObject = await userManager.GetUserAsync(currentUser);
+                    var userRoles = await userManager.GetRolesAsync(currentUserObject);
+                    bool isGlobalAdmin = userRoles.Contains("globalAdmin");
+
+                    // 4) Load the driver with compensation by aspUserId
+                    var driverEntity = await dbContext.Drivers
+                        .Include(d => d.Company)
+                        .Include(d => d.DriverCompensationSettings)
+                        .FirstOrDefaultAsync(d => d.AspNetUserId == aspUserId);
+
+                    if (driverEntity == null)
+                    {
+                        return ApiResponseFactory.Error(
+                            "Driver not found for the given ASP user ID.",
+                            StatusCodes.Status404NotFound
+                        );
+                    }
+
+                    // 5) If not globalAdmin, ensure user is in the same company
+                    if (!isGlobalAdmin)
+                    {
+                        if (!driverEntity.CompanyId.HasValue)
+                        {
+                            return ApiResponseFactory.Error(
+                                "Driver has no associated company, access denied.",
+                                StatusCodes.Status403Forbidden
+                            );
+                        }
+
+                        bool belongsToSameCompany = await UserCompanyHelper.CheckUserBelongsToCompanyAsync(
+                            currentUserId,
+                            driverEntity.CompanyId.Value,
+                            dbContext
+                        );
+
+                        if (!belongsToSameCompany)
+                        {
+                            return ApiResponseFactory.Error(
+                                "You are not authorized to view this driver's compensation settings.",
+                                StatusCodes.Status403Forbidden
+                            );
+                        }
+                    }
+
+                    // 6) Return the compensation data
+                    var settings = driverEntity.DriverCompensationSettings;
+                    if (settings == null)
+                    {
+                        return ApiResponseFactory.Error(
+                            "No compensation settings found for this driver.",
+                            StatusCodes.Status404NotFound
+                        );
+                    }
+
+                    var responseData = new
+                    {
+                        driverEntity.Id,
+                        driverEntity.AspNetUserId,
+                        driverEntity.CompanyId,
+                        CompensationSettings = new
+                        {
+                            settings.PercentageOfWork,
+                            settings.NightHoursAllowed,
+                            settings.NightHours19Percent,
+                            settings.DriverRatePerHour,
+                            settings.NightAllowanceRate,
+                            settings.KilometerAllowanceEnabled,
+                            settings.KilometersOneWayValue,
+                            settings.KilometersMin,
+                            settings.KilometersMax,
+                            settings.KilometerAllowance,
+                            settings.HourlyRate,
+                            settings.Salary4Weeks,
+                            settings.WeeklySalary,
+                            DateOfEmployment = settings.DateOfEmployment.ToString("yyyy-MM-dd")
+                        }
+                    };
+
+                    return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Error fetching driver compensation: {ex.Message}");
+                    return ApiResponseFactory.Error(
+                        "An unexpected error occurred while fetching driver compensation.",
+                        StatusCodes.Status500InternalServerError
+                    );
+                }
+            }
+        );
+
+        app.MapPut("/users/{aspUserId}/driver/compensations",
+            [Authorize(Roles = "globalAdmin, customerAdmin")]
+            async (
+                string aspUserId,
+                [FromBody] DriverCompensationSettings request,
+                UserManager<ApplicationUser> userManager,
+                ClaimsPrincipal currentUser,
+                ApplicationDbContext dbContext
+            ) =>
+            {
+                try
+                {
+                    // Validate user
+                    if (string.IsNullOrWhiteSpace(aspUserId))
+                    {
+                        return ApiResponseFactory.Error("Invalid ASP user ID.", StatusCodes.Status400BadRequest);
+                    }
+
+                    var currentUserId = userManager.GetUserId(currentUser);
+                    if (string.IsNullOrEmpty(currentUserId))
+                    {
+                        return ApiResponseFactory.Error("User not authenticated.", StatusCodes.Status401Unauthorized);
+                    }
+
+                    // Get roles
+                    var user = await userManager.GetUserAsync(currentUser);
+                    var userRoles = await userManager.GetRolesAsync(user);
+                    var isGlobalAdmin = userRoles.Contains("globalAdmin");
+
+                    // Find driver
+                    var driver = await dbContext.Drivers
+                        .Include(d => d.Company)
+                        .Include(d => d.DriverCompensationSettings)
+                        .FirstOrDefaultAsync(d => d.AspNetUserId == aspUserId);
+
+                    if (driver == null)
+                    {
+                        return ApiResponseFactory.Error("Driver not found.", StatusCodes.Status404NotFound);
+                    }
+
+                    // If not global admin, validate company access
+                    if (!isGlobalAdmin)
+                    {
+                        if (!driver.CompanyId.HasValue)
+                        {
+                            return ApiResponseFactory.Error(
+                                "Driver has no associated company.",
+                                StatusCodes.Status403Forbidden
+                            );
+                        }
+
+                        var hasAccess = await UserCompanyHelper.CheckUserBelongsToCompanyAsync(
+                            currentUserId,
+                            driver.CompanyId.Value,
+                            dbContext
+                        );
+
+                        if (!hasAccess)
+                        {
+                            return ApiResponseFactory.Error(
+                                "You are not authorized to update this driver's compensation.",
+                                StatusCodes.Status403Forbidden
+                            );
+                        }
+                    }
+
+                    // Update or create the settings
+                    var settings = driver.DriverCompensationSettings;
+                    if (settings == null)
+                    {
+                        settings = new DriverCompensationSettings
+                        {
+                            Id = Guid.NewGuid(),
+                            DriverId = driver.Id,
+                            DateOfEmployment = request.DateOfEmployment
+                        };
+                        dbContext.DriverCompensationSettings.Add(settings);
+                    }
+
+                    // Update fields
+                    settings.PercentageOfWork = request.PercentageOfWork;
+                    settings.NightHoursAllowed = request.NightHoursAllowed;
+                    settings.NightHours19Percent = request.NightHours19Percent;
+                    settings.DriverRatePerHour = request.DriverRatePerHour;
+                    settings.NightAllowanceRate = request.NightAllowanceRate;
+                    settings.KilometerAllowanceEnabled = request.KilometerAllowanceEnabled;
+                    settings.KilometersOneWayValue = request.KilometersOneWayValue;
+                    settings.KilometersMin = request.KilometersMin;
+                    settings.KilometersMax = request.KilometersMax;
+                    settings.KilometerAllowance = request.KilometerAllowance;
+                    settings.HourlyRate = request.HourlyRate;
+                    settings.Salary4Weeks = request.Salary4Weeks;
+                    settings.WeeklySalary = request.WeeklySalary;
+                    settings.DateOfEmployment = DateTime.SpecifyKind(request.DateOfEmployment, DateTimeKind.Utc);
+
+                    await dbContext.SaveChangesAsync();
+
+                    return ApiResponseFactory.Success("Driver compensation settings updated.", StatusCodes.Status200OK);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Error updating driver compensation: {ex.Message}");
+                    return ApiResponseFactory.Error(
+                        "An unexpected error occurred while updating driver compensation.",
+                        StatusCodes.Status500InternalServerError
+                    );
+                }
+            }
+        );
 
         app.MapPost("/users/change-password", async (
                 ChangePasswordRequest req,
@@ -1427,8 +1657,6 @@ public static class UserEndpoints
                     );
                 }
             });
-
-
         return app;
     }
 }
