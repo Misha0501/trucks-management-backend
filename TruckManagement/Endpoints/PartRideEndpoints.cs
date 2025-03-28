@@ -502,7 +502,7 @@ public static class PartRideEndpoints
                     if (!crossesMidnight)
                     {
                         // 13a) If NOT crossing midnight, just recalc & save
-                        RecalculatePartRideValues(existingPartRide);
+                        await RecalculatePartRideValues(db, existingPartRide);
                         await db.SaveChangesAsync();
 
                         // Return single updated PartRide
@@ -514,7 +514,7 @@ public static class PartRideEndpoints
                         // 13b) SHIFT CROSSES MIDNIGHT
                         // Keep existing from Start -> 24:00
                         existingPartRide.End = TimeSpan.FromHours(24);
-                        RecalculatePartRideValues(existingPartRide);
+                        await RecalculatePartRideValues(db, existingPartRide);
 
                         // Create NEW PartRide for [00:00 -> new End], date is +1 day
                         var newPartRide = new PartRide
@@ -547,7 +547,7 @@ public static class PartRideEndpoints
                         };
 
                         // Recalculate new PartRide
-                        RecalculatePartRideValues(newPartRide);
+                        await RecalculatePartRideValues(db, newPartRide);
 
                         // Add and save both
                         await db.PartRides.AddAsync(newPartRide);
@@ -1906,8 +1906,25 @@ public static class PartRideEndpoints
         return query;
     }
 
-    private static void RecalculatePartRideValues(PartRide partRide)
-    {
+    private static async Task RecalculatePartRideValues(
+        ApplicationDbContext db,
+        PartRide partRide
+    ){
+        // Make sure there's a valid DriverId
+        if (!partRide.DriverId.HasValue)
+        {
+            throw new InvalidOperationException("Cannot recalculate compensation: PartRide has no DriverId.");
+        }
+
+        // Load the compensation settings for the driver
+        var compensation = await db.DriverCompensationSettings
+            .FirstOrDefaultAsync(dcs => dcs.DriverId == partRide.DriverId.Value);
+
+        if (compensation == null)
+        {
+            throw new InvalidOperationException("No DriverCompensationSettings found for this driver.");
+        }
+        
         // Recompute time calculations based on updated Start/End/Rest
         double startTimeDecimal = partRide.Start.TotalHours;
         double endTimeDecimal = partRide.End.TotalHours;
@@ -1932,14 +1949,14 @@ public static class PartRideEndpoints
         double calculatedSickHours = WorkHoursCalculator.CalculateSickHours(
             hourCode: "",
             holidayName: "",
-            weeklyPercentage: 100.0,
+            weeklyPercentage: compensation.PercentageOfWork,
             startTime: startTimeDecimal,
             endTime: endTimeDecimal
         );
 
         double calculatedHolidayHours = WorkHoursCalculator.CalculateHolidayHours(
             hourCode: "",
-            weeklyPercentage: 100.0,
+            weeklyPercentage: compensation.PercentageOfWork,
             startTime: startTimeDecimal,
             endTime: endTimeDecimal
         );
@@ -1948,13 +1965,13 @@ public static class PartRideEndpoints
             inputDate: partRide.Date,
             startTime: startTimeDecimal,
             endTime: endTimeDecimal,
-            nightHoursAllowed: true,
-            nightHours19Percent: false,
+            nightHoursAllowed: compensation.NightHoursAllowed,
+            nightHours19Percent: compensation.NightHours19Percent,
             nightHoursInEuros: true,
             someMonthDate: DateTime.UtcNow,
-            driverRateOne: 18.71,
-            driverRateTwo: 18.71,
-            nightAllowanceRate: 0.19,
+            driverRateOne: (double)compensation.DriverRatePerHour,
+            driverRateTwo: (double)compensation.DriverRatePerHour,
+            nightAllowanceRate: (double)compensation.NightAllowanceRate,
             nightHoursWholeHours: false
         );
 
@@ -1976,10 +1993,10 @@ public static class PartRideEndpoints
         );
 
         double homeWorkDistance = KilometersAllowance.HomeWorkDistance(
-            kilometerAllowanceEnabled: true,
-            oneWayValue: 25,
-            minThreshold: 10,
-            maxThreshold: 35
+            kilometerAllowanceEnabled: compensation.KilometerAllowanceEnabled,
+            oneWayValue: (double)compensation.KilometersOneWayValue,
+            minThreshold: (double)compensation.KilometersMin,
+            maxThreshold: (double)compensation.KilometersMax
         );
         TimeSpan restTimeSpan = TimeSpan.FromHours(totalBreak);
 
@@ -1993,7 +2010,7 @@ public static class PartRideEndpoints
 
         double kilometersAllowance = KilometersAllowance.CalculateKilometersAllowance(
             extraKilometers: partRide.Kilometers ?? 0,
-            kilometerRate: 0.23,
+            kilometerRate: (double)compensation.KilometerAllowance,
             hourCode: "Eendaagserit",
             hourOption: "1",
             totalHours: totalHours,

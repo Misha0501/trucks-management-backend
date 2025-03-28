@@ -51,7 +51,7 @@ public class KilometersAllowance
     )
     {
         // 1) Base part: Q6 * P3
-        double result = extraKilometers * kilometerRate;
+        double result = Math.Round(extraKilometers * kilometerRate, 2);
 
         // 2) Now the big IF from Excel:
         //    If hourCode is in {3, "vak", "zie", "tvt", 0} or hourOption in {"X", "GW"}, add nothing.
@@ -92,7 +92,7 @@ public class KilometersAllowance
             result += secondTerm;
         }
 
-        return result;
+        return Math.Round(result, 2);
     }
 
     // ---------- Helper Methods ----------
