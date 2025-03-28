@@ -1026,7 +1026,6 @@ public static class PartRideEndpoints
                                 }
                                 : null
                         }).OrderByDescending(a => a.UpdatedAt)
-
                     };
 
                     return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
@@ -1975,7 +1974,7 @@ public static class PartRideEndpoints
             breakDuration: totalBreak,
             manualAdjustment: 0
         );
-        
+
         double homeWorkDistance = KilometersAllowance.HomeWorkDistance(
             kilometerAllowanceEnabled: true,
             oneWayValue: 25,
@@ -2000,7 +1999,7 @@ public static class PartRideEndpoints
             totalHours: totalHours,
             homeWorkDistance: homeWorkDistance
         );
-        
+
         partRide.Rest = restTimeSpan;
         partRide.DecimalHours = totalHoursCalculated;
         partRide.TaxFreeCompensation = untaxedAllowanceSingleDay;
@@ -2312,16 +2311,22 @@ public static class PartRideEndpoints
         double startTimeDecimal = segmentStart.TotalHours;
         double endTimeDecimal = segmentEnd.TotalHours;
 
-        // 2) Compute base shift length ignoring "Rest" from the request
-        double rawTime = (endTimeDecimal - startTimeDecimal);
         // If you allow crossing midnight in these segments, rawTime could be negative. 
         // Typically you'd handle that outside or split into two segments.
 
         // 3) Some basic calculations from your request:
         //    (If you prefer reading from request directly, feel free.)
 
-        double weeklyPercentage = 100.0; // e.g. user is full-time
         bool isHoliday = false; // or check your own holiday logic
+        // Fetch DriverCompensationSettings
+        var driverId = TryParseGuid(request.DriverId);
+        var compensation = await db.DriverCompensationSettings
+            .FirstOrDefaultAsync(c => c.DriverId == driverId);
+
+        if (compensation == null)
+        {
+            throw new InvalidOperationException("DriverCompensationSettings not found for the specified driver.");
+        }
 
         // 4) RUN THE CALCULATIONS:
 
@@ -2345,13 +2350,13 @@ public static class PartRideEndpoints
         double sickHours = WorkHoursCalculator.CalculateSickHours(
             hourCode: "", // Replace with real hour code from request
             holidayName: "", // Or request.HolidayName if you have it
-            weeklyPercentage: weeklyPercentage,
+            weeklyPercentage: compensation.PercentageOfWork,
             startTime: startTimeDecimal,
             endTime: endTimeDecimal
         );
         double holidayHours = WorkHoursCalculator.CalculateHolidayHours(
             hourCode: "", // Replace with real hour code from request
-            weeklyPercentage: weeklyPercentage,
+            weeklyPercentage: compensation.PercentageOfWork,
             startTime: startTimeDecimal,
             endTime: endTimeDecimal
         );
@@ -2361,13 +2366,13 @@ public static class PartRideEndpoints
             inputDate: segmentDate,
             startTime: startTimeDecimal,
             endTime: endTimeDecimal,
-            nightHoursAllowed: true,
-            nightHours19Percent: false,
+            nightHoursAllowed: compensation.NightHoursAllowed,
+            nightHours19Percent: compensation.NightHours19Percent,
             nightHoursInEuros: true,
             someMonthDate: DateTime.UtcNow,
-            driverRateOne: 18.71,
-            driverRateTwo: 18.71,
-            nightAllowanceRate: 0.19,
+            driverRateOne: (double)compensation.DriverRatePerHour,
+            driverRateTwo: (double)compensation.DriverRatePerHour,
+            nightAllowanceRate: (double)compensation.NightAllowanceRate,
             nightHoursWholeHours: false
         );
 
@@ -2393,15 +2398,15 @@ public static class PartRideEndpoints
         );
 
         double homeWorkDistance = KilometersAllowance.HomeWorkDistance(
-            kilometerAllowanceEnabled: true,
-            oneWayValue: 25,
-            minThreshold: 10,
-            maxThreshold: 35
+            kilometerAllowanceEnabled: compensation.KilometerAllowanceEnabled,
+            oneWayValue: compensation.KilometersOneWayValue,
+            minThreshold: compensation.KilometersMin,
+            maxThreshold: compensation.KilometersMax
         );
 
         double kilometersAllowance = KilometersAllowance.CalculateKilometersAllowance(
             extraKilometers: request.Kilometers,
-            kilometerRate: 0.23,
+            kilometerRate: (double)compensation.KilometerAllowance,
             hourCode: "Eendaagserit",
             hourOption: "1",
             totalHours: totalHours,
@@ -2435,7 +2440,7 @@ public static class PartRideEndpoints
             CharterId = TryParseGuid(request.CharterId),
             RideId = TryParseGuid(request.RideId),
 
-            DecimalHours = totalHours,  
+            DecimalHours = totalHours,
             CorrectionTotalHours = correctionHours,
             TaxFreeCompensation = untaxedAllowanceSingleDay,
             NightAllowance = nightAllowance,
@@ -2446,8 +2451,8 @@ public static class PartRideEndpoints
             SundayHolidayHours = holidayHours,
             NumberOfHours = totalHours,
             VariousCompensation = request.VariousCompensation ?? 0,
-            HoursOptionId       = TryParseGuid(request.HoursOptionId),
-            HoursCodeId         = TryParseGuid(request.HoursCodeId)
+            HoursOptionId = TryParseGuid(request.HoursOptionId),
+            HoursCodeId = TryParseGuid(request.HoursCodeId)
         };
 
         // Save
