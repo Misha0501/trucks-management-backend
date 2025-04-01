@@ -2000,12 +2000,11 @@ public static class PartRideEndpoints
         );
         TimeSpan restTimeSpan = TimeSpan.FromHours(totalBreak);
 
-        double manualAdjustment = partRide.CorrectionTotalHours; // or request.ManualAdjustment if you have that
         double totalHours = WorkHoursCalculator.CalculateTotalHours(
             shiftStart: startTimeDecimal,
             shiftEnd: endTimeDecimal,
             breakDuration: totalBreak,
-            manualAdjustment: manualAdjustment
+            manualAdjustment: partRide.CorrectionTotalHours
         );
 
         double kilometersAllowance = KilometersAllowance.CalculateKilometersAllowance(
