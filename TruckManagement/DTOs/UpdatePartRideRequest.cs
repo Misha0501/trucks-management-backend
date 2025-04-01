@@ -13,10 +13,7 @@ namespace TruckManagement
         public decimal? Costs { get; set; }
         public string? ClientId { get; set; }
         public int? WeekNumber { get; set; }
-        public string? UnitId { get; set; }
-        public string? RateId { get; set; }
         public string? CostsDescription { get; set; }
-        public string? SurchargeId { get; set; }
         public decimal? Turnover { get; set; }
         public string? Remark { get; set; }
         public string? CharterId { get; set; }

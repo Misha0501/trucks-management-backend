@@ -293,10 +293,7 @@ public static class PartRideEndpoints
                     Guid? newRideId = TryParseGuid(request.RideId);
                     Guid? newCarId = TryParseGuid(request.CarId);
                     Guid? newDriverId = TryParseGuid(request.DriverId);
-                    Guid? newRateId = TryParseGuid(request.RateId);
-                    Guid? newSurchargeId = TryParseGuid(request.SurchargeId);
                     Guid? newCharterId = TryParseGuid(request.CharterId);
-                    Guid? newUnitId = TryParseGuid(request.UnitId);
                     Guid? newClientId = TryParseGuid(request.ClientId);
                     Guid? newHoursCodeId = TryParseGuid(request.HoursCodeId);
                     Guid? newHoursOptionId = TryParseGuid(request.HoursOptionId);
@@ -377,50 +374,6 @@ public static class PartRideEndpoints
                         }
                     }
 
-                    // Validate Rate
-                    if (newRateId.HasValue)
-                    {
-                        var rateEntity = await db.Rates
-                            .FirstOrDefaultAsync(r => r.Id == newRateId.Value);
-                        if (rateEntity == null)
-                        {
-                            return ApiResponseFactory.Error(
-                                "The specified rate does not exist.",
-                                StatusCodes.Status400BadRequest
-                            );
-                        }
-
-                        if (rateEntity.CompanyId != currentCompanyId)
-                        {
-                            return ApiResponseFactory.Error(
-                                "Rate's company does not match the provided companyId.",
-                                StatusCodes.Status400BadRequest
-                            );
-                        }
-                    }
-
-                    // Validate Surcharge
-                    if (newSurchargeId.HasValue)
-                    {
-                        var surchargeEntity = await db.Surcharges
-                            .FirstOrDefaultAsync(s => s.Id == newSurchargeId.Value);
-                        if (surchargeEntity == null)
-                        {
-                            return ApiResponseFactory.Error(
-                                "The specified surcharge does not exist.",
-                                StatusCodes.Status400BadRequest
-                            );
-                        }
-
-                        if (surchargeEntity.CompanyId != currentCompanyId)
-                        {
-                            return ApiResponseFactory.Error(
-                                "Surcharge's company does not match the provided companyId.",
-                                StatusCodes.Status400BadRequest
-                            );
-                        }
-                    }
-
                     // Validate Charter
                     if (newCharterId.HasValue)
                     {
@@ -478,11 +431,8 @@ public static class PartRideEndpoints
                     existingPartRide.RideId = newRideId;
                     existingPartRide.CarId = newCarId;
                     existingPartRide.DriverId = newDriverId;
-                    existingPartRide.RateId = newRateId;
-                    existingPartRide.SurchargeId = newSurchargeId;
                     existingPartRide.CharterId = newCharterId;
                     existingPartRide.ClientId = newClientId;
-                    existingPartRide.UnitId = newUnitId;
                     existingPartRide.HoursCodeId = newHoursCodeId;
                     existingPartRide.HoursOptionId = newHoursOptionId;
                     existingPartRide.CorrectionTotalHours = request.HoursCorrection ?? 0;
@@ -524,11 +474,8 @@ public static class PartRideEndpoints
                             DriverId = existingPartRide.DriverId,
                             CarId = existingPartRide.CarId,
                             RideId = existingPartRide.RideId,
-                            RateId = existingPartRide.RateId,
-                            SurchargeId = existingPartRide.SurchargeId,
                             CharterId = existingPartRide.CharterId,
                             ClientId = existingPartRide.ClientId,
-                            UnitId = existingPartRide.UnitId,
 
                             // date is next day
                             Date = existingPartRide.Date.AddDays(1),
@@ -814,10 +761,7 @@ public static class PartRideEndpoints
                         .Include(pr => pr.Client)
                         .Include(pr => pr.Client)
                         .Include(pr => pr.Car)
-                        .Include(pr => pr.Rate)
-                        .Include(pr => pr.Surcharge)
                         .Include(pr => pr.Charter)
-                        .Include(pr => pr.Unit)
                         .Include(pr => pr.Ride)
                         .Include(pr => pr.HoursOption)
                         .Include(pr => pr.HoursCode)
@@ -939,32 +883,11 @@ public static class PartRideEndpoints
                                 partRide.Car.LicensePlate
                             }
                             : null,
-                        Rate = partRide.Rate != null
-                            ? new
-                            {
-                                partRide.Rate.Id,
-                                partRide.Rate.Name
-                            }
-                            : null,
-                        Surcharge = partRide.Surcharge != null
-                            ? new
-                            {
-                                partRide.Surcharge.Id,
-                                partRide.Surcharge.Value
-                            }
-                            : null,
                         Charter = partRide.Charter != null
                             ? new
                             {
                                 partRide.Charter.Id,
                                 partRide.Charter.Name
-                            }
-                            : null,
-                        Unit = partRide.Unit != null
-                            ? new
-                            {
-                                partRide.Unit.Id,
-                                partRide.Unit.Value
                             }
                             : null,
                         Ride = partRide.Ride != null
@@ -2081,11 +2004,8 @@ public static class PartRideEndpoints
         Guid? rideGuid = TryParseGuid(request.RideId);
         Guid? carGuid = TryParseGuid(request.CarId);
         Guid? driverGuid = TryParseGuid(request.DriverId);
-        Guid? rateGuid = TryParseGuid(request.RateId);
-        Guid? surchargeGuid = TryParseGuid(request.SurchargeId);
         Guid? charterGuid = TryParseGuid(request.CharterId);
         Guid? clientGuid = TryParseGuid(request.ClientId);
-        Guid? unitGuid = TryParseGuid(request.UnitId);
 
         // If the user is a driver => ensure the driver matches the user & company
         if (isDriver)
@@ -2187,50 +2107,6 @@ public static class PartRideEndpoints
             {
                 return ApiResponseFactory.Error(
                     "Ride's company does not match the provided companyId.",
-                    StatusCodes.Status400BadRequest
-                );
-            }
-        }
-
-        if (rateGuid.HasValue)
-        {
-            var rateEntity = await db.Rates
-                .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(r => r.Id == rateGuid.Value);
-            if (rateEntity == null)
-            {
-                return ApiResponseFactory.Error(
-                    "The specified rate does not exist.",
-                    StatusCodes.Status400BadRequest
-                );
-            }
-
-            if (rateEntity.CompanyId != companyGuid)
-            {
-                return ApiResponseFactory.Error(
-                    "Rate's company does not match the provided companyId.",
-                    StatusCodes.Status400BadRequest
-                );
-            }
-        }
-
-        if (surchargeGuid.HasValue)
-        {
-            var surchargeEntity = await db.Surcharges
-                .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(s => s.Id == surchargeGuid.Value);
-            if (surchargeEntity == null)
-            {
-                return ApiResponseFactory.Error(
-                    "The specified surcharge does not exist.",
-                    StatusCodes.Status400BadRequest
-                );
-            }
-
-            if (surchargeEntity.CompanyId != companyGuid)
-            {
-                return ApiResponseFactory.Error(
-                    "Surcharge's company does not match the provided companyId.",
                     StatusCodes.Status400BadRequest
                 );
             }
@@ -2446,10 +2322,7 @@ public static class PartRideEndpoints
             Costs = request.Costs,
             ClientId = TryParseGuid(request.ClientId),
             WeekNumber = request.WeekNumber > 0 ? request.WeekNumber : GetIso8601WeekOfYear(segmentDate),
-            UnitId = TryParseGuid(request.UnitId),
-            RateId = TryParseGuid(request.RateId),
             CostsDescription = request.CostsDescription,
-            SurchargeId = TryParseGuid(request.SurchargeId),
             Turnover = request.Turnover,
             Remark = request.Remark,
             CompanyId = companyGuid,

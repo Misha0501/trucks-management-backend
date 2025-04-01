@@ -26,18 +26,7 @@ namespace TruckManagement.Entities
 
         public int? WeekNumber { get; set; }
         public double? DecimalHours { get; set; }
-
-        public Guid? UnitId { get; set; }
-        public Unit? Unit { get; set; } = default!;
-
-        public Guid? RateId { get; set; }
-        public Rate? Rate { get; set; } = default!;
-
         public string? CostsDescription { get; set; }
-
-        public Guid? SurchargeId { get; set; }
-        public Surcharge? Surcharge { get; set; } = default!;
-
         public decimal? Turnover { get; set; }
         public string? Remark { get; set; }
 
