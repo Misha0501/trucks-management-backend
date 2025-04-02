@@ -417,6 +417,32 @@ public static class PartRideEndpoints
                             );
                         }
                     }
+                    
+                    // Validate HoursCode
+                    if (newHoursCodeId.HasValue)
+                    {
+                        var hoursCodeEntity = await db.HoursCodes.FindAsync(newHoursCodeId.Value);
+                        if (hoursCodeEntity == null)
+                        {
+                            return ApiResponseFactory.Error(
+                                "The specified hours code does not exist.",
+                                StatusCodes.Status400BadRequest
+                            );
+                        }
+                    }
+
+                    // Validate HoursOption if provided
+                    if (newHoursOptionId.HasValue)
+                    {
+                        var hoursOptionEntity = await db.HoursOptions.FindAsync(newHoursOptionId.Value);
+                        if (hoursOptionEntity == null)
+                        {
+                            return ApiResponseFactory.Error(
+                                "The specified hours option does not exist.",
+                                StatusCodes.Status400BadRequest
+                            );
+                        }
+                    }
 
                     // Update base fields if provided
                     if (request.Date.HasValue) existingPartRide.Date = request.Date.Value;
@@ -1848,6 +1874,22 @@ public static class PartRideEndpoints
             throw new InvalidOperationException("No DriverCompensationSettings found for this driver.");
         }
         
+        // Load HoursCode with default fallback
+        Guid defaultHoursCodeId = Guid.Parse("AAAA1111-1111-1111-1111-111111111111");
+        var hoursCodeId = partRide.HoursCodeId ?? defaultHoursCodeId;
+        var hoursCode = await db.HoursCodes.FindAsync(hoursCodeId);
+        if (hoursCode == null)
+        {
+            throw new InvalidOperationException($"HoursCode not found for ID: {hoursCodeId}");
+        }
+        
+        // Load HoursOption if exists
+        HoursOption? hoursOption = null;
+        if (partRide.HoursOptionId.HasValue)
+        {
+            hoursOption = await db.HoursOptions.FindAsync(partRide.HoursOptionId.Value);
+        }
+        
         // Recompute time calculations based on updated Start/End/Rest
         double startTimeDecimal = partRide.Start.TotalHours;
         double endTimeDecimal = partRide.End.TotalHours;
@@ -1861,7 +1903,7 @@ public static class PartRideEndpoints
             );
 
         double untaxedAllowanceSingleDay = WorkHoursCalculator.CalculateUntaxedAllowanceSingleDay(
-            hourCode: "Eendaagserit",
+            hourCode: hoursCode.Name,
             startTime: startTimeDecimal,
             endTime: endTimeDecimal,
             untaxedAllowanceNormalDayPartial: untaxedAllowanceNormalDayPartial,
@@ -1869,7 +1911,7 @@ public static class PartRideEndpoints
         );
 
         double calculatedSickHours = WorkHoursCalculator.CalculateSickHours(
-            hourCode: "",
+            hourCode: hoursCode.Name,
             holidayName: "",
             weeklyPercentage: compensation.PercentageOfWork,
             startTime: startTimeDecimal,
@@ -1877,7 +1919,7 @@ public static class PartRideEndpoints
         );
 
         double calculatedHolidayHours = WorkHoursCalculator.CalculateHolidayHours(
-            hourCode: "",
+            hourCode: hoursCode.Name,
             weeklyPercentage: compensation.PercentageOfWork,
             startTime: startTimeDecimal,
             endTime: endTimeDecimal
@@ -1901,18 +1943,11 @@ public static class PartRideEndpoints
             breakScheduleOn: true,
             startTime: startTimeDecimal,
             endTime: endTimeDecimal,
-            hourCode: "",
+            hourCode: hoursCode.Name,
             sickHours: calculatedSickHours,
             holidayHours: calculatedHolidayHours
         );
-
-        double totalHoursCalculated = WorkHoursCalculator.CalculateTotalHours(
-            shiftStart: startTimeDecimal,
-            shiftEnd: endTimeDecimal,
-            breakDuration: totalBreak,
-            manualAdjustment: 0
-        );
-
+        
         double homeWorkDistance = KilometersAllowance.HomeWorkDistance(
             kilometerAllowanceEnabled: compensation.KilometerAllowanceEnabled,
             oneWayValue: (double)compensation.KilometersOneWayValue,
@@ -1931,14 +1966,14 @@ public static class PartRideEndpoints
         double kilometersAllowance = KilometersAllowance.CalculateKilometersAllowance(
             extraKilometers: partRide.Kilometers ?? 0,
             kilometerRate: (double)compensation.KilometerAllowance,
-            hourCode: "Eendaagserit",
-            hourOption: "1",
+            hourCode: hoursCode.Name,
+            hourOption: hoursOption?.Name,
             totalHours: totalHours,
             homeWorkDistance: homeWorkDistance
         );
 
         partRide.Rest = restTimeSpan;
-        partRide.DecimalHours = totalHoursCalculated;
+        partRide.DecimalHours = totalHours;
         partRide.TaxFreeCompensation = untaxedAllowanceSingleDay;
         partRide.NightAllowance = calculatedNightAllowance;
         partRide.StandOver = 0.0;
