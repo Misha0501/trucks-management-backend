@@ -9,7 +9,12 @@ public class WorkHoursCalculator
     static string TIME_FOR_TIME_CODE = "Time for time";
     static string HOLIDAY_CODE = "Holiday";
 
-        public static double CalculateTotalBreak(
+    // New static fields for departure day calculation
+    static string DEPARTURE_CODE = "Multi-day trip departure";
+    static double MULTI_DAY_ALLOWANCE_BEFORE_17H = 1.54;
+    static double MULTI_DAY_ALLOWANCE_AFTER_17H = 3.51;
+
+    public static double CalculateTotalBreak(
         bool breakScheduleOn,
         double startTime,
         double endTime,
@@ -56,12 +61,12 @@ public class WorkHoursCalculator
         else
             return 0.0;
     }
-    
+
     public static double CalculateHolidayHours(
-        string hourCode,        // The code in E6 (e.g. "1","2","vak","zie","C127", etc.)
-        double weeklyPercentage,// e.g., 100 for full-time, 50 for half-time, etc. (cell G2)
-        double startTime,       // The start time (was F6)
-        double endTime          // The end time (was G6)
+        string hourCode, // The code in E6 (e.g. "1","2","vak","zie","C127", etc.)
+        double weeklyPercentage, // e.g., 100 for full-time, 50 for half-time, etc. (cell G2)
+        double startTime, // The start time (was F6)
+        double endTime // The end time (was G6)
     )
     {
         // 1) Calculate the shift length, handling a possible midnight crossover:
@@ -133,11 +138,11 @@ public class WorkHoursCalculator
             return 0.0;
         }
     }
-    
+
     public static double CalculateUntaxedAllowanceNormalDayPartial(
-        double startOfShift,       // F6 in Excel
-        double endOfShift,         // G6 in Excel
-        bool isHoliday             // true if it's a holiday (AM has a holiday name)
+        double startOfShift, // F6 in Excel
+        double endOfShift, // G6 in Excel
+        bool isHoliday // true if it's a holiday (AM has a holiday name)
     )
     {
         // 1) If it's a holiday => no untaxed allowance
@@ -166,7 +171,7 @@ public class WorkHoursCalculator
             {
                 double hoursBefore18 = 18.0 - startOfShift;
                 double hoursAfter18 = endOfShift - 18.0;
-                totalAllowance = (hoursBefore18 * dayRateBefore18) 
+                totalAllowance = (hoursBefore18 * dayRateBefore18)
                                  + (hoursAfter18 * eveningRateAfter18);
             }
             else
@@ -178,79 +183,119 @@ public class WorkHoursCalculator
 
         return Math.Round(totalAllowance, 2);
     }
-    
+
     public static double CalculateUntaxedAllowanceSingleDay(
-    string hourCode,                        // E6, e.g. "1", "vak", "C123", etc.
-    double startTime,                       // F6
-    double endTime,                         // G6
-    double untaxedAllowanceNormalDayPartial,// AG6 result, i.e. same-day partial logic
-    double lumpSumIf12h                     // AC6, TDonbelast for 12+ hours (cross-midnight)
-)
-{
-    // 1) If the code is not "Eendaagserit", Excel returns "" => we do 0
-    if (hourCode != SINGLE_DAY_TRIP_CODE)
-        return 0.0;
-
-    // 2) If start+end = 0 => no times => 0
-    if ((startTime + endTime) == 0.0)
-        return 0.0;
-
-    // 3) Check if crossing midnight
-    if (endTime > startTime)
+        string hourCode, // E6, e.g. "1", "vak", "C123", etc.
+        double startTime, // F6
+        double endTime, // G6
+        double untaxedAllowanceNormalDayPartial, // AG6 result, i.e. same-day partial logic
+        double lumpSumIf12h // AC6, TDonbelast for 12+ hours (cross-midnight)
+    )
     {
-        // Same-day scenario => if shift < 4 => 0, else => use the partial normal-day result (AG6)
-        double shiftLength = endTime - startTime;
-        if (shiftLength < 4.0)
+        // 1) If the code is not "Eendaagserit", Excel returns "" => we do 0
+        if (hourCode != SINGLE_DAY_TRIP_CODE)
             return 0.0;
-        else
-            return untaxedAllowanceNormalDayPartial;
-    }
-    else
-    {
-        // 4) Cross-midnight scenario (endTime <= startTime)
-        //    - If F6 < 14 => ((18 - F6) + G6)*AB6 + (6 * AD6)
-        //    - Else check total shift (24 - F6 + G6).
-        double result = 0.0;
 
-        if (startTime < 14.0)
+        // 2) If start+end = 0 => no times => 0
+        if ((startTime + endTime) == 0.0)
+            return 0.0;
+
+        // 3) Check if crossing midnight
+        if (endTime > startTime)
         {
-            // ((18 - F6) + G6)*AB6 + (6*AD6)
-            double hoursBefore18PlusMorning = (18.0 - startTime) + endTime;
-            result = hoursBefore18PlusMorning * dayRateBefore18 
-                   + (6.0 * eveningRateAfter18);
+            // Same-day scenario => if shift < 4 => 0, else => use the partial normal-day result (AG6)
+            double shiftLength = endTime - startTime;
+            if (shiftLength < 4.0)
+                return 0.0;
+            else
+                return untaxedAllowanceNormalDayPartial;
         }
         else
         {
-            // F6 >= 14 => we do (24 - F6 + G6) => X
-            double totalShift = (24.0 - startTime) + endTime;
-            if (totalShift < 4.0)
+            // 4) Cross-midnight scenario (endTime <= startTime)
+            //    - If F6 < 14 => ((18 - F6) + G6)*AB6 + (6 * AD6)
+            //    - Else check total shift (24 - F6 + G6).
+            double result = 0.0;
+
+            if (startTime < 14.0)
             {
-                result = 0.0;
-            }
-            else if (totalShift < 12.0)
-            {
-                result = totalShift * dayRateBefore18;
+                // ((18 - F6) + G6)*AB6 + (6*AD6)
+                double hoursBefore18PlusMorning = (18.0 - startTime) + endTime;
+                result = hoursBefore18PlusMorning * dayRateBefore18
+                         + (6.0 * eveningRateAfter18);
             }
             else
             {
-                // totalShift >= 12 => add AC6 lumpsum
-                result = (totalShift * dayRateBefore18) + lumpSumIf12h;
+                // F6 >= 14 => we do (24 - F6 + G6) => X
+                double totalShift = (24.0 - startTime) + endTime;
+                if (totalShift < 4.0)
+                {
+                    result = 0.0;
+                }
+                else if (totalShift < 12.0)
+                {
+                    result = totalShift * dayRateBefore18;
+                }
+                else
+                {
+                    // totalShift >= 12 => add AC6 lumpsum
+                    result = (totalShift * dayRateBefore18) + lumpSumIf12h;
+                }
             }
-        }
 
-        return result;
+            return result;
+        }
     }
-}
-    
+
     public static double CalculateTotalHours(
-        double shiftStart,      // Was F7 in Excel
-        double shiftEnd,        // Was G7 in Excel
-        double breakDuration,   // Was H7 in Excel (the break)
+        double shiftStart, // Was F7 in Excel
+        double shiftEnd, // Was G7 in Excel
+        double breakDuration, // Was H7 in Excel (the break)
         double manualAdjustment // Was I7 in Excel
     )
     {
         double totalHours = (shiftEnd - shiftStart) - breakDuration + manualAdjustment;
 
         return Math.Round(totalHours, 2);
+    }
+
+    public static double CalculateUntaxedAllowanceDepartureDay(
+        string hourCode,
+        double departureStartTime)
+    {
+        // If code isn't "Multi-day trip departure", return 0
+        if (hourCode != DEPARTURE_CODE)
+            return 0.0;
+
+        // If invalid start time => 0
+        if (departureStartTime < 0.0 || departureStartTime >= 24.0)
+            return 0.0;
+
+        // AE6 => the “before” rate, AD6 => the “after” rate
+        // but from the formula, if start >= 17 => uses AE6 anyway
+
+        if (departureStartTime < 17.0)
+        {
+            // (17 - start)* AE6 + 7* AD6
+            double hoursUntil17 = 17.0 - departureStartTime;
+            return Math.Round(
+                (hoursUntil17 * MULTI_DAY_ALLOWANCE_BEFORE_17H)
+                + (7.0 * MULTI_DAY_ALLOWANCE_AFTER_17H),
+                2
+            );
+        }
+        else if (departureStartTime >= 17.0)
+        {
+            // (24 - start)* AE6
+            double remainingHours = 24.0 - departureStartTime;
+            return Math.Round(
+                remainingHours * MULTI_DAY_ALLOWANCE_BEFORE_17H, // "AE6" from formula
+                2
+            );
+        }
+        else
+        {
+            return 0.0;
+        }
     }
 }

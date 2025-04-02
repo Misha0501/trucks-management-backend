@@ -1971,10 +1971,17 @@ public static class PartRideEndpoints
             totalHours: totalHours,
             homeWorkDistance: homeWorkDistance
         );
+        
+        double untaxedAllowanceDepartureDay = WorkHoursCalculator.CalculateUntaxedAllowanceDepartureDay(
+            hourCode: hoursCode.Name,
+            departureStartTime: startTimeDecimal
+        );
+
+        double taxFreeCompensation = untaxedAllowanceSingleDay + untaxedAllowanceDepartureDay;
 
         partRide.Rest = restTimeSpan;
         partRide.DecimalHours = totalHours;
-        partRide.TaxFreeCompensation = untaxedAllowanceSingleDay;
+        partRide.TaxFreeCompensation = taxFreeCompensation;
         partRide.NightAllowance = calculatedNightAllowance;
         partRide.StandOver = 0.0;
         partRide.KilometerReimbursement = kilometersAllowance;
@@ -2356,6 +2363,13 @@ public static class PartRideEndpoints
             totalHours: totalHours,
             homeWorkDistance: homeWorkDistance
         );
+        
+        double untaxedAllowanceDepartureDay = WorkHoursCalculator.CalculateUntaxedAllowanceDepartureDay(
+            hourCode: hoursCode.Name,
+            departureStartTime: startTimeDecimal
+        );
+
+        double taxFreeCompensation = untaxedAllowanceSingleDay + untaxedAllowanceDepartureDay;
 
         // 4f) Decide how you combine partial vs single-day allowances:
         //     e.g., sum them or pick the larger. We'll just sum them here:
@@ -2383,7 +2397,7 @@ public static class PartRideEndpoints
 
             DecimalHours = totalHours,
             CorrectionTotalHours = correctionHours,
-            TaxFreeCompensation = untaxedAllowanceSingleDay,
+            TaxFreeCompensation = taxFreeCompensation,
             NightAllowance = nightAllowance,
             StandOver = 0.0,
             KilometerReimbursement = kilometersAllowance,
