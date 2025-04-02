@@ -45,7 +45,7 @@ public class KilometersAllowance
         double extraKilometers,
         double kilometerRate,
         string hourCode,
-        string hourOption,
+        string? hourOption,
         double totalHours,
         double homeWorkDistance
     )
@@ -78,7 +78,7 @@ public class KilometersAllowance
         if (totalHours > 0)
         {
             double secondTerm = 0.0;
-            if (IsInSet(hourCode, new[] { "2", "4" }))
+            if (IsInSet(hourCode, new[] { "Multi-day trip departure", "Multi-day trip arrival" }))
             {
                 // E6=2 or 4 => P2 * P3
                 secondTerm = homeWorkDistance * kilometerRate;
@@ -98,15 +98,15 @@ public class KilometersAllowance
     // ---------- Helper Methods ----------
 
     // Replicates: OR(E6=3; E6="vak"; E6="zie"; E6="tvt"; E6=0; J6="X"; J6="GW")
-    private static bool ShouldSkip(string code, string option)
+    private static bool ShouldSkip(string code, string? option)
     {
-        var skipCodes = new HashSet<string> { "3", "vak", "zie", "tvt", "0" };
-        var skipOptions = new HashSet<string> { "X", "GW" };
+        var skipCodes = new HashSet<string> { "Multi-day trip intermediate day", "Holiday", "Sick", "Time for time", "0" };
+        var skipOptions = new HashSet<string> { "StandOver", "NoCommutingAllowance" };
 
         if (skipCodes.Contains(code))
             return true;
 
-        if (skipOptions.Contains(option))
+        if (option != null && skipOptions.Contains(option))
             return true;
 
         return false;

@@ -4,13 +4,16 @@ public class WorkHoursCalculator
 {
     static double dayRateBefore18 = 0.77; // Example placeholders, replace with real config
     static double eveningRateAfter18 = 3.51;
-    
+    static string SINGLE_DAY_TRIP_CODE = "One day ride";
+    static string SICK_CODE = "Sick";
+    static string TIME_FOR_TIME_CODE = "Time for time";
+    static string HOLIDAY_CODE = "Holiday";
+
         public static double CalculateTotalBreak(
         bool breakScheduleOn,
         double startTime,
         double endTime,
         string hourCode,
-        string timeForTimeCode,
         double sickHours,
         double holidayHours
     )
@@ -24,7 +27,7 @@ public class WorkHoursCalculator
             return 0.0;
 
         // 3) If codeE6 == timeForTimeCode (e.g. "tvt") or (sick + holiday) > 0 => break is 0
-        if (hourCode == timeForTimeCode || (sickHours + holidayHours) > 0)
+        if (hourCode == TIME_FOR_TIME_CODE || (sickHours + holidayHours) > 0)
             return 0.0;
 
         // 4) Determine time difference across midnight if needed
@@ -61,8 +64,6 @@ public class WorkHoursCalculator
         double endTime          // The end time (was G6)
     )
     {
-        string HOLIDAY_CODE = "vak";
-        
         // 1) Calculate the shift length, handling a possible midnight crossover:
         double shiftHours;
         if (endTime < startTime)
@@ -97,7 +98,6 @@ public class WorkHoursCalculator
         double endTime // End time of the shift
     )
     {
-        string SICK_CODE = "zie";
         // 1) Compute the length of this shift in hours, handling midnight crossover:
         double shiftHours;
         if (endTime < startTime)
@@ -181,7 +181,6 @@ public class WorkHoursCalculator
     
     public static double CalculateUntaxedAllowanceSingleDay(
     string hourCode,                        // E6, e.g. "1", "vak", "C123", etc.
-    string singleDayTripCode,               // C123 ("Eendaagserit")
     double startTime,                       // F6
     double endTime,                         // G6
     double untaxedAllowanceNormalDayPartial,// AG6 result, i.e. same-day partial logic
@@ -189,7 +188,7 @@ public class WorkHoursCalculator
 )
 {
     // 1) If the code is not "Eendaagserit", Excel returns "" => we do 0
-    if (hourCode != singleDayTripCode)
+    if (hourCode != SINGLE_DAY_TRIP_CODE)
         return 0.0;
 
     // 2) If start+end = 0 => no times => 0

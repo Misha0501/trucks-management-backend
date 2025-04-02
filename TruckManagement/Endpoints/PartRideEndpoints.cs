@@ -1862,7 +1862,6 @@ public static class PartRideEndpoints
 
         double untaxedAllowanceSingleDay = WorkHoursCalculator.CalculateUntaxedAllowanceSingleDay(
             hourCode: "Eendaagserit",
-            singleDayTripCode: "Eendaagserit",
             startTime: startTimeDecimal,
             endTime: endTimeDecimal,
             untaxedAllowanceNormalDayPartial: untaxedAllowanceNormalDayPartial,
@@ -1903,7 +1902,6 @@ public static class PartRideEndpoints
             startTime: startTimeDecimal,
             endTime: endTimeDecimal,
             hourCode: "",
-            timeForTimeCode: "tvt",
             sickHours: calculatedSickHours,
             holidayHours: calculatedHolidayHours
         );
@@ -2199,6 +2197,27 @@ public static class PartRideEndpoints
         double correctionHours
     )
     {
+        Guid defaultHoursCodeId = Guid.Parse("AAAA1111-1111-1111-1111-111111111111"); // "One day ride"
+        
+        // Get HoursCode - use default if not specified
+        var hoursCodeId = TryParseGuid(request.HoursCodeId) ?? defaultHoursCodeId;
+        var hoursCode = await db.HoursCodes.FindAsync(hoursCodeId);
+        if (hoursCode == null)
+        {
+            throw new InvalidOperationException($"HoursCode not found for ID: {hoursCodeId}");
+        }
+        
+        // Get HoursOption - can be null
+        HoursOption? hoursOption = null;
+        if (TryParseGuid(request.HoursOptionId) is Guid hoursOptionId)
+        {
+            hoursOption = await db.HoursOptions.FindAsync(hoursOptionId);
+            if (hoursOption == null)
+            {
+                throw new InvalidOperationException($"HoursOption not found for ID: {hoursOptionId}");
+            }
+        }
+        
         // 1) Convert Start/End to decimal hours
         double startTimeDecimal = segmentStart.TotalHours;
         double endTimeDecimal = segmentEnd.TotalHours;
@@ -2230,24 +2249,23 @@ public static class PartRideEndpoints
         );
 
         double untaxedAllowanceSingleDay = WorkHoursCalculator.CalculateUntaxedAllowanceSingleDay(
-            hourCode: "Eendaagserit", // Example placeholders 
-            singleDayTripCode: "Eendaagserit", // Example 
+            hourCode: hoursCode.Name,
             startTime: startTimeDecimal,
             endTime: endTimeDecimal,
             untaxedAllowanceNormalDayPartial: untaxedAllowanceNormalDayPartial,
-            lumpSumIf12h: 14.63 // Example lumpsum
+            lumpSumIf12h: 14.63 
         );
 
         // 4b) Sick/Holiday hours
         double sickHours = WorkHoursCalculator.CalculateSickHours(
-            hourCode: "", // Replace with real hour code from request
+            hourCode: hoursCode.Name, // Replace with real hour code from request
             holidayName: "", // Or request.HolidayName if you have it
             weeklyPercentage: compensation.PercentageOfWork,
             startTime: startTimeDecimal,
             endTime: endTimeDecimal
         );
         double holidayHours = WorkHoursCalculator.CalculateHolidayHours(
-            hourCode: "", // Replace with real hour code from request
+            hourCode: hoursCode.Name,
             weeklyPercentage: compensation.PercentageOfWork,
             startTime: startTimeDecimal,
             endTime: endTimeDecimal
@@ -2273,8 +2291,7 @@ public static class PartRideEndpoints
             breakScheduleOn: true, // Always true
             startTime: startTimeDecimal,
             endTime: endTimeDecimal,
-            hourCode: "", // or request.HourCode if you have it
-            timeForTimeCode: "tvt", // Example 
+            hourCode: hoursCode.Name,
             sickHours: sickHours,
             holidayHours: holidayHours
         );
@@ -2299,8 +2316,8 @@ public static class PartRideEndpoints
         double kilometersAllowance = KilometersAllowance.CalculateKilometersAllowance(
             extraKilometers: request.Kilometers,
             kilometerRate: (double)compensation.KilometerAllowance,
-            hourCode: "Eendaagserit",
-            hourOption: "1",
+            hourCode: hoursCode.Name,
+            hourOption: hoursOption?.Name,
             totalHours: totalHours,
             homeWorkDistance: homeWorkDistance
         );
