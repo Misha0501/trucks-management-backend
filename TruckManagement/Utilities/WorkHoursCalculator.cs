@@ -11,8 +11,12 @@ public class WorkHoursCalculator
 
     // New static fields for departure day calculation
     static string DEPARTURE_CODE = "Multi-day trip departure";
+    static string ARRIVAL_CODE = "Multi-day trip arrival"; // new
     static double MULTI_DAY_ALLOWANCE_BEFORE_17H = 1.54;
     static double MULTI_DAY_ALLOWANCE_AFTER_17H = 3.51;
+    
+    static string INTERMEDIATE_DAY_CODE = "Multi-day trip intermediate day";
+    static double MULTI_DAY_ALLOWANCE_INTERMEDIATE = 60.60; // Example placeholder
 
     public static double CalculateTotalBreak(
         bool breakScheduleOn,
@@ -296,6 +300,58 @@ public class WorkHoursCalculator
         else
         {
             return 0.0;
+        }
+    }
+    public static double CalculateUntaxedAllowanceIntermediateDay(
+        string hoursCode // e.g. E6 in your Excel example
+    )
+    {
+        // If hourCode != "Multi-day trip intermediate day" => return 0
+        if (hoursCode != INTERMEDIATE_DAY_CODE)
+            return 0.0;
+
+        // Otherwise => return the intermediate-day allowance
+        return MULTI_DAY_ALLOWANCE_INTERMEDIATE;
+    }
+    
+    public static double CalculateUntaxedAllowanceArrivalDay(
+        string hourCode, // E6
+        double arrivalEndTime // G6
+    )
+    {
+        // If not "Multi-day trip arrival" => return 0
+        if (hourCode != ARRIVAL_CODE)
+            return 0.0;
+
+        // Validate input
+        if (arrivalEndTime < 0.0 || arrivalEndTime > 24.0)
+            return 0.0;
+
+        // 1) If G6 <= 12 => G6 * AE6
+        if (arrivalEndTime <= 12.0)
+        {
+            return Math.Round(arrivalEndTime * MULTI_DAY_ALLOWANCE_BEFORE_17H, 2);
+        }
+        // 2) Else if G6 < 18 => (6 * AD6) + ((G6 - 6) * AE6)
+        else if (arrivalEndTime < 18.0)
+        {
+            double hoursAfter6  = arrivalEndTime - 6.0;
+            return Math.Round(
+                (6.0 * MULTI_DAY_ALLOWANCE_AFTER_17H)
+                + (hoursAfter6 * MULTI_DAY_ALLOWANCE_BEFORE_17H),
+                2
+            );
+        }
+        // 3) Else if G6 >= 18 => ((G6 - 18)*AD6) + (12*AE6) + (6*AD6)
+        else
+        {
+            double hoursAfter18 = arrivalEndTime - 18.0;
+            return Math.Round(
+                (hoursAfter18 * MULTI_DAY_ALLOWANCE_AFTER_17H)
+                + (12.0 * MULTI_DAY_ALLOWANCE_BEFORE_17H)
+                + (6.0 * MULTI_DAY_ALLOWANCE_AFTER_17H),
+                2
+            );
         }
     }
 }

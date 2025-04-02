@@ -1976,8 +1976,17 @@ public static class PartRideEndpoints
             hourCode: hoursCode.Name,
             departureStartTime: startTimeDecimal
         );
+        
+        double untaxedAllowanceIntermediateDay = WorkHoursCalculator.CalculateUntaxedAllowanceIntermediateDay(
+            hoursCode: hoursCode.Name
+        );
+        
+        double untaxedAllowanceArrivalDay = WorkHoursCalculator.CalculateUntaxedAllowanceArrivalDay(
+            hourCode: hoursCode.Name,
+            arrivalEndTime: endTimeDecimal
+        );
 
-        double taxFreeCompensation = untaxedAllowanceSingleDay + untaxedAllowanceDepartureDay;
+        double taxFreeCompensation = untaxedAllowanceSingleDay + untaxedAllowanceDepartureDay + untaxedAllowanceIntermediateDay + untaxedAllowanceArrivalDay;
 
         partRide.Rest = restTimeSpan;
         partRide.DecimalHours = totalHours;
@@ -2368,8 +2377,17 @@ public static class PartRideEndpoints
             hourCode: hoursCode.Name,
             departureStartTime: startTimeDecimal
         );
+        
+        double untaxedAllowanceIntermediateDay = WorkHoursCalculator.CalculateUntaxedAllowanceIntermediateDay(
+            hoursCode: hoursCode.Name
+        );
 
-        double taxFreeCompensation = untaxedAllowanceSingleDay + untaxedAllowanceDepartureDay;
+        double untaxedAllowanceArrivalDay = WorkHoursCalculator.CalculateUntaxedAllowanceArrivalDay(
+            hourCode: hoursCode.Name,
+            arrivalEndTime: endTimeDecimal
+        );
+
+        double taxFreeCompensation = untaxedAllowanceSingleDay + untaxedAllowanceDepartureDay + untaxedAllowanceIntermediateDay + untaxedAllowanceArrivalDay;
 
         // 4f) Decide how you combine partial vs single-day allowances:
         //     e.g., sum them or pick the larger. We'll just sum them here:
