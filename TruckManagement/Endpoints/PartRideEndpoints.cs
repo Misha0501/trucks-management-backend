@@ -1997,7 +1997,7 @@ public static class PartRideEndpoints
             endTime: endTimeDecimal
         );
         
-        string holidayName = "";
+        string holidayName = WorkHoursCalculator.GetHolidayName(date: partRide.Date);
 
         double saturdayHours = WorkHoursCalculator.CalculateSaturdayHours(
             date: partRide.Date,
@@ -2415,7 +2415,7 @@ public static class PartRideEndpoints
             endTime: endTimeDecimal
         );
 
-        string holidayName = "";
+        string holidayName = WorkHoursCalculator.GetHolidayName(date: request.Date);
 
         double saturdayHours = WorkHoursCalculator.CalculateSaturdayHours(
             date: request.Date,

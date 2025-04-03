@@ -3,9 +3,10 @@ namespace TruckManagement;
 public class ConsignmentRate
 {
     public DateTime Date { get; set; }
-    public double Taxed { get; set; }    // 2nd column in Tabel1
-    public double Untaxed { get; set; }  // 3rd column in Tabel1
+    public double Taxed { get; set; } // 2nd column in Tabel1
+    public double Untaxed { get; set; } // 3rd column in Tabel1
 }
+
 public class WorkHoursCalculator
 {
     static double dayRateBefore18 = 0.77; // Example placeholders, replace with real config
@@ -22,12 +23,64 @@ public class WorkHoursCalculator
     static double MULTI_DAY_ALLOWANCE_INTERMEDIATE = 60.60; // Example placeholder
     static string COURSE_DAY_CODE = "Course day"; // e.g. "C$131"
 
-    
+
     private static readonly List<ConsignmentRate> RatesTable = new()
     {
         new ConsignmentRate { Date = new DateTime(2024, 1, 1), Taxed = 25.68, Untaxed = 3.21 },
         new ConsignmentRate { Date = new DateTime(2024, 7, 1), Taxed = 26.16, Untaxed = 3.27 },
         new ConsignmentRate { Date = new DateTime(2025, 1, 1), Taxed = 27.20, Untaxed = 3.40 }
+    };
+
+    private static readonly Dictionary<DateTime, string> DutchHolidays = new()
+    {
+        { new DateTime(2022, 1, 1), "Nieuwjaarsdag" },
+        { new DateTime(2022, 4, 18), "2e Paasdag" },
+        { new DateTime(2022, 4, 27), "Koningsdag" },
+        { new DateTime(2022, 5, 26), "Hemelvaart" },
+        { new DateTime(2022, 6, 6), "2e Pinksterdag" },
+        { new DateTime(2022, 12, 26), "2e Kerstdag" },
+
+        { new DateTime(2023, 1, 1), "Nieuwjaarsdag" },
+        { new DateTime(2023, 4, 9), "2e Paasdag" },
+        { new DateTime(2023, 4, 27), "Koningsdag" },
+        { new DateTime(2023, 5, 18), "Hemelvaart" },
+        { new DateTime(2023, 12, 25), "1e kerstdag" },
+        { new DateTime(2023, 12, 26), "2e Kerstdag" },
+
+        { new DateTime(2024, 1, 1), "Nieuwjaarsdag" },
+        { new DateTime(2024, 4, 1), "2e Paasdag" },
+        { new DateTime(2024, 4, 27), "Koningsdag" },
+        { new DateTime(2024, 5, 9), "Hemelvaart" },
+        { new DateTime(2024, 5, 20), "2e Pinksterdag" },
+        { new DateTime(2024, 12, 26), "2e Kerstdag" },
+
+        { new DateTime(2025, 1, 1), "Nieuwjaarsdag" },
+        { new DateTime(2025, 4, 21), "2e Paasdag" },
+        { new DateTime(2025, 4, 26), "Koningsdag" },
+        { new DateTime(2025, 5, 5), "bevrijdingsdag" },
+        { new DateTime(2025, 5, 29), "Hemelvaart" },
+        { new DateTime(2025, 6, 9), "2e Pinksterdag" },
+        { new DateTime(2025, 12, 26), "2e Kerstdag" },
+
+        { new DateTime(2026, 1, 1), "Nieuwjaarsdag" },
+        { new DateTime(2026, 4, 6), "2e Paasdag" },
+        { new DateTime(2026, 4, 27), "Koningsdag" },
+        { new DateTime(2026, 5, 14), "Hemelvaart" },
+        { new DateTime(2026, 5, 25), "2e Pinksterdag" },
+        { new DateTime(2026, 12, 26), "2e Kerstdag" },
+
+        { new DateTime(2027, 1, 1), "Nieuwjaarsdag" },
+        { new DateTime(2027, 3, 29), "2e Paasdag" },
+        { new DateTime(2027, 4, 27), "Koningsdag" },
+        { new DateTime(2027, 6, 6), "Hemelvaart" },
+        { new DateTime(2027, 12, 26), "2e Kerstdag" },
+
+        { new DateTime(2028, 1, 1), "Nieuwjaarsdag" },
+        { new DateTime(2028, 4, 17), "2e Paasdag" },
+        { new DateTime(2028, 4, 27), "Koningsdag" },
+        { new DateTime(2028, 5, 25), "Hemelvaart" },
+        { new DateTime(2028, 6, 5), "2e Pinksterdag" },
+        { new DateTime(2028, 12, 26), "2e Kerstdag" }
     };
 
     public static double CalculateTotalBreak(
@@ -314,6 +367,7 @@ public class WorkHoursCalculator
             return 0.0;
         }
     }
+
     public static double CalculateUntaxedAllowanceIntermediateDay(
         string hoursCode // e.g. E6 in your Excel example
     )
@@ -325,7 +379,7 @@ public class WorkHoursCalculator
         // Otherwise => return the intermediate-day allowance
         return MULTI_DAY_ALLOWANCE_INTERMEDIATE;
     }
-    
+
     public static double CalculateUntaxedAllowanceArrivalDay(
         string hourCode, // E6
         double arrivalEndTime // G6
@@ -347,7 +401,7 @@ public class WorkHoursCalculator
         // 2) Else if G6 < 18 => (6 * AD6) + ((G6 - 6) * AE6)
         else if (arrivalEndTime < 18.0)
         {
-            double hoursAfter6  = arrivalEndTime - 6.0;
+            double hoursAfter6 = arrivalEndTime - 6.0;
             return Math.Round(
                 (6.0 * MULTI_DAY_ALLOWANCE_AFTER_17H)
                 + (hoursAfter6 * MULTI_DAY_ALLOWANCE_BEFORE_17H),
@@ -366,11 +420,12 @@ public class WorkHoursCalculator
             );
         }
     }
+
     public static double CalculateConsignmentAllowance(
-        string hourCode,           // E6
-        DateTime dateLookup,       // D6
-        double startTime,          // F6
-        double endTime            // G6
+        string hourCode, // E6
+        DateTime dateLookup, // D6
+        double startTime, // F6
+        double endTime // G6
     )
     {
         // If hourCode != "Consignment" => 0
@@ -384,14 +439,14 @@ public class WorkHoursCalculator
             .Where(r => r.Date <= dateLookup)
             .OrderByDescending(r => r.Date)
             .FirstOrDefault();
-    
+
         if (matchedRate == null)
         {
             // If there's no date less than or equal to dateLookup, you could pick the earliest,
             // or just do 0. We'll do 0 for now.
             return 0.0;
         }
-    
+
         double untaxedValue = matchedRate.Untaxed;
 
         // 2) The SHIFT formula: 
@@ -413,12 +468,12 @@ public class WorkHoursCalculator
 
         return Math.Round(result, 2);
     }
-    
+
     public static double CalculateSaturdayHours(
-        DateTime date,         // replaces dayName, e.g., 2025-04-05
-        string holidayName,    // AM11 in Excel (empty if no holiday)
-        string hoursCode,      // E11 in Excel (e.g. "Course day")
-        double totalHours      // AT11 in Excel (the total hours to consider)
+        DateTime date, // replaces dayName, e.g., 2025-04-05
+        string holidayName, // AM11 in Excel (empty if no holiday)
+        string hoursCode, // E11 in Excel (e.g. "Course day")
+        double totalHours // AT11 in Excel (the total hours to consider)
     )
     {
         // 1) Check if the date is a Saturday
@@ -435,5 +490,15 @@ public class WorkHoursCalculator
 
         // All conditions passed, return total hours
         return totalHours;
+    }
+    
+    public static string GetHolidayName(DateTime date)
+    {
+        if (DutchHolidays.TryGetValue(date.Date, out var holidayName))
+        {
+            return holidayName;
+        }
+
+        return "";
     }
 }
