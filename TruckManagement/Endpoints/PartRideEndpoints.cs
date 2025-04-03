@@ -1919,7 +1919,7 @@ public static class PartRideEndpoints
             endTime: endTimeDecimal
         );
 
-        double calculatedHolidayHours = WorkHoursCalculator.CalculateHolidayHours(
+        double vacationHours = WorkHoursCalculator.CalculateVacationHours(
             hourCode: hoursCode.Name,
             weeklyPercentage: compensation.PercentageOfWork,
             startTime: startTimeDecimal,
@@ -1946,7 +1946,7 @@ public static class PartRideEndpoints
             endTime: endTimeDecimal,
             hourCode: hoursCode.Name,
             sickHours: calculatedSickHours,
-            holidayHours: calculatedHolidayHours
+            holidayHours: vacationHours
         );
 
         double homeWorkDistance = KilometersAllowance.HomeWorkDistance(
@@ -2343,7 +2343,7 @@ public static class PartRideEndpoints
             startTime: startTimeDecimal,
             endTime: endTimeDecimal
         );
-        double holidayHours = WorkHoursCalculator.CalculateHolidayHours(
+        double vacationHours = WorkHoursCalculator.CalculateVacationHours(
             hourCode: hoursCode.Name,
             weeklyPercentage: compensation.PercentageOfWork,
             startTime: startTimeDecimal,
@@ -2372,7 +2372,7 @@ public static class PartRideEndpoints
             endTime: endTimeDecimal,
             hourCode: hoursCode.Name,
             sickHours: sickHours,
-            holidayHours: holidayHours
+            holidayHours: vacationHours
         );
         TimeSpan restTimeSpan = TimeSpan.FromHours(totalBreak);
 

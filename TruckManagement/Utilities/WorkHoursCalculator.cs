@@ -131,7 +131,7 @@ public class WorkHoursCalculator
             return 0.0;
     }
 
-    public static double CalculateHolidayHours(
+    public static double CalculateVacationHours(
         string hourCode, // The code in E6 (e.g. "1","2","vak","zie","C127", etc.)
         double weeklyPercentage, // e.g., 100 for full-time, 50 for half-time, etc. (cell G2)
         double startTime, // The start time (was F6)
