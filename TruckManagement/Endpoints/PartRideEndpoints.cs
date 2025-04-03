@@ -54,8 +54,25 @@ public static class PartRideEndpoints
                     double startDecimal = request.Start.TotalHours;
                     double endDecimal = request.End.TotalHours;
 
+
                     // SHIFT crosses midnight if end <= start in decimal hours
-                    bool crossesMidnight = (endDecimal <= startDecimal);
+                    bool crossesMidnight = false;
+
+                    // Not crossing if both are 00:00
+                    if (startDecimal == 0 && endDecimal == 0)
+                    {
+                        crossesMidnight = false;
+                    }
+                    // Crossing if times are equal but not zero (e.g., 2:00 → 2:00)
+                    else if (startDecimal == endDecimal)
+                    {
+                        crossesMidnight = true;
+                    }
+                    // Crossing if end is before start
+                    else
+                    {
+                        crossesMidnight = endDecimal < startDecimal;
+                    }
 
                     // 3) Validate references/roles once (driver, company, etc.)
                     var userId = userManager.GetUserId(currentUser)!;
@@ -473,7 +490,21 @@ public static class PartRideEndpoints
                     // 13) Check if updated End crosses midnight relative to Start
                     double startTimeDecimal = existingPartRide.Start.TotalHours;
                     double endTimeDecimal = existingPartRide.End.TotalHours;
-                    bool crossesMidnight = (endTimeDecimal <= startTimeDecimal);
+                    bool crossesMidnight = false;
+                    
+                    // Not crossing if both are 00:00
+                    if (startTimeDecimal == 0 && endTimeDecimal == 0)
+                    {
+                        crossesMidnight = false;
+                    }
+                    else if (startTimeDecimal == endTimeDecimal)
+                    {
+                        crossesMidnight = true;
+                    }
+                    else
+                    {
+                        crossesMidnight = endTimeDecimal < startTimeDecimal;
+                    }
 
                     if (!crossesMidnight)
                     {
@@ -2016,8 +2047,16 @@ public static class PartRideEndpoints
             totalHours: totalHours
         );
 
+        double netHours = WorkHoursCalculator.CalculateNetHours(
+            hourCode: hoursCode.Name,
+            day: partRide.Date,
+            isHoliday: !string.IsNullOrWhiteSpace(holidayName),
+            totalHours: totalHours,
+            weeklyPercentage: compensation.PercentageOfWork
+        );
+
         partRide.Rest = restTimeSpan;
-        partRide.DecimalHours = totalHours;
+        partRide.DecimalHours = netHours;
         partRide.TaxFreeCompensation = taxFreeCompensation;
         partRide.NightAllowance = calculatedNightAllowance;
         partRide.StandOver = 0.0;
@@ -2334,7 +2373,7 @@ public static class PartRideEndpoints
             untaxedAllowanceNormalDayPartial: untaxedAllowanceNormalDayPartial,
             lumpSumIf12h: 14.63
         );
-        
+
         string holidayName = WorkHoursCalculator.GetHolidayName(
             date: request.Date,
             hoursOptionName: hoursOption?.Name
@@ -2444,6 +2483,14 @@ public static class PartRideEndpoints
             totalHours: totalHours
         );
 
+        double netHours = WorkHoursCalculator.CalculateNetHours(
+            hourCode: hoursCode.Name,
+            day: request.Date,
+            isHoliday: !string.IsNullOrWhiteSpace(holidayName),
+            totalHours: totalHours,
+            weeklyPercentage: compensation.PercentageOfWork
+        );
+
         // 4f) Decide how you combine partial vs single-day allowances:
         //     e.g., sum them or pick the larger. We'll just sum them here:
 
@@ -2468,7 +2515,7 @@ public static class PartRideEndpoints
             CharterId = TryParseGuid(request.CharterId),
             RideId = TryParseGuid(request.RideId),
 
-            DecimalHours = totalHours,
+            DecimalHours = netHours,
             CorrectionTotalHours = correctionHours,
             TaxFreeCompensation = taxFreeCompensation,
             NightAllowance = nightAllowance,

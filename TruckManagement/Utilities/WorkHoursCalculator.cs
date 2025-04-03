@@ -20,8 +20,9 @@ public class WorkHoursCalculator
     static double MULTI_DAY_ALLOWANCE_BEFORE_17H = 1.54;
     static double MULTI_DAY_ALLOWANCE_AFTER_17H = 3.51;
     static string INTERMEDIATE_DAY_CODE = "Multi-day trip intermediate day";
-    static double MULTI_DAY_ALLOWANCE_INTERMEDIATE = 60.60; // Example placeholder
-    static string COURSE_DAY_CODE = "Course day"; // e.g. "C$131"
+    static double MULTI_DAY_ALLOWANCE_INTERMEDIATE = 60.60;
+    static string COURSE_DAY_CODE = "Course day";
+    static string CONSIGNMENT_CODE = "Consignment";
 
 
     private static readonly List<ConsignmentRate> RatesTable = new()
@@ -491,23 +492,22 @@ public class WorkHoursCalculator
         // All conditions passed, return total hours
         return totalHours;
     }
-    
+
     public static string GetHolidayName(DateTime date, string? hoursOptionName)
     {
-        
         // If the selected hours option explicitly marks the day as a holiday
         if (!string.IsNullOrWhiteSpace(hoursOptionName) && hoursOptionName == "Holiday")
         {
             return "Holiday";
         }
-        
-        
+
+
         // If the hours option explicitly says "NoHoliday"
         if (!string.IsNullOrWhiteSpace(hoursOptionName) && hoursOptionName == "NoHoliday")
         {
             return string.Empty;
         }
-        
+
         // Otherwise, check if the date is a public holiday from the list
         if (DutchHolidays.TryGetValue(date.Date, out var holidayName))
         {
@@ -516,6 +516,7 @@ public class WorkHoursCalculator
 
         return string.Empty;
     }
+
     public static double CalculateSundayHolidayHours(
         string hourCode,
         DateTime date,
@@ -537,5 +538,40 @@ public class WorkHoursCalculator
 
         // Not a Sunday and not a holiday => 0
         return 0.0;
+    }
+
+    public static double CalculateNetHours(
+        string hourCode,
+        DateTime day,
+        bool isHoliday,
+        double totalHours,
+        double weeklyPercentage
+    )
+    {
+        // 1) If hourCode is "Consignment", return 0
+        if (hourCode == CONSIGNMENT_CODE)
+        {
+            return Math.Round(0.0, 2);
+        }
+
+        // 2) If not Saturday or Sunday and isHoliday == true and totalHours <= 8
+        bool isWeekend = day.DayOfWeek == DayOfWeek.Saturday || day.DayOfWeek == DayOfWeek.Sunday;
+        if (!isWeekend && isHoliday && totalHours <= 8.0)
+        {
+            return Math.Round(8.0 * (weeklyPercentage / 100.0), 2);
+        }
+
+        // 3) If hourCode is "Holiday", "Sick", or "Time for time"
+        bool isNonWorkingHour = hourCode == HOLIDAY_CODE || hourCode == SICK_CODE || hourCode == TIME_FOR_TIME_CODE;
+        if (isNonWorkingHour)
+        {
+            if (totalHours > 0.0)
+                return Math.Round(totalHours, 2);
+            else
+                return Math.Round(8.0 * (weeklyPercentage / 100.0), 2);
+        }
+
+        // 4) Default: return the totalHours
+        return Math.Round(totalHours, 2);
     }
 }
