@@ -1996,6 +1996,15 @@ public static class PartRideEndpoints
             startTime: startTimeDecimal,
             endTime: endTimeDecimal
         );
+        
+        string holidayName = "";
+
+        double saturdayHours = WorkHoursCalculator.CalculateSaturdayHours(
+            date: partRide.Date,
+            holidayName: holidayName,
+            hoursCode: hoursCode.Name,
+            totalHours: totalHours
+        );
 
         partRide.Rest = restTimeSpan;
         partRide.DecimalHours = totalHours;
@@ -2004,7 +2013,7 @@ public static class PartRideEndpoints
         partRide.StandOver = 0.0;
         partRide.KilometerReimbursement = kilometersAllowance;
         partRide.ConsignmentFee = consignmentAllowance;
-        partRide.SaturdayHours = 0.0;
+        partRide.SaturdayHours = saturdayHours;
         partRide.SundayHolidayHours = calculatedHolidayHours;
         partRide.NumberOfHours = totalHours;
     }
@@ -2406,6 +2415,15 @@ public static class PartRideEndpoints
             endTime: endTimeDecimal
         );
 
+        string holidayName = "";
+
+        double saturdayHours = WorkHoursCalculator.CalculateSaturdayHours(
+            date: request.Date,
+            holidayName: holidayName,
+            hoursCode: hoursCode.Name,
+            totalHours: totalHours
+        );
+
         // 4f) Decide how you combine partial vs single-day allowances:
         //     e.g., sum them or pick the larger. We'll just sum them here:
 
@@ -2437,7 +2455,7 @@ public static class PartRideEndpoints
             StandOver = 0.0,
             KilometerReimbursement = kilometersAllowance,
             ConsignmentFee = consignmentAllowance,
-            SaturdayHours = 0.0,
+            SaturdayHours = saturdayHours,
             SundayHolidayHours = holidayHours,
             NumberOfHours = totalHours,
             VariousCompensation = request.VariousCompensation ?? 0,

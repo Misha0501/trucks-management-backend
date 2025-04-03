@@ -23,6 +23,8 @@ public class WorkHoursCalculator
     
     static string INTERMEDIATE_DAY_CODE = "Multi-day trip intermediate day";
     static double MULTI_DAY_ALLOWANCE_INTERMEDIATE = 60.60; // Example placeholder
+    static string COURSE_DAY_CODE = "Course day"; // e.g. "C$131"
+
     
     private static readonly List<ConsignmentRate> RatesTable = new()
     {
@@ -413,5 +415,28 @@ public class WorkHoursCalculator
         double result = untaxedValue * rawShift;
 
         return Math.Round(result, 2);
+    }
+    
+    public static double CalculateSaturdayHours(
+        DateTime date,         // replaces dayName, e.g., 2025-04-05
+        string holidayName,    // AM11 in Excel (empty if no holiday)
+        string hoursCode,      // E11 in Excel (e.g. "Course day")
+        double totalHours      // AT11 in Excel (the total hours to consider)
+    )
+    {
+        // 1) Check if the date is a Saturday
+        if (date.DayOfWeek != DayOfWeek.Saturday)
+            return 0.0;
+
+        // 2) Check if it's a holiday
+        if (!string.IsNullOrWhiteSpace(holidayName))
+            return 0.0;
+
+        // 3) Check if the hour code is "Course day"
+        if (hoursCode == COURSE_DAY_CODE)
+            return 0.0;
+
+        // All conditions passed, return total hours
+        return totalHours;
     }
 }
