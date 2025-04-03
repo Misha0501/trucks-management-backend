@@ -89,7 +89,7 @@ public class WorkHoursCalculator
         double endTime,
         string hourCode,
         double sickHours,
-        double holidayHours
+        double vacationHours
     )
     {
         // 1) In Excel: IF(Admin!E$20="ja", ...) => only proceed if breakScheduleOn == "ja"
@@ -101,7 +101,7 @@ public class WorkHoursCalculator
             return 0.0;
 
         // 3) If codeE6 == timeForTimeCode (e.g. "tvt") or (sick + holiday) > 0 => break is 0
-        if (hourCode == TIME_FOR_TIME_CODE || (sickHours + holidayHours) > 0)
+        if (hourCode == TIME_FOR_TIME_CODE || (sickHours + vacationHours) > 0)
             return 0.0;
 
         // 4) Determine time difference across midnight if needed

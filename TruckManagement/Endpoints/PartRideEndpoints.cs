@@ -1911,9 +1911,14 @@ public static class PartRideEndpoints
             lumpSumIf12h: 14.63
         );
 
+        string holidayName = WorkHoursCalculator.GetHolidayName(
+            date: partRide.Date,
+            hoursOptionName: hoursOption?.Name
+        );
+
         double calculatedSickHours = WorkHoursCalculator.CalculateSickHours(
             hourCode: hoursCode.Name,
-            holidayName: "",
+            holidayName: holidayName,
             weeklyPercentage: compensation.PercentageOfWork,
             startTime: startTimeDecimal,
             endTime: endTimeDecimal
@@ -1946,7 +1951,7 @@ public static class PartRideEndpoints
             endTime: endTimeDecimal,
             hourCode: hoursCode.Name,
             sickHours: calculatedSickHours,
-            holidayHours: vacationHours
+            vacationHours: vacationHours
         );
 
         double homeWorkDistance = KilometersAllowance.HomeWorkDistance(
@@ -1997,18 +2002,13 @@ public static class PartRideEndpoints
             endTime: endTimeDecimal
         );
 
-        string holidayName = WorkHoursCalculator.GetHolidayName(
-            date: partRide.Date,
-            hoursOptionName: hoursOption?.Name
-        );
-
         double saturdayHours = WorkHoursCalculator.CalculateSaturdayHours(
             date: partRide.Date,
             holidayName: holidayName,
             hoursCode: hoursCode.Name,
             totalHours: totalHours
         );
-        
+
         double sundayHolidayHours = WorkHoursCalculator.CalculateSundayHolidayHours(
             date: partRide.Date,
             holidayName: holidayName,
@@ -2334,11 +2334,16 @@ public static class PartRideEndpoints
             untaxedAllowanceNormalDayPartial: untaxedAllowanceNormalDayPartial,
             lumpSumIf12h: 14.63
         );
+        
+        string holidayName = WorkHoursCalculator.GetHolidayName(
+            date: request.Date,
+            hoursOptionName: hoursOption?.Name
+        );
 
         // 4b) Sick/Holiday hours
         double sickHours = WorkHoursCalculator.CalculateSickHours(
             hourCode: hoursCode.Name, // Replace with real hour code from request
-            holidayName: "", // Or request.HolidayName if you have it
+            holidayName: holidayName, // Or request.HolidayName if you have it
             weeklyPercentage: compensation.PercentageOfWork,
             startTime: startTimeDecimal,
             endTime: endTimeDecimal
@@ -2372,7 +2377,7 @@ public static class PartRideEndpoints
             endTime: endTimeDecimal,
             hourCode: hoursCode.Name,
             sickHours: sickHours,
-            holidayHours: vacationHours
+            vacationHours: vacationHours
         );
         TimeSpan restTimeSpan = TimeSpan.FromHours(totalBreak);
 
@@ -2425,18 +2430,13 @@ public static class PartRideEndpoints
             endTime: endTimeDecimal
         );
 
-        string holidayName = WorkHoursCalculator.GetHolidayName(
-            date: request.Date,
-            hoursOptionName: hoursOption?.Name
-        );
-
         double saturdayHours = WorkHoursCalculator.CalculateSaturdayHours(
             date: request.Date,
             holidayName: holidayName,
             hoursCode: hoursCode.Name,
             totalHours: totalHours
         );
-        
+
         double sundayHolidayHours = WorkHoursCalculator.CalculateSundayHolidayHours(
             date: request.Date,
             holidayName: holidayName,
