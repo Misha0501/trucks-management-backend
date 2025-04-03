@@ -14,13 +14,10 @@ public class WorkHoursCalculator
     static string SICK_CODE = "Sick";
     static string TIME_FOR_TIME_CODE = "Time for time";
     static string HOLIDAY_CODE = "Holiday";
-
-    // New static fields for departure day calculation
     static string DEPARTURE_CODE = "Multi-day trip departure";
     static string ARRIVAL_CODE = "Multi-day trip arrival"; // new
     static double MULTI_DAY_ALLOWANCE_BEFORE_17H = 1.54;
     static double MULTI_DAY_ALLOWANCE_AFTER_17H = 3.51;
-    
     static string INTERMEDIATE_DAY_CODE = "Multi-day trip intermediate day";
     static double MULTI_DAY_ALLOWANCE_INTERMEDIATE = 60.60; // Example placeholder
     static string COURSE_DAY_CODE = "Course day"; // e.g. "C$131"
