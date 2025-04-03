@@ -516,4 +516,26 @@ public class WorkHoursCalculator
 
         return string.Empty;
     }
+    public static double CalculateSundayHolidayHours(
+        string hourCode,
+        DateTime date,
+        string? holidayName,
+        double totalHours
+    )
+    {
+        // If hour code is "Course day", do not count hours as Sunday hours
+        if (hourCode == COURSE_DAY_CODE)
+            return 0.0;
+
+        // If it's a holiday, count total hours
+        if (!string.IsNullOrWhiteSpace(holidayName))
+            return totalHours;
+
+        // If it's a Sunday, count total hours
+        if (date.DayOfWeek == DayOfWeek.Sunday)
+            return totalHours;
+
+        // Not a Sunday and not a holiday => 0
+        return 0.0;
+    }
 }
