@@ -492,13 +492,28 @@ public class WorkHoursCalculator
         return totalHours;
     }
     
-    public static string GetHolidayName(DateTime date)
+    public static string GetHolidayName(DateTime date, string? hoursOptionName)
     {
+        
+        // If the selected hours option explicitly marks the day as a holiday
+        if (!string.IsNullOrWhiteSpace(hoursOptionName) && hoursOptionName == "Holiday")
+        {
+            return "Holiday";
+        }
+        
+        
+        // If the hours option explicitly says "NoHoliday"
+        if (!string.IsNullOrWhiteSpace(hoursOptionName) && hoursOptionName == "NoHoliday")
+        {
+            return string.Empty;
+        }
+        
+        // Otherwise, check if the date is a public holiday from the list
         if (DutchHolidays.TryGetValue(date.Date, out var holidayName))
         {
             return holidayName;
         }
 
-        return "";
+        return string.Empty;
     }
 }
