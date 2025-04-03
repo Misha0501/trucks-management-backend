@@ -2000,15 +2000,6 @@ public static class PartRideEndpoints
             manualAdjustment: partRide.CorrectionTotalHours
         );
 
-        double kilometersAllowance = KilometersAllowance.CalculateKilometersAllowance(
-            extraKilometers: partRide.Kilometers ?? 0,
-            kilometerRate: (double)compensation.KilometerAllowance,
-            hourCode: hoursCode.Name,
-            hourOption: hoursOption?.Name,
-            totalHours: totalHours,
-            homeWorkDistance: homeWorkDistance
-        );
-
         double untaxedAllowanceDepartureDay = WorkHoursCalculator.CalculateUntaxedAllowanceDepartureDay(
             hourCode: hoursCode.Name,
             departureStartTime: startTimeDecimal
@@ -2053,6 +2044,15 @@ public static class PartRideEndpoints
             isHoliday: !string.IsNullOrWhiteSpace(holidayName),
             totalHours: totalHours,
             weeklyPercentage: compensation.PercentageOfWork
+        );
+        
+        double kilometersAllowance = KilometersAllowance.CalculateKilometersAllowance(
+            extraKilometers: partRide.Kilometers ?? 0,
+            kilometerRate: (double)compensation.KilometerAllowance,
+            hourCode: hoursCode.Name,
+            hourOption: hoursOption?.Name,
+            totalHours: netHours,
+            homeWorkDistance: homeWorkDistance
         );
 
         partRide.Rest = restTimeSpan;
@@ -2436,15 +2436,6 @@ public static class PartRideEndpoints
             maxThreshold: compensation.KilometersMax
         );
 
-        double kilometersAllowance = KilometersAllowance.CalculateKilometersAllowance(
-            extraKilometers: request.Kilometers,
-            kilometerRate: (double)compensation.KilometerAllowance,
-            hourCode: hoursCode.Name,
-            hourOption: hoursOption?.Name,
-            totalHours: totalHours,
-            homeWorkDistance: homeWorkDistance
-        );
-
         double untaxedAllowanceDepartureDay = WorkHoursCalculator.CalculateUntaxedAllowanceDepartureDay(
             hourCode: hoursCode.Name,
             departureStartTime: startTimeDecimal
@@ -2490,7 +2481,16 @@ public static class PartRideEndpoints
             totalHours: totalHours,
             weeklyPercentage: compensation.PercentageOfWork
         );
-
+        
+        double kilometersAllowance = KilometersAllowance.CalculateKilometersAllowance(
+            extraKilometers: request.Kilometers,
+            kilometerRate: (double)compensation.KilometerAllowance,
+            hourCode: hoursCode.Name,
+            hourOption: hoursOption?.Name,
+            totalHours: netHours,
+            homeWorkDistance: homeWorkDistance
+        );
+        
         // 4f) Decide how you combine partial vs single-day allowances:
         //     e.g., sum them or pick the larger. We'll just sum them here:
 
