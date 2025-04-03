@@ -417,7 +417,7 @@ public static class PartRideEndpoints
                             );
                         }
                     }
-                    
+
                     // Validate HoursCode
                     if (newHoursCodeId.HasValue)
                     {
@@ -1858,7 +1858,8 @@ public static class PartRideEndpoints
     private static async Task RecalculatePartRideValues(
         ApplicationDbContext db,
         PartRide partRide
-    ){
+    )
+    {
         // Make sure there's a valid DriverId
         if (!partRide.DriverId.HasValue)
         {
@@ -1873,7 +1874,7 @@ public static class PartRideEndpoints
         {
             throw new InvalidOperationException("No DriverCompensationSettings found for this driver.");
         }
-        
+
         // Load HoursCode with default fallback
         Guid defaultHoursCodeId = Guid.Parse("AAAA1111-1111-1111-1111-111111111111");
         var hoursCodeId = partRide.HoursCodeId ?? defaultHoursCodeId;
@@ -1882,14 +1883,14 @@ public static class PartRideEndpoints
         {
             throw new InvalidOperationException($"HoursCode not found for ID: {hoursCodeId}");
         }
-        
+
         // Load HoursOption if exists
         HoursOption? hoursOption = null;
         if (partRide.HoursOptionId.HasValue)
         {
             hoursOption = await db.HoursOptions.FindAsync(partRide.HoursOptionId.Value);
         }
-        
+
         // Recompute time calculations based on updated Start/End/Rest
         double startTimeDecimal = partRide.Start.TotalHours;
         double endTimeDecimal = partRide.End.TotalHours;
@@ -1947,7 +1948,7 @@ public static class PartRideEndpoints
             sickHours: calculatedSickHours,
             holidayHours: calculatedHolidayHours
         );
-        
+
         double homeWorkDistance = KilometersAllowance.HomeWorkDistance(
             kilometerAllowanceEnabled: compensation.KilometerAllowanceEnabled,
             oneWayValue: (double)compensation.KilometersOneWayValue,
@@ -1971,22 +1972,30 @@ public static class PartRideEndpoints
             totalHours: totalHours,
             homeWorkDistance: homeWorkDistance
         );
-        
+
         double untaxedAllowanceDepartureDay = WorkHoursCalculator.CalculateUntaxedAllowanceDepartureDay(
             hourCode: hoursCode.Name,
             departureStartTime: startTimeDecimal
         );
-        
+
         double untaxedAllowanceIntermediateDay = WorkHoursCalculator.CalculateUntaxedAllowanceIntermediateDay(
             hoursCode: hoursCode.Name
         );
-        
+
         double untaxedAllowanceArrivalDay = WorkHoursCalculator.CalculateUntaxedAllowanceArrivalDay(
             hourCode: hoursCode.Name,
             arrivalEndTime: endTimeDecimal
         );
 
-        double taxFreeCompensation = untaxedAllowanceSingleDay + untaxedAllowanceDepartureDay + untaxedAllowanceIntermediateDay + untaxedAllowanceArrivalDay;
+        double taxFreeCompensation = untaxedAllowanceSingleDay + untaxedAllowanceDepartureDay +
+                                     untaxedAllowanceIntermediateDay + untaxedAllowanceArrivalDay;
+
+        double consignmentAllowance = WorkHoursCalculator.CalculateConsignmentAllowance(
+            hourCode: hoursCode.Name,
+            dateLookup: partRide.Date,
+            startTime: startTimeDecimal,
+            endTime: endTimeDecimal
+        );
 
         partRide.Rest = restTimeSpan;
         partRide.DecimalHours = totalHours;
@@ -1994,7 +2003,7 @@ public static class PartRideEndpoints
         partRide.NightAllowance = calculatedNightAllowance;
         partRide.StandOver = 0.0;
         partRide.KilometerReimbursement = kilometersAllowance;
-        partRide.ConsignmentFee = 0.0;
+        partRide.ConsignmentFee = consignmentAllowance;
         partRide.SaturdayHours = 0.0;
         partRide.SundayHolidayHours = calculatedHolidayHours;
         partRide.NumberOfHours = totalHours;
@@ -2249,7 +2258,7 @@ public static class PartRideEndpoints
     )
     {
         Guid defaultHoursCodeId = Guid.Parse("AAAA1111-1111-1111-1111-111111111111"); // "One day ride"
-        
+
         // Get HoursCode - use default if not specified
         var hoursCodeId = TryParseGuid(request.HoursCodeId) ?? defaultHoursCodeId;
         var hoursCode = await db.HoursCodes.FindAsync(hoursCodeId);
@@ -2257,7 +2266,7 @@ public static class PartRideEndpoints
         {
             throw new InvalidOperationException($"HoursCode not found for ID: {hoursCodeId}");
         }
-        
+
         // Get HoursOption - can be null
         HoursOption? hoursOption = null;
         if (TryParseGuid(request.HoursOptionId) is Guid hoursOptionId)
@@ -2268,7 +2277,7 @@ public static class PartRideEndpoints
                 throw new InvalidOperationException($"HoursOption not found for ID: {hoursOptionId}");
             }
         }
-        
+
         // 1) Convert Start/End to decimal hours
         double startTimeDecimal = segmentStart.TotalHours;
         double endTimeDecimal = segmentEnd.TotalHours;
@@ -2304,7 +2313,7 @@ public static class PartRideEndpoints
             startTime: startTimeDecimal,
             endTime: endTimeDecimal,
             untaxedAllowanceNormalDayPartial: untaxedAllowanceNormalDayPartial,
-            lumpSumIf12h: 14.63 
+            lumpSumIf12h: 14.63
         );
 
         // 4b) Sick/Holiday hours
@@ -2372,12 +2381,12 @@ public static class PartRideEndpoints
             totalHours: totalHours,
             homeWorkDistance: homeWorkDistance
         );
-        
+
         double untaxedAllowanceDepartureDay = WorkHoursCalculator.CalculateUntaxedAllowanceDepartureDay(
             hourCode: hoursCode.Name,
             departureStartTime: startTimeDecimal
         );
-        
+
         double untaxedAllowanceIntermediateDay = WorkHoursCalculator.CalculateUntaxedAllowanceIntermediateDay(
             hoursCode: hoursCode.Name
         );
@@ -2387,7 +2396,15 @@ public static class PartRideEndpoints
             arrivalEndTime: endTimeDecimal
         );
 
-        double taxFreeCompensation = untaxedAllowanceSingleDay + untaxedAllowanceDepartureDay + untaxedAllowanceIntermediateDay + untaxedAllowanceArrivalDay;
+        double taxFreeCompensation = untaxedAllowanceSingleDay + untaxedAllowanceDepartureDay +
+                                     untaxedAllowanceIntermediateDay + untaxedAllowanceArrivalDay;
+
+        double consignmentAllowance = WorkHoursCalculator.CalculateConsignmentAllowance(
+            hourCode: hoursCode.Name,
+            dateLookup: request.Date,
+            startTime: startTimeDecimal,
+            endTime: endTimeDecimal
+        );
 
         // 4f) Decide how you combine partial vs single-day allowances:
         //     e.g., sum them or pick the larger. We'll just sum them here:
@@ -2419,7 +2436,7 @@ public static class PartRideEndpoints
             NightAllowance = nightAllowance,
             StandOver = 0.0,
             KilometerReimbursement = kilometersAllowance,
-            ConsignmentFee = 0.0,
+            ConsignmentFee = consignmentAllowance,
             SaturdayHours = 0.0,
             SundayHolidayHours = holidayHours,
             NumberOfHours = totalHours,

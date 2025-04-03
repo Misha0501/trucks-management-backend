@@ -1,5 +1,11 @@
 namespace TruckManagement;
 
+public class ConsignmentRate
+{
+    public DateTime Date { get; set; }
+    public double Taxed { get; set; }    // 2nd column in Tabel1
+    public double Untaxed { get; set; }  // 3rd column in Tabel1
+}
 public class WorkHoursCalculator
 {
     static double dayRateBefore18 = 0.77; // Example placeholders, replace with real config
@@ -17,6 +23,13 @@ public class WorkHoursCalculator
     
     static string INTERMEDIATE_DAY_CODE = "Multi-day trip intermediate day";
     static double MULTI_DAY_ALLOWANCE_INTERMEDIATE = 60.60; // Example placeholder
+    
+    private static readonly List<ConsignmentRate> RatesTable = new()
+    {
+        new ConsignmentRate { Date = new DateTime(2024, 1, 1), Taxed = 25.68, Untaxed = 3.21 },
+        new ConsignmentRate { Date = new DateTime(2024, 7, 1), Taxed = 26.16, Untaxed = 3.27 },
+        new ConsignmentRate { Date = new DateTime(2025, 1, 1), Taxed = 27.20, Untaxed = 3.40 }
+    };
 
     public static double CalculateTotalBreak(
         bool breakScheduleOn,
@@ -353,5 +366,52 @@ public class WorkHoursCalculator
                 2
             );
         }
+    }
+    public static double CalculateConsignmentAllowance(
+        string hourCode,           // E6
+        DateTime dateLookup,       // D6
+        double startTime,          // F6
+        double endTime            // G6
+    )
+    {
+        // If hourCode != "Consignment" => 0
+        if (hourCode != "Consignment")
+            return 0.0;
+
+        // 1) VLOOKUP(D6, Tabel1[#All], 3, 1) => approximate match on 'dateLookup'
+        //    We'll pick the largest date <= dateLookup (common approach).
+        //    If none is <= dateLookup, we might pick the earliest row or return 0.
+        var matchedRate = RatesTable
+            .Where(r => r.Date <= dateLookup)
+            .OrderByDescending(r => r.Date)
+            .FirstOrDefault();
+    
+        if (matchedRate == null)
+        {
+            // If there's no date less than or equal to dateLookup, you could pick the earliest,
+            // or just do 0. We'll do 0 for now.
+            return 0.0;
+        }
+    
+        double untaxedValue = matchedRate.Untaxed;
+
+        // 2) The SHIFT formula: 
+        //    If G6 < F6 => shift = 24 - F6 + G6
+        //    else => shift = G6 - F6
+        //    Then clamp shift between 0 and 8
+        double rawShift;
+        if (endTime < startTime)
+            rawShift = 24.0 - startTime + endTime;
+        else
+            rawShift = endTime - startTime;
+
+        // Force min 0, then max 8
+        rawShift = Math.Max(0.0, rawShift);
+        rawShift = Math.Min(8.0, rawShift);
+
+        // 3) Multiply shift by the "onbelast" value
+        double result = untaxedValue * rawShift;
+
+        return Math.Round(result, 2);
     }
 }
