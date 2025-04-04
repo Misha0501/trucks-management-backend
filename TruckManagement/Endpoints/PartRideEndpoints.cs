@@ -2006,7 +2006,11 @@ public static class PartRideEndpoints
         );
 
         double untaxedAllowanceIntermediateDay = WorkHoursCalculator.CalculateUntaxedAllowanceIntermediateDay(
-            hoursCode: hoursCode.Name
+            hourCode: hoursCode.Name,
+            hourOption: hoursOption?.Name,
+            date: partRide.Date,
+            startTime: startTimeDecimal,
+            endTime: endTimeDecimal
         );
 
         double untaxedAllowanceArrivalDay = WorkHoursCalculator.CalculateUntaxedAllowanceArrivalDay(
@@ -2442,7 +2446,11 @@ public static class PartRideEndpoints
         );
 
         double untaxedAllowanceIntermediateDay = WorkHoursCalculator.CalculateUntaxedAllowanceIntermediateDay(
-            hoursCode: hoursCode.Name
+            hourCode: hoursCode.Name,
+            hourOption: hoursOption?.Name,
+            date: request.Date,
+            startTime: startTimeDecimal,
+            endTime: endTimeDecimal
         );
 
         double untaxedAllowanceArrivalDay = WorkHoursCalculator.CalculateUntaxedAllowanceArrivalDay(

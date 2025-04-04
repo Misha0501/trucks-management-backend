@@ -23,6 +23,7 @@ public class WorkHoursCalculator
     static double MULTI_DAY_ALLOWANCE_INTERMEDIATE = 60.60;
     static string COURSE_DAY_CODE = "Course day";
     static string CONSIGNMENT_CODE = "Consignment";
+    static string STANDOVER_OPTION = "StandOver";
 
 
     private static readonly List<ConsignmentRate> RatesTable = new()
@@ -82,6 +83,15 @@ public class WorkHoursCalculator
         { new DateTime(2028, 5, 25), "Hemelvaart" },
         { new DateTime(2028, 6, 5), "2e Pinksterdag" },
         { new DateTime(2028, 12, 26), "2e Kerstdag" }
+    };
+
+    private static readonly SortedDictionary<DateTime, double> IntermediateUntaxedRateIfStandOver = new()
+    {
+        { new DateTime(2022, 1, 1), 13.79 },
+        { new DateTime(2023, 1, 1), 14.63 },
+        { new DateTime(2024, 1, 1), 15.22 },
+        { new DateTime(2024, 7, 1), 15.22 },
+        { new DateTime(2025, 1, 1), 15.22 }
     };
 
     public static double CalculateTotalBreak(
@@ -370,15 +380,32 @@ public class WorkHoursCalculator
     }
 
     public static double CalculateUntaxedAllowanceIntermediateDay(
-        string hoursCode // e.g. E6 in your Excel example
+        string hourCode,
+        string? hourOption,
+        DateTime date,
+        double startTime,
+        double endTime
     )
     {
-        // If hourCode != "Multi-day trip intermediate day" => return 0
-        if (hoursCode != INTERMEDIATE_DAY_CODE)
+        // Must be "Multi-day trip intermediate day"
+        if (hourCode != INTERMEDIATE_DAY_CODE)
             return 0.0;
 
-        // Otherwise => return the intermediate-day allowance
-        return MULTI_DAY_ALLOWANCE_INTERMEDIATE;
+        // If "StandOver" option and both times are 0, check the date-based untaxed rates
+        if (hourOption == STANDOVER_OPTION && startTime == 0.0 && endTime == 0.0)
+        {
+            // Look for the latest applicable rate before or on the given date
+            var rate = IntermediateUntaxedRateIfStandOver
+                .Where(x => x.Key <= date)
+                .OrderByDescending(x => x.Key)
+                .Select(x => x.Value)
+                .FirstOrDefault();
+
+            return Math.Round(rate, 2);
+        }
+
+        // Otherwise, return the default static intermediate rate
+        return Math.Round(MULTI_DAY_ALLOWANCE_INTERMEDIATE, 2);
     }
 
     public static double CalculateUntaxedAllowanceArrivalDay(
