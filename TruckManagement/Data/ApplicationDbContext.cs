@@ -28,6 +28,7 @@ namespace TruckManagement.Data
         public DbSet<HoursOption> HoursOptions { get; set; } = default!;
         public DbSet<HoursCode> HoursCodes { get; set; } = default!;
         public DbSet<DriverCompensationSettings> DriverCompensationSettings { get; set; } = default!;
+        public DbSet<Cao> Caos { get; set; }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
