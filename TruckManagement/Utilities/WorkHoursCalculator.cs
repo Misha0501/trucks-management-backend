@@ -93,6 +93,17 @@ public class WorkHoursCalculator
         { new DateTime(2024, 7, 1), 15.22 },
         { new DateTime(2025, 1, 1), 15.22 }
     };
+    
+    private static readonly SortedDictionary<DateTime, double> IntermediateUntaxedRates = new()
+    {
+        { new DateTime(2021, 1, 1), 50.16 },
+        { new DateTime(2021, 7, 1), 51.48 },
+        { new DateTime(2022, 1, 1), 53.16 },
+        { new DateTime(2023, 1, 1), 57.12 },
+        { new DateTime(2024, 1, 1), 59.40 },
+        { new DateTime(2024, 7, 1), 60.60 },
+        { new DateTime(2025, 1, 1), 63.00 }
+    };
 
     public static double CalculateTotalBreak(
         bool breakScheduleOn,
@@ -403,9 +414,15 @@ public class WorkHoursCalculator
 
             return Math.Round(rate, 2);
         }
+        
+        // Use MultiDayTripIntermediateUntaxed rates by date
+        var defaultRate = IntermediateUntaxedRates
+            .Where(x => x.Key <= date)
+            .OrderByDescending(x => x.Key)
+            .Select(x => x.Value)
+            .FirstOrDefault();
 
-        // Otherwise, return the default static intermediate rate
-        return Math.Round(MULTI_DAY_ALLOWANCE_INTERMEDIATE, 2);
+        return Math.Round(defaultRate, 2);
     }
 
     public static double CalculateUntaxedAllowanceArrivalDay(
