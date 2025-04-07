@@ -1,64 +1,47 @@
+using TruckManagement.Entities;
+
 namespace TruckManagement.Utilities;
 
-public static class NightAllowanceCalculator
+public class NightAllowanceCalculator
 {
-    private static double nightStartTime = 21.0;
-    private static double nightEndTime = 5.0; 
+    
+    private readonly Cao _cao;
+
+    public NightAllowanceCalculator(Cao cao)
+    {
+        _cao = cao ?? throw new ArgumentNullException(nameof(cao));
+    }
+    
     /// <summary>
     /// Calculates the night allowance for a single shift, mimicking the logic 
     /// in "Periode_1" sheet, cell O6, using named parameters for clarity.
     /// </summary>
-    /// <param name="inputDate">The date of the shift (was D6 in Excel).</param>
     /// <param name="startTime">Shift start time in decimal hours (was F6).</param>
     /// <param name="endTime">Shift end time in decimal hours (was G6).</param>
-    /// <param name="nightStartTime">When night window begins (AJ1), e.g. 21.0.</param>
-    /// <param name="nightEndTime">When night window ends (AK1), e.g. 5.0.</param>
     /// <param name="nightHoursAllowed">Admin E28 = "ja"? True if night hours are enabled.</param>
-    /// <param name="nightHours19Percent">Admin K28 = "ja"? True if night hours are 19% surcharge.</param>
-    /// <param name="nightHoursInEuros">Admin H28 = "ja"? True if we pay night hours in euros rate.</param>
-    /// <param name="someMonthDate">Admin D15: a reference month date for rate selection.</param>
-    /// <param name="driverRateOne">Admin C15: e.g. 19.46, the driver’s first hourly rate.</param>
-    /// <param name="driverRateTwo">Admin E15: e.g. 18.71, the driver’s second hourly rate.</param>
-    /// <param name="nightAllowanceRate">Admin D28: e.g. 0.19, if we’re adding 19% or 0.19 euros/hour.</param>
+    /// <param name="driverRate">Admin C15: e.g. 19.46, the driver’s first hourly rate.</param>
     /// <param name="nightHoursWholeHours">Admin K27 = "ja"? If true, maybe round hours to whole hours.</param>
     /// <returns>The total night allowance in decimal currency.</returns>
-    public static double CalculateNightAllowance(
-        DateTime inputDate,
+    public double CalculateNightAllowance(
         double startTime,
         double endTime,
         bool nightHoursAllowed,
-        bool nightHours19Percent,
-        bool nightHoursInEuros,
-        DateTime someMonthDate,
-        double driverRateOne,
-        double driverRateTwo,
-        double nightAllowanceRate,
+        double driverRate,
         bool nightHoursWholeHours
     )
     {
         // 1) If night hours not allowed => return 0
         if (!nightHoursAllowed)
             return 0.0;
-
-        // 2) Determine which driver rate to use based on the month comparison
-        //    If the input date's month is strictly less than someMonthDate's month, use driverRateOne
-        //    else use driverRateTwo
-        double chosenDriverRate;
-        if (inputDate.Month < someMonthDate.Month || inputDate.Year < someMonthDate.Year)
-        {
-            chosenDriverRate = driverRateOne;
-        }
-        else
-        {
-            chosenDriverRate = driverRateTwo;
-        }
-
+        
+        double nightStart = _cao.NightTimeStart.TotalHours; // e.g. 21.0
+        double nightEnd   = _cao.NightTimeEnd.TotalHours;   // e.g. 5.0
         // 3) Calculate how many night hours are in the shift
         //    We'll define "night hours" as the portion overlapping [nightStartTime, 24) plus (0, nightEndTime].
         //    For example, if nightStartTime=21 and nightEndTime=5, 
         //    then the night window is 21:00-24:00 plus 00:00-05:00.
 
-        double nightHours = CalculateNightHours(startTime, endTime, nightStartTime, nightEndTime);
+        double nightHours = CalculateNightHours(startTime, endTime, nightStart, nightEnd);
 
         // 4) Possibly round or floor to whole hours if nightHoursWholeHours is true
         if (nightHoursWholeHours)
@@ -67,31 +50,7 @@ public static class NightAllowanceCalculator
         }
 
         // 5) Convert those night hours into an allowance
-        double nightAllowance = 0.0;
-
-        // 5a) If the spreadsheet says "nightHours19Percent" => 
-        //     the original might multiply by AdminD10 or something. 
-        //     We'll interpret that as "19% of the normal pay" or "some factor of base pay."
-        //     If "nightHoursInEuros", we interpret it as "night hours * (driverRate * nightAllowanceRate)."
-
-        if (nightHours19Percent)
-        {
-            // For example, 19% might mean: totalNightPay = nightHours * (chosenDriverRate * 0.19)
-            // If your sheet used a direct multiplier from an AdminD10, you can put that in place of nightAllowanceRate.
-            nightAllowance = nightHours * (chosenDriverRate * nightAllowanceRate);
-        }
-        else if (nightHoursInEuros)
-        {
-            // If it's a direct euros approach, e.g. "night hours in euros"
-            // Possibly: nightHours * (some base euro rate).
-            // We'll assume "chosenDriverRate * nightAllowanceRate" again
-            nightAllowance = nightHours * (chosenDriverRate * nightAllowanceRate);
-        }
-        else
-        {
-            // If none of the flags is set, no extra pay
-            nightAllowance = 0.0;
-        }
+        double nightAllowance = nightHours * (driverRate * (double)_cao.NightHoursAllowanceRate);
 
         return Math.Round(nightAllowance, 2);
     }

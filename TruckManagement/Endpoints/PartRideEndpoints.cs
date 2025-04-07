@@ -1933,6 +1933,8 @@ public static class PartRideEndpoints
 
         var kilometersAllowanceCalculator = new KilometersAllowance(caoRow);
 
+        var nightAllowanceCalculator = new NightAllowanceCalculator(caoRow); // pass the CAO row
+
         // Recompute time calculations based on updated Start/End/Rest
         double startTimeDecimal = partRide.Start.TotalHours;
         double endTimeDecimal = partRide.End.TotalHours;
@@ -1973,17 +1975,11 @@ public static class PartRideEndpoints
             endTime: endTimeDecimal
         );
 
-        double calculatedNightAllowance = NightAllowanceCalculator.CalculateNightAllowance(
-            inputDate: partRide.Date,
+        double calculatedNightAllowance = nightAllowanceCalculator.CalculateNightAllowance(
             startTime: startTimeDecimal,
             endTime: endTimeDecimal,
             nightHoursAllowed: compensation.NightHoursAllowed,
-            nightHours19Percent: compensation.NightHours19Percent,
-            nightHoursInEuros: true,
-            someMonthDate: DateTime.UtcNow,
-            driverRateOne: (double)compensation.DriverRatePerHour,
-            driverRateTwo: (double)compensation.DriverRatePerHour,
-            nightAllowanceRate: (double)compensation.NightAllowanceRate,
+            driverRate: (double)compensation.DriverRatePerHour,
             nightHoursWholeHours: false
         );
 
@@ -2375,7 +2371,9 @@ public static class PartRideEndpoints
 
         // 3) Create the calculator
         var workHoursCalculator = new WorkHoursCalculator(caoRow);
-        var kilometersAllowanceCalculator = new KilometersAllowance(caoRow); 
+        var kilometersAllowanceCalculator = new KilometersAllowance(caoRow);
+        var nightAllowanceCalculator = new NightAllowanceCalculator(caoRow); // pass the CAO row
+
         // 4) RUN THE CALCULATIONS:
 
         // 4a) Untaxed allowances
@@ -2414,17 +2412,11 @@ public static class PartRideEndpoints
         );
 
         // 4c) Night allowance
-        double nightAllowance = NightAllowanceCalculator.CalculateNightAllowance(
-            inputDate: segmentDate,
+        double nightAllowance = nightAllowanceCalculator.CalculateNightAllowance(
             startTime: startTimeDecimal,
             endTime: endTimeDecimal,
             nightHoursAllowed: compensation.NightHoursAllowed,
-            nightHours19Percent: compensation.NightHours19Percent,
-            nightHoursInEuros: true,
-            someMonthDate: DateTime.UtcNow,
-            driverRateOne: (double)compensation.DriverRatePerHour,
-            driverRateTwo: (double)compensation.DriverRatePerHour,
-            nightAllowanceRate: (double)compensation.NightAllowanceRate,
+            driverRate: (double)compensation.DriverRatePerHour,
             nightHoursWholeHours: false
         );
 
