@@ -19,7 +19,6 @@ public class WorkHoursCalculator
     static string DEPARTURE_CODE = "Multi-day trip departure";
     static string ARRIVAL_CODE = "Multi-day trip arrival"; // new
     static string INTERMEDIATE_DAY_CODE = "Multi-day trip intermediate day";
-    static double MULTI_DAY_ALLOWANCE_INTERMEDIATE = 60.60;
     static string COURSE_DAY_CODE = "Course day";
     static string CONSIGNMENT_CODE = "Consignment";
     static string STANDOVER_OPTION = "StandOver";
@@ -91,17 +90,6 @@ public class WorkHoursCalculator
         { new DateTime(2024, 1, 1), 15.22 },
         { new DateTime(2024, 7, 1), 15.22 },
         { new DateTime(2025, 1, 1), 15.22 }
-    };
-    
-    private static readonly SortedDictionary<DateTime, double> IntermediateUntaxedRates = new()
-    {
-        { new DateTime(2021, 1, 1), 50.16 },
-        { new DateTime(2021, 7, 1), 51.48 },
-        { new DateTime(2022, 1, 1), 53.16 },
-        { new DateTime(2023, 1, 1), 57.12 },
-        { new DateTime(2024, 1, 1), 59.40 },
-        { new DateTime(2024, 7, 1), 60.60 },
-        { new DateTime(2025, 1, 1), 63.00 }
     };
 
     public WorkHoursCalculator(Cao cao)
