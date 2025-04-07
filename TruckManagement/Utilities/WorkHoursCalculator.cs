@@ -12,8 +12,6 @@ public class ConsignmentRate
 public class WorkHoursCalculator
 {
     private readonly Cao _cao; // The CAO row for this date
-    static double dayRateBefore18 = 0.77; // Example placeholders, replace with real config
-    static double eveningRateAfter18 = 3.51;
     static string SINGLE_DAY_TRIP_CODE = "One day ride";
     static string SICK_CODE = "Sick";
     static string TIME_FOR_TIME_CODE = "Time for time";
@@ -261,7 +259,7 @@ public class WorkHoursCalculator
         // If shift starts at or after 14:00, everything uses dayRateBefore18
         if (startOfShift >= 14.0)
         {
-            totalAllowance = shiftLength * dayRateBefore18;
+            totalAllowance = shiftLength * (double)_cao.StandardUntaxedAllowance;
         }
         else
         {
@@ -270,13 +268,13 @@ public class WorkHoursCalculator
             {
                 double hoursBefore18 = 18.0 - startOfShift;
                 double hoursAfter18 = endOfShift - 18.0;
-                totalAllowance = (hoursBefore18 * dayRateBefore18)
-                                 + (hoursAfter18 * eveningRateAfter18);
+                totalAllowance = (hoursBefore18 * (double)_cao.StandardUntaxedAllowance)
+                                 + (hoursAfter18 * (double)_cao.MultiDayAfter17Allowance);
             }
             else
             {
                 // Ends before 18:00 => entire shift at dayRateBefore18
-                totalAllowance = shiftLength * dayRateBefore18;
+                totalAllowance = shiftLength * (double)_cao.StandardUntaxedAllowance;
             }
         }
 
@@ -320,8 +318,8 @@ public class WorkHoursCalculator
             {
                 // ((18 - F6) + G6)*AB6 + (6*AD6)
                 double hoursBefore18PlusMorning = (18.0 - startTime) + endTime;
-                result = hoursBefore18PlusMorning * dayRateBefore18
-                         + (6.0 * eveningRateAfter18);
+                result = hoursBefore18PlusMorning * (double)_cao.StandardUntaxedAllowance
+                         + (6.0 * (double)_cao.MultiDayAfter17Allowance);
             }
             else
             {
@@ -333,12 +331,12 @@ public class WorkHoursCalculator
                 }
                 else if (totalShift < 12.0)
                 {
-                    result = totalShift * dayRateBefore18;
+                    result = totalShift * (double)_cao.StandardUntaxedAllowance;
                 }
                 else
                 {
                     // totalShift >= 12 => add AC6 lumpsum
-                    result = (totalShift * dayRateBefore18) + lumpSumIf12h;
+                    result = (totalShift * (double)_cao.StandardUntaxedAllowance) + lumpSumIf12h;
                 }
             }
 
