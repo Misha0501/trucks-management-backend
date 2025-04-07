@@ -2,13 +2,6 @@ using TruckManagement.Entities;
 
 namespace TruckManagement;
 
-public class ConsignmentRate
-{
-    public DateTime Date { get; set; }
-    public double Taxed { get; set; } // 2nd column in Tabel1
-    public double Untaxed { get; set; } // 3rd column in Tabel1
-}
-
 public class WorkHoursCalculator
 {
     private readonly Cao _cao; // The CAO row for this date
