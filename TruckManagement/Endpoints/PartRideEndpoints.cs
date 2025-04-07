@@ -10,6 +10,7 @@ using TruckManagement.DTOs;
 using TruckManagement.Entities;
 using TruckManagement.Enums;
 using TruckManagement.Helpers;
+using TruckManagement.Services;
 using TruckManagement.Utilities;
 
 public static class PartRideEndpoints
@@ -1921,6 +1922,14 @@ public static class PartRideEndpoints
         {
             hoursOption = await db.HoursOptions.FindAsync(partRide.HoursOptionId.Value);
         }
+        
+        var caoService = new CaoService(db);
+        var caoRow = caoService.GetCaoRow(partRide.Date);
+        if (caoRow == null)
+            throw new InvalidOperationException("No CAO entry for this date.");
+
+        // 3) Create the calculator
+        var workHoursCalculator = new WorkHoursCalculator(caoRow);
 
         // Recompute time calculations based on updated Start/End/Rest
         double startTimeDecimal = partRide.Start.TotalHours;
@@ -1928,13 +1937,13 @@ public static class PartRideEndpoints
 
         // Calculate additional allowances and totals using helper functions
         double untaxedAllowanceNormalDayPartial =
-            WorkHoursCalculator.CalculateUntaxedAllowanceNormalDayPartial(
+            workHoursCalculator.CalculateUntaxedAllowanceNormalDayPartial(
                 startOfShift: startTimeDecimal,
                 endOfShift: endTimeDecimal,
                 isHoliday: false
             );
 
-        double untaxedAllowanceSingleDay = WorkHoursCalculator.CalculateUntaxedAllowanceSingleDay(
+        double untaxedAllowanceSingleDay = workHoursCalculator.CalculateUntaxedAllowanceSingleDay(
             hourCode: hoursCode.Name,
             startTime: startTimeDecimal,
             endTime: endTimeDecimal,
@@ -1942,12 +1951,12 @@ public static class PartRideEndpoints
             lumpSumIf12h: 14.63
         );
 
-        string holidayName = WorkHoursCalculator.GetHolidayName(
+        string holidayName = workHoursCalculator.GetHolidayName(
             date: partRide.Date,
             hoursOptionName: hoursOption?.Name
         );
 
-        double calculatedSickHours = WorkHoursCalculator.CalculateSickHours(
+        double calculatedSickHours = workHoursCalculator.CalculateSickHours(
             hourCode: hoursCode.Name,
             holidayName: holidayName,
             weeklyPercentage: compensation.PercentageOfWork,
@@ -1955,7 +1964,7 @@ public static class PartRideEndpoints
             endTime: endTimeDecimal
         );
 
-        double vacationHours = WorkHoursCalculator.CalculateVacationHours(
+        double vacationHours = workHoursCalculator.CalculateVacationHours(
             hourCode: hoursCode.Name,
             weeklyPercentage: compensation.PercentageOfWork,
             startTime: startTimeDecimal,
@@ -1976,7 +1985,7 @@ public static class PartRideEndpoints
             nightHoursWholeHours: false
         );
 
-        double totalBreak = WorkHoursCalculator.CalculateTotalBreak(
+        double totalBreak = workHoursCalculator.CalculateTotalBreak(
             breakScheduleOn: true,
             startTime: startTimeDecimal,
             endTime: endTimeDecimal,
@@ -1993,19 +2002,19 @@ public static class PartRideEndpoints
         );
         TimeSpan restTimeSpan = TimeSpan.FromHours(totalBreak);
 
-        double totalHours = WorkHoursCalculator.CalculateTotalHours(
+        double totalHours = workHoursCalculator.CalculateTotalHours(
             shiftStart: startTimeDecimal,
             shiftEnd: endTimeDecimal,
             breakDuration: totalBreak,
             manualAdjustment: partRide.CorrectionTotalHours
         );
 
-        double untaxedAllowanceDepartureDay = WorkHoursCalculator.CalculateUntaxedAllowanceDepartureDay(
+        double untaxedAllowanceDepartureDay = workHoursCalculator.CalculateUntaxedAllowanceDepartureDay(
             hourCode: hoursCode.Name,
             departureStartTime: startTimeDecimal
         );
 
-        double untaxedAllowanceIntermediateDay = WorkHoursCalculator.CalculateUntaxedAllowanceIntermediateDay(
+        double untaxedAllowanceIntermediateDay = workHoursCalculator.CalculateUntaxedAllowanceIntermediateDay(
             hourCode: hoursCode.Name,
             hourOption: hoursOption?.Name,
             date: partRide.Date,
@@ -2013,7 +2022,7 @@ public static class PartRideEndpoints
             endTime: endTimeDecimal
         );
 
-        double untaxedAllowanceArrivalDay = WorkHoursCalculator.CalculateUntaxedAllowanceArrivalDay(
+        double untaxedAllowanceArrivalDay = workHoursCalculator.CalculateUntaxedAllowanceArrivalDay(
             hourCode: hoursCode.Name,
             arrivalEndTime: endTimeDecimal
         );
@@ -2021,28 +2030,28 @@ public static class PartRideEndpoints
         double taxFreeCompensation = untaxedAllowanceSingleDay + untaxedAllowanceDepartureDay +
                                      untaxedAllowanceIntermediateDay + untaxedAllowanceArrivalDay;
 
-        double consignmentAllowance = WorkHoursCalculator.CalculateConsignmentAllowance(
+        double consignmentAllowance = workHoursCalculator.CalculateConsignmentAllowance(
             hourCode: hoursCode.Name,
             dateLookup: partRide.Date,
             startTime: startTimeDecimal,
             endTime: endTimeDecimal
         );
 
-        double saturdayHours = WorkHoursCalculator.CalculateSaturdayHours(
+        double saturdayHours = workHoursCalculator.CalculateSaturdayHours(
             date: partRide.Date,
             holidayName: holidayName,
             hoursCode: hoursCode.Name,
             totalHours: totalHours
         );
 
-        double sundayHolidayHours = WorkHoursCalculator.CalculateSundayHolidayHours(
+        double sundayHolidayHours = workHoursCalculator.CalculateSundayHolidayHours(
             date: partRide.Date,
             holidayName: holidayName,
             hourCode: hoursCode.Name,
             totalHours: totalHours
         );
 
-        double netHours = WorkHoursCalculator.CalculateNetHours(
+        double netHours = workHoursCalculator.CalculateNetHours(
             hourCode: hoursCode.Name,
             day: partRide.Date,
             isHoliday: !string.IsNullOrWhiteSpace(holidayName),
@@ -2360,17 +2369,25 @@ public static class PartRideEndpoints
         {
             throw new InvalidOperationException("DriverCompensationSettings not found for the specified driver.");
         }
+        
+        var caoService = new CaoService(db);
+        var caoRow = caoService.GetCaoRow(request.Date);
+        if (caoRow == null)
+            throw new InvalidOperationException("No CAO entry for this date.");
+
+        // 3) Create the calculator
+        var workHoursCalculator = new WorkHoursCalculator(caoRow);
 
         // 4) RUN THE CALCULATIONS:
 
         // 4a) Untaxed allowances
-        double untaxedAllowanceNormalDayPartial = WorkHoursCalculator.CalculateUntaxedAllowanceNormalDayPartial(
+        double untaxedAllowanceNormalDayPartial = workHoursCalculator.CalculateUntaxedAllowanceNormalDayPartial(
             startOfShift: startTimeDecimal,
             endOfShift: endTimeDecimal,
             isHoliday: isHoliday
         );
 
-        double untaxedAllowanceSingleDay = WorkHoursCalculator.CalculateUntaxedAllowanceSingleDay(
+        double untaxedAllowanceSingleDay = workHoursCalculator.CalculateUntaxedAllowanceSingleDay(
             hourCode: hoursCode.Name,
             startTime: startTimeDecimal,
             endTime: endTimeDecimal,
@@ -2378,20 +2395,20 @@ public static class PartRideEndpoints
             lumpSumIf12h: 14.63
         );
 
-        string holidayName = WorkHoursCalculator.GetHolidayName(
+        string holidayName = workHoursCalculator.GetHolidayName(
             date: request.Date,
             hoursOptionName: hoursOption?.Name
         );
 
         // 4b) Sick/Holiday hours
-        double sickHours = WorkHoursCalculator.CalculateSickHours(
+        double sickHours = workHoursCalculator.CalculateSickHours(
             hourCode: hoursCode.Name, // Replace with real hour code from request
             holidayName: holidayName, // Or request.HolidayName if you have it
             weeklyPercentage: compensation.PercentageOfWork,
             startTime: startTimeDecimal,
             endTime: endTimeDecimal
         );
-        double vacationHours = WorkHoursCalculator.CalculateVacationHours(
+        double vacationHours = workHoursCalculator.CalculateVacationHours(
             hourCode: hoursCode.Name,
             weeklyPercentage: compensation.PercentageOfWork,
             startTime: startTimeDecimal,
@@ -2414,7 +2431,7 @@ public static class PartRideEndpoints
         );
 
         // 4d) Break calculation (TotalBreak)
-        double totalBreak = WorkHoursCalculator.CalculateTotalBreak(
+        double totalBreak = workHoursCalculator.CalculateTotalBreak(
             breakScheduleOn: true, // Always true
             startTime: startTimeDecimal,
             endTime: endTimeDecimal,
@@ -2426,7 +2443,7 @@ public static class PartRideEndpoints
 
         // 4e) Compute final “totalHours” after subtracting the break, plus any manual adjustment
         double manualAdjustment = request.HoursCorrection ?? 0; // or request.ManualAdjustment if you have that
-        double totalHours = WorkHoursCalculator.CalculateTotalHours(
+        double totalHours = workHoursCalculator.CalculateTotalHours(
             shiftStart: startTimeDecimal,
             shiftEnd: endTimeDecimal,
             breakDuration: totalBreak,
@@ -2440,12 +2457,12 @@ public static class PartRideEndpoints
             maxThreshold: compensation.KilometersMax
         );
 
-        double untaxedAllowanceDepartureDay = WorkHoursCalculator.CalculateUntaxedAllowanceDepartureDay(
+        double untaxedAllowanceDepartureDay = workHoursCalculator.CalculateUntaxedAllowanceDepartureDay(
             hourCode: hoursCode.Name,
             departureStartTime: startTimeDecimal
         );
 
-        double untaxedAllowanceIntermediateDay = WorkHoursCalculator.CalculateUntaxedAllowanceIntermediateDay(
+        double untaxedAllowanceIntermediateDay = workHoursCalculator.CalculateUntaxedAllowanceIntermediateDay(
             hourCode: hoursCode.Name,
             hourOption: hoursOption?.Name,
             date: request.Date,
@@ -2453,7 +2470,7 @@ public static class PartRideEndpoints
             endTime: endTimeDecimal
         );
 
-        double untaxedAllowanceArrivalDay = WorkHoursCalculator.CalculateUntaxedAllowanceArrivalDay(
+        double untaxedAllowanceArrivalDay = workHoursCalculator.CalculateUntaxedAllowanceArrivalDay(
             hourCode: hoursCode.Name,
             arrivalEndTime: endTimeDecimal
         );
@@ -2461,28 +2478,28 @@ public static class PartRideEndpoints
         double taxFreeCompensation = untaxedAllowanceSingleDay + untaxedAllowanceDepartureDay +
                                      untaxedAllowanceIntermediateDay + untaxedAllowanceArrivalDay;
 
-        double consignmentAllowance = WorkHoursCalculator.CalculateConsignmentAllowance(
+        double consignmentAllowance = workHoursCalculator.CalculateConsignmentAllowance(
             hourCode: hoursCode.Name,
             dateLookup: request.Date,
             startTime: startTimeDecimal,
             endTime: endTimeDecimal
         );
 
-        double saturdayHours = WorkHoursCalculator.CalculateSaturdayHours(
+        double saturdayHours = workHoursCalculator.CalculateSaturdayHours(
             date: request.Date,
             holidayName: holidayName,
             hoursCode: hoursCode.Name,
             totalHours: totalHours
         );
 
-        double sundayHolidayHours = WorkHoursCalculator.CalculateSundayHolidayHours(
+        double sundayHolidayHours = workHoursCalculator.CalculateSundayHolidayHours(
             date: request.Date,
             holidayName: holidayName,
             hourCode: hoursCode.Name,
             totalHours: totalHours
         );
 
-        double netHours = WorkHoursCalculator.CalculateNetHours(
+        double netHours = workHoursCalculator.CalculateNetHours(
             hourCode: hoursCode.Name,
             day: request.Date,
             isHoliday: !string.IsNullOrWhiteSpace(holidayName),

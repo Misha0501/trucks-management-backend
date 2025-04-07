@@ -1,3 +1,5 @@
+using TruckManagement.Entities;
+
 namespace TruckManagement;
 
 public class ConsignmentRate
@@ -9,6 +11,7 @@ public class ConsignmentRate
 
 public class WorkHoursCalculator
 {
+    private readonly Cao _cao; // The CAO row for this date
     static double dayRateBefore18 = 0.77; // Example placeholders, replace with real config
     static double eveningRateAfter18 = 3.51;
     static string SINGLE_DAY_TRIP_CODE = "One day ride";
@@ -105,7 +108,12 @@ public class WorkHoursCalculator
         { new DateTime(2025, 1, 1), 63.00 }
     };
 
-    public static double CalculateTotalBreak(
+    public WorkHoursCalculator(Cao cao)
+    {
+        _cao = cao ?? throw new ArgumentNullException(nameof(cao));
+    }
+    
+    public double CalculateTotalBreak(
         bool breakScheduleOn,
         double startTime,
         double endTime,
@@ -153,7 +161,7 @@ public class WorkHoursCalculator
             return 0.0;
     }
 
-    public static double CalculateVacationHours(
+    public double CalculateVacationHours(
         string hourCode, // The code in E6 (e.g. "1","2","vak","zie","C127", etc.)
         double weeklyPercentage, // e.g., 100 for full-time, 50 for half-time, etc. (cell G2)
         double startTime, // The start time (was F6)
@@ -186,7 +194,7 @@ public class WorkHoursCalculator
         }
     }
 
-    public static double CalculateSickHours(
+    public double CalculateSickHours(
         string hourCode, // E6: e.g. "1", "2", "vak", "zie", "C128", "tvt", etc.
         string holidayName, // AM6: the name of a holiday (empty if not a holiday)
         double weeklyPercentage, // G2: e.g. 100 for full-time, 50 for half-time, etc.
@@ -230,7 +238,7 @@ public class WorkHoursCalculator
         }
     }
 
-    public static double CalculateUntaxedAllowanceNormalDayPartial(
+    public double CalculateUntaxedAllowanceNormalDayPartial(
         double startOfShift, // F6 in Excel
         double endOfShift, // G6 in Excel
         bool isHoliday // true if it's a holiday (AM has a holiday name)
@@ -275,7 +283,7 @@ public class WorkHoursCalculator
         return Math.Round(totalAllowance, 2);
     }
 
-    public static double CalculateUntaxedAllowanceSingleDay(
+    public double CalculateUntaxedAllowanceSingleDay(
         string hourCode, // E6, e.g. "1", "vak", "C123", etc.
         double startTime, // F6
         double endTime, // G6
@@ -338,7 +346,7 @@ public class WorkHoursCalculator
         }
     }
 
-    public static double CalculateTotalHours(
+    public double CalculateTotalHours(
         double shiftStart, // Was F7 in Excel
         double shiftEnd, // Was G7 in Excel
         double breakDuration, // Was H7 in Excel (the break)
@@ -350,7 +358,7 @@ public class WorkHoursCalculator
         return Math.Round(totalHours, 2);
     }
 
-    public static double CalculateUntaxedAllowanceDepartureDay(
+    public double CalculateUntaxedAllowanceDepartureDay(
         string hourCode,
         double departureStartTime)
     {
@@ -390,7 +398,7 @@ public class WorkHoursCalculator
         }
     }
 
-    public static double CalculateUntaxedAllowanceIntermediateDay(
+    public double CalculateUntaxedAllowanceIntermediateDay(
         string hourCode,
         string? hourOption,
         DateTime date,
@@ -425,7 +433,7 @@ public class WorkHoursCalculator
         return Math.Round(defaultRate, 2);
     }
 
-    public static double CalculateUntaxedAllowanceArrivalDay(
+    public double CalculateUntaxedAllowanceArrivalDay(
         string hourCode, // E6
         double arrivalEndTime // G6
     )
@@ -466,7 +474,7 @@ public class WorkHoursCalculator
         }
     }
 
-    public static double CalculateConsignmentAllowance(
+    public double CalculateConsignmentAllowance(
         string hourCode, // E6
         DateTime dateLookup, // D6
         double startTime, // F6
@@ -514,7 +522,7 @@ public class WorkHoursCalculator
         return Math.Round(result, 2);
     }
 
-    public static double CalculateSaturdayHours(
+    public double CalculateSaturdayHours(
         DateTime date, // replaces dayName, e.g., 2025-04-05
         string holidayName, // AM11 in Excel (empty if no holiday)
         string hoursCode, // E11 in Excel (e.g. "Course day")
@@ -537,7 +545,7 @@ public class WorkHoursCalculator
         return totalHours;
     }
 
-    public static string GetHolidayName(DateTime date, string? hoursOptionName)
+    public string GetHolidayName(DateTime date, string? hoursOptionName)
     {
         // If the selected hours option explicitly marks the day as a holiday
         if (!string.IsNullOrWhiteSpace(hoursOptionName) && hoursOptionName == "Holiday")
@@ -561,7 +569,7 @@ public class WorkHoursCalculator
         return string.Empty;
     }
 
-    public static double CalculateSundayHolidayHours(
+    public double CalculateSundayHolidayHours(
         string hourCode,
         DateTime date,
         string? holidayName,
@@ -584,7 +592,7 @@ public class WorkHoursCalculator
         return 0.0;
     }
 
-    public static double CalculateNetHours(
+    public double CalculateNetHours(
         string hourCode,
         DateTime day,
         bool isHoliday,
