@@ -1,12 +1,19 @@
+using TruckManagement.Entities;
+
 namespace TruckManagement;
 
 public class KilometersAllowance
 {
-    public static double HomeWorkDistance(
+    private readonly Cao _cao;
+    
+    public KilometersAllowance(Cao cao)
+    {
+        _cao = cao ?? throw new ArgumentNullException(nameof(cao));
+    }
+
+    public double HomeWorkDistance(
         bool kilometerAllowanceEnabled,  // Admin!E16 == "ja"?
-        double oneWayValue,             // Admin!G16
-        double minThreshold,            // Admin!H16
-        double maxThreshold             // Admin!I16
+        double oneWayValue             // Admin!G16
     )
     {
         // 1) If the allowance is not enabled => 0
@@ -14,6 +21,9 @@ public class KilometersAllowance
         {
             return 0.0;
         }
+        
+        double minThreshold = (double)_cao.CommuteMinKilometers;
+        double maxThreshold = (double)_cao.CommuteMaxKilometers;
 
         // 2) If oneWayValue < min => 0
         if (oneWayValue < minThreshold)
@@ -35,21 +45,21 @@ public class KilometersAllowance
     /// Replicates the cell P6 formula from the "Periode_1" sheet.
     /// </summary>
     /// <param name="extraKilometers">Q6, the extra km traveled.</param>
-    /// <param name="kilometerRate">P3, the allowance rate per km.</param>
     /// <param name="hourCode">E6, a numeric or string code: e.g. "3", "vak", etc.</param>
     /// <param name="hourOption">J6, e.g. "X", "GW", or empty.</param>
     /// <param name="totalHours">K6, total shift hours.</param>
     /// <param name="homeWorkDistance">P2, the home–work distance factor.</param>
     /// <returns>The value that goes into P6.</returns>
-    public static double CalculateKilometersAllowance(
+    public double CalculateKilometersAllowance(
         double extraKilometers,
-        double kilometerRate,
         string hourCode,
         string? hourOption,
         double totalHours,
         double homeWorkDistance
     )
     {
+        double kilometerRate = (double)_cao.KilometersAllowance;
+        
         // 1) Base part: Q6 * P3
         double result = Math.Round(extraKilometers * kilometerRate, 2);
 
