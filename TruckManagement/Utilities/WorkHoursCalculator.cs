@@ -23,14 +23,6 @@ public class WorkHoursCalculator
     static string CONSIGNMENT_CODE = "Consignment";
     static string STANDOVER_OPTION = "StandOver";
 
-
-    private static readonly List<ConsignmentRate> RatesTable = new()
-    {
-        new ConsignmentRate { Date = new DateTime(2024, 1, 1), Taxed = 25.68, Untaxed = 3.21 },
-        new ConsignmentRate { Date = new DateTime(2024, 7, 1), Taxed = 26.16, Untaxed = 3.27 },
-        new ConsignmentRate { Date = new DateTime(2025, 1, 1), Taxed = 27.20, Untaxed = 3.40 }
-    };
-
     private static readonly Dictionary<DateTime, string> DutchHolidays = new()
     {
         { new DateTime(2022, 1, 1), "Nieuwjaarsdag" },
@@ -462,25 +454,13 @@ public class WorkHoursCalculator
     )
     {
         // If hourCode != "Consignment" => 0
-        if (hourCode != "Consignment")
+        if (hourCode != CONSIGNMENT_CODE)
             return 0.0;
 
         // 1) VLOOKUP(D6, Tabel1[#All], 3, 1) => approximate match on 'dateLookup'
         //    We'll pick the largest date <= dateLookup (common approach).
         //    If none is <= dateLookup, we might pick the earliest row or return 0.
-        var matchedRate = RatesTable
-            .Where(r => r.Date <= dateLookup)
-            .OrderByDescending(r => r.Date)
-            .FirstOrDefault();
-
-        if (matchedRate == null)
-        {
-            // If there's no date less than or equal to dateLookup, you could pick the earliest,
-            // or just do 0. We'll do 0 for now.
-            return 0.0;
-        }
-
-        double untaxedValue = matchedRate.Untaxed;
+        double untaxedValue = (double)_cao.ConsignmentUntaxedAllowance;
 
         // 2) The SHIFT formula: 
         //    If G6 < F6 => shift = 24 - F6 + G6
