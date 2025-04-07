@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using TruckManagement.Data;
+using TruckManagement.Data.Seeding;
 using TruckManagement.Entities;
 
 namespace TruckManagement.Seeding
@@ -805,6 +806,8 @@ namespace TruckManagement.Seeding
                 }
             }
             await dbContext.SaveChangesAsync();
+            
+            await CaoSeeder.SeedAsync(dbContext);
         }
     }
 }
