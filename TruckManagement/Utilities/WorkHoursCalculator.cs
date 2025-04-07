@@ -75,15 +75,6 @@ public class WorkHoursCalculator
         { new DateTime(2028, 12, 26), "2e Kerstdag" }
     };
 
-    private static readonly SortedDictionary<DateTime, double> IntermediateUntaxedRateIfStandOver = new()
-    {
-        { new DateTime(2022, 1, 1), 13.79 },
-        { new DateTime(2023, 1, 1), 14.63 },
-        { new DateTime(2024, 1, 1), 15.22 },
-        { new DateTime(2024, 7, 1), 15.22 },
-        { new DateTime(2025, 1, 1), 15.22 }
-    };
-
     public WorkHoursCalculator(Cao cao)
     {
         _cao = cao ?? throw new ArgumentNullException(nameof(cao));
@@ -377,7 +368,6 @@ public class WorkHoursCalculator
     public double CalculateUntaxedAllowanceIntermediateDay(
         string hourCode,
         string? hourOption,
-        DateTime date,
         double startTime,
         double endTime
     )
@@ -390,11 +380,7 @@ public class WorkHoursCalculator
         if (hourOption == STANDOVER_OPTION && startTime == 0.0 && endTime == 0.0)
         {
             // Look for the latest applicable rate before or on the given date
-            var rate = IntermediateUntaxedRateIfStandOver
-                .Where(x => x.Key <= date)
-                .OrderByDescending(x => x.Key)
-                .Select(x => x.Value)
-                .FirstOrDefault();
+            var rate = (double)_cao.StandOverIntermediateDayUntaxed;
 
             return Math.Round(rate, 2);
         }
