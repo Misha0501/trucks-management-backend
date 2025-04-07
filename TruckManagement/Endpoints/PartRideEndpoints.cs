@@ -1951,8 +1951,7 @@ public static class PartRideEndpoints
             hourCode: hoursCode.Name,
             startTime: startTimeDecimal,
             endTime: endTimeDecimal,
-            untaxedAllowanceNormalDayPartial: untaxedAllowanceNormalDayPartial,
-            lumpSumIf12h: 14.63
+            untaxedAllowanceNormalDayPartial: untaxedAllowanceNormalDayPartial
         );
 
         string holidayName = workHoursCalculator.GetHolidayName(
@@ -2387,8 +2386,7 @@ public static class PartRideEndpoints
             hourCode: hoursCode.Name,
             startTime: startTimeDecimal,
             endTime: endTimeDecimal,
-            untaxedAllowanceNormalDayPartial: untaxedAllowanceNormalDayPartial,
-            lumpSumIf12h: 14.63
+            untaxedAllowanceNormalDayPartial: untaxedAllowanceNormalDayPartial
         );
 
         string holidayName = workHoursCalculator.GetHolidayName(

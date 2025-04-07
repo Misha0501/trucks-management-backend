@@ -247,8 +247,7 @@ public class WorkHoursCalculator
         string hourCode, // E6, e.g. "1", "vak", "C123", etc.
         double startTime, // F6
         double endTime, // G6
-        double untaxedAllowanceNormalDayPartial, // AG6 result, i.e. same-day partial logic
-        double lumpSumIf12h // AC6, TDonbelast for 12+ hours (cross-midnight)
+        double untaxedAllowanceNormalDayPartial // AG6 result, i.e. same-day partial logic
     )
     {
         // 1) If the code is not "Eendaagserit", Excel returns "" => we do 0
@@ -298,7 +297,7 @@ public class WorkHoursCalculator
                 else
                 {
                     // totalShift >= 12 => add AC6 lumpsum
-                    result = (totalShift * (double)_cao.StandardUntaxedAllowance) + lumpSumIf12h;
+                    result = (totalShift * (double)_cao.StandardUntaxedAllowance) + (double)_cao.ShiftMoreThan12HAllowance;
                 }
             }
 
