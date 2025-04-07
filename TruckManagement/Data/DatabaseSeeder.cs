@@ -808,6 +808,8 @@ namespace TruckManagement.Seeding
             await dbContext.SaveChangesAsync();
             
             await CaoSeeder.SeedAsync(dbContext);
+            
+            await VacationRightSeeder.SeedAsync(dbContext);
         }
     }
 }
