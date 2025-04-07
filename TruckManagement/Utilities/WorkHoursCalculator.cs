@@ -18,8 +18,6 @@ public class WorkHoursCalculator
     static string HOLIDAY_CODE = "Holiday";
     static string DEPARTURE_CODE = "Multi-day trip departure";
     static string ARRIVAL_CODE = "Multi-day trip arrival"; // new
-    static double MULTI_DAY_ALLOWANCE_BEFORE_17H = 1.54;
-    static double MULTI_DAY_ALLOWANCE_AFTER_17H = 3.51;
     static string INTERMEDIATE_DAY_CODE = "Multi-day trip intermediate day";
     static double MULTI_DAY_ALLOWANCE_INTERMEDIATE = 60.60;
     static string COURSE_DAY_CODE = "Course day";
@@ -376,8 +374,8 @@ public class WorkHoursCalculator
             // (17 - start)* AE6 + 7* AD6
             double hoursUntil17 = 17.0 - departureStartTime;
             return Math.Round(
-                (hoursUntil17 * MULTI_DAY_ALLOWANCE_BEFORE_17H)
-                + (7.0 * MULTI_DAY_ALLOWANCE_AFTER_17H),
+                (hoursUntil17 * (double)_cao.MultiDayBefore17Allowance)
+                + (7.0 * (double)_cao.MultiDayAfter17Allowance),
                 2
             );
         }
@@ -386,7 +384,7 @@ public class WorkHoursCalculator
             // (24 - start)* AE6
             double remainingHours = 24.0 - departureStartTime;
             return Math.Round(
-                remainingHours * MULTI_DAY_ALLOWANCE_BEFORE_17H, // "AE6" from formula
+                remainingHours * (double)_cao.MultiDayBefore17Allowance, // "AE6" from formula
                 2
             );
         }
@@ -447,15 +445,15 @@ public class WorkHoursCalculator
         // 1) If G6 <= 12 => G6 * AE6
         if (arrivalEndTime <= 12.0)
         {
-            return Math.Round(arrivalEndTime * MULTI_DAY_ALLOWANCE_BEFORE_17H, 2);
+            return Math.Round(arrivalEndTime * (double)_cao.MultiDayBefore17Allowance, 2);
         }
         // 2) Else if G6 < 18 => (6 * AD6) + ((G6 - 6) * AE6)
         else if (arrivalEndTime < 18.0)
         {
             double hoursAfter6 = arrivalEndTime - 6.0;
             return Math.Round(
-                (6.0 * MULTI_DAY_ALLOWANCE_AFTER_17H)
-                + (hoursAfter6 * MULTI_DAY_ALLOWANCE_BEFORE_17H),
+                (6.0 * (double)_cao.MultiDayAfter17Allowance)
+                + (hoursAfter6 * (double)_cao.MultiDayBefore17Allowance),
                 2
             );
         }
@@ -464,9 +462,9 @@ public class WorkHoursCalculator
         {
             double hoursAfter18 = arrivalEndTime - 18.0;
             return Math.Round(
-                (hoursAfter18 * MULTI_DAY_ALLOWANCE_AFTER_17H)
-                + (12.0 * MULTI_DAY_ALLOWANCE_BEFORE_17H)
-                + (6.0 * MULTI_DAY_ALLOWANCE_AFTER_17H),
+                (hoursAfter18 * (double)_cao.MultiDayAfter17Allowance)
+                + (12.0 * (double)_cao.MultiDayBefore17Allowance)
+                + (6.0 * (double)_cao.MultiDayAfter17Allowance),
                 2
             );
         }
