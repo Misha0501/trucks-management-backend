@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TruckManagement.Data;
@@ -11,9 +12,11 @@ using TruckManagement.Data;
 namespace TruckManagement.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250407122707_AddedStandOverIntermidiateDayUntaxed")]
+    partial class AddedStandOverIntermidiateDayUntaxed
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -297,7 +300,7 @@ namespace TruckManagement.Migrations
                     b.Property<decimal>("ShiftMoreThan12HAllowance")
                         .HasColumnType("numeric");
 
-                    b.Property<decimal>("StandOverIntermediateDayUntaxed")
+                    b.Property<decimal>("StandOverIntermidiateDayUntaxed")
                         .HasColumnType("numeric");
 
                     b.Property<decimal>("StandardUntaxedAllowance")

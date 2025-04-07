@@ -33,7 +33,8 @@ public static class CaoSeeder
                 KilometersAllowance = 0.00m, 
                 NightHoursAllowanceRate = 0.19m,
                 NightTimeStart = nightStart,
-                NightTimeEnd = nightEnd
+                NightTimeEnd = nightEnd,
+                StandOverIntermediateDayUntaxed = 13.79m
             },
             // 2) 01/07/2021 -> 31/12/2021
             new Cao
@@ -54,7 +55,8 @@ public static class CaoSeeder
                 KilometersAllowance = 0.00m,
                 NightHoursAllowanceRate = 0.19m,
                 NightTimeStart = nightStart,
-                NightTimeEnd = nightEnd
+                NightTimeEnd = nightEnd,
+                StandOverIntermediateDayUntaxed = 15.22m
             },
             // 3) 01/01/2022 -> 31/12/2022
             new Cao
@@ -75,7 +77,8 @@ public static class CaoSeeder
                 KilometersAllowance = 0.00m,
                 NightHoursAllowanceRate = 0.19m,
                 NightTimeStart = nightStart,
-                NightTimeEnd = nightEnd
+                NightTimeEnd = nightEnd,
+                StandOverIntermediateDayUntaxed = 15.22m
             },
             // 4) 01/01/2023 -> 31/12/2023
             new Cao
@@ -96,7 +99,8 @@ public static class CaoSeeder
                 KilometersAllowance = 0.21m,
                 NightHoursAllowanceRate = 0.19m,
                 NightTimeStart = nightStart,
-                NightTimeEnd = nightEnd
+                NightTimeEnd = nightEnd,
+                StandOverIntermediateDayUntaxed = 15.22m
             },
             // 5) 01/01/2024 -> 30/06/2024
             new Cao
@@ -117,7 +121,8 @@ public static class CaoSeeder
                 KilometersAllowance = 0.23m,
                 NightHoursAllowanceRate = 0.19m,
                 NightTimeStart = nightStart,
-                NightTimeEnd = nightEnd
+                NightTimeEnd = nightEnd,
+                StandOverIntermediateDayUntaxed = 15.22m
             },
             // 6) 01/07/2024 -> 31/12/2024
             new Cao
@@ -138,7 +143,8 @@ public static class CaoSeeder
                 KilometersAllowance = 0.23m,
                 NightHoursAllowanceRate = 0.19m,
                 NightTimeStart = nightStart,
-                NightTimeEnd = nightEnd
+                NightTimeEnd = nightEnd,
+                StandOverIntermediateDayUntaxed = 15.22m
             },
             // 7) 01/01/2025 -> far future
             new Cao
@@ -159,7 +165,8 @@ public static class CaoSeeder
                 KilometersAllowance = 0.23m,
                 NightHoursAllowanceRate = 0.19m,
                 NightTimeStart = nightStart,
-                NightTimeEnd = nightEnd
+                NightTimeEnd = nightEnd,
+                StandOverIntermediateDayUntaxed = 15.22m
             },
         };
 

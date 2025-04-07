@@ -16,6 +16,7 @@ namespace TruckManagement.Entities
         public decimal MultiDayUntaxedAllowance { get; set; } // Tussendag
         public decimal ConsignmentUntaxedAllowance { get; set; } // Onbelast
         public decimal ConsignmentTaxedAllowance { get; set; } // manually added or computed
+        public decimal StandOverIntermediateDayUntaxed { get; set; } // manually added or computed
 
         public decimal CommuteMinKilometers { get; set; }
         public decimal CommuteMaxKilometers { get; set; }
