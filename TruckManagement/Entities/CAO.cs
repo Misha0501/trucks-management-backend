@@ -11,7 +11,7 @@ namespace TruckManagement.Entities
         public decimal StandardUntaxedAllowance { get; set; } // Normaal
         public decimal MultiDayAfter17Allowance { get; set; } // MRDna
         public decimal MultiDayBefore17Allowance { get; set; } // MRDvoor
-        public decimal ShiftMoreThan12hAllowance { get; set; } // Doorbelasting
+        public decimal ShiftMoreThan12HAllowance { get; set; } // Doorbelasting
         public decimal MultiDayTaxedAllowance { get; set; } // Dbelast
         public decimal MultiDayUntaxedAllowance { get; set; } // Tussendag
         public decimal ConsignmentUntaxedAllowance { get; set; } // Onbelast
