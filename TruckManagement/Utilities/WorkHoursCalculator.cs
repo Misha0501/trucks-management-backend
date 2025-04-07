@@ -420,11 +420,7 @@ public class WorkHoursCalculator
         }
         
         // Use MultiDayTripIntermediateUntaxed rates by date
-        var defaultRate = IntermediateUntaxedRates
-            .Where(x => x.Key <= date)
-            .OrderByDescending(x => x.Key)
-            .Select(x => x.Value)
-            .FirstOrDefault();
+        var defaultRate = (double)_cao.MultiDayUntaxedAllowance;
 
         return Math.Round(defaultRate, 2);
     }
