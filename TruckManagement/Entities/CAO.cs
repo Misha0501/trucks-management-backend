@@ -17,8 +17,8 @@ namespace TruckManagement.Entities
         public decimal ConsignmentUntaxedAllowance { get; set; } // Onbelast
         public decimal ConsignmentTaxedAllowance { get; set; } // manually added or computed
 
-        public int CommuteMinKilometers { get; set; }
-        public int CommuteMaxKilometers { get; set; }
+        public decimal CommuteMinKilometers { get; set; }
+        public decimal CommuteMaxKilometers { get; set; }
         public decimal KilometersAllowance { get; set; } // EUR 0.23
 
         public decimal NightHoursAllowanceRate { get; set; } // EUR 0.19
