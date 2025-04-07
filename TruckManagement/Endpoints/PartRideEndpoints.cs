@@ -2352,7 +2352,6 @@ public static class PartRideEndpoints
         // 3) Some basic calculations from your request:
         //    (If you prefer reading from request directly, feel free.)
 
-        bool isHoliday = false; // or check your own holiday logic
         // Fetch DriverCompensationSettings
         var driverId = TryParseGuid(request.DriverId);
         var compensation = await db.DriverCompensationSettings
@@ -2374,12 +2373,16 @@ public static class PartRideEndpoints
         var nightAllowanceCalculator = new NightAllowanceCalculator(caoRow); // pass the CAO row
 
         // 4) RUN THE CALCULATIONS:
-
+        string holidayName = workHoursCalculator.GetHolidayName(
+            date: request.Date,
+            hoursOptionName: hoursOption?.Name
+        );
+        
         // 4a) Untaxed allowances
         double untaxedAllowanceNormalDayPartial = workHoursCalculator.CalculateUntaxedAllowanceNormalDayPartial(
             startOfShift: startTimeDecimal,
             endOfShift: endTimeDecimal,
-            isHoliday: isHoliday
+            isHoliday: !string.IsNullOrWhiteSpace(holidayName)
         );
 
         double untaxedAllowanceSingleDay = workHoursCalculator.CalculateUntaxedAllowanceSingleDay(
@@ -2387,11 +2390,6 @@ public static class PartRideEndpoints
             startTime: startTimeDecimal,
             endTime: endTimeDecimal,
             untaxedAllowanceNormalDayPartial: untaxedAllowanceNormalDayPartial
-        );
-
-        string holidayName = workHoursCalculator.GetHolidayName(
-            date: request.Date,
-            hoursOptionName: hoursOption?.Name
         );
 
         // 4b) Sick/Holiday hours
