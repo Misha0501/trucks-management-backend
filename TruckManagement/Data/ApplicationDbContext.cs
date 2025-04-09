@@ -30,6 +30,7 @@ namespace TruckManagement.Data
         public DbSet<DriverCompensationSettings> DriverCompensationSettings { get; set; } = default!;
         public DbSet<Cao> Caos { get; set; }
         public DbSet<VacationRight> VacationRights { get; set; } = default!;
+        public DbSet<EmployeeContract> EmployeeContracts { get; set; } = default!;
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
