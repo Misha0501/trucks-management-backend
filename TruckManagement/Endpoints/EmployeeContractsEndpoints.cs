@@ -54,6 +54,11 @@ namespace TruckManagement.Endpoints
 
                             driverGuid = parsedDriverId;
                         }
+                        
+                        if (string.IsNullOrWhiteSpace(request.CompanyId))
+                        {
+                            return ApiResponseFactory.Error("CompanyId is required.", StatusCodes.Status400BadRequest);
+                        }
 
                         // 3) Validate optional CompanyId
                         Guid? companyGuid = null;
@@ -404,6 +409,7 @@ namespace TruckManagement.Endpoints
                         );
                     }
                 });
+
             app.MapGet("/employee-contracts/{id}",
                 [Authorize(Roles = "globalAdmin, customerAdmin, employer, customer, driver")]
                 async (

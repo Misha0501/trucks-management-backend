@@ -1,9 +1,11 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace TruckManagement.DTOs;
 
 public class CreateEmployeeContractRequest
 {
     public string? DriverId { get; set; }
-    public string? CompanyId { get; set; }
+    public string CompanyId { get; set; }
     public decimal? ReleaseVersion { get; set; }
 
     public bool NightHoursAllowed { get; set; }
