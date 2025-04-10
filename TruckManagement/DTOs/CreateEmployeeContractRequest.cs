@@ -5,7 +5,7 @@ namespace TruckManagement.DTOs;
 public class CreateEmployeeContractRequest
 {
     public string? DriverId { get; set; }
-    public string CompanyId { get; set; }
+    public string CompanyId { get; set; }= default!;
     public decimal? ReleaseVersion { get; set; }
 
     public bool NightHoursAllowed { get; set; }
