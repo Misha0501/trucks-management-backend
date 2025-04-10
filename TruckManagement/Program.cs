@@ -77,5 +77,6 @@ app.MapRideEndpoints();
 app.MapPartRideEndpoints();
 app.MapHoursCodeRoutes();
 app.MapHoursOptionRoutes();
+app.MapEmployeeContractsEndpoints();
 
 app.Run();

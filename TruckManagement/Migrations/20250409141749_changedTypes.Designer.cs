@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TruckManagement.Data;
@@ -11,9 +12,11 @@ using TruckManagement.Data;
 namespace TruckManagement.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250409141749_changedTypes")]
+    partial class changedTypes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -701,8 +704,8 @@ namespace TruckManagement.Migrations
                     b.Property<string>("ProbationPeriod")
                         .HasColumnType("text");
 
-                    b.Property<decimal?>("ReleaseVersion")
-                        .HasColumnType("numeric");
+                    b.Property<string>("ReleaseVersion")
+                        .HasColumnType("text");
 
                     b.Property<decimal>("TravelExpenses")
                         .HasColumnType("numeric");

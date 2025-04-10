@@ -12,7 +12,7 @@ namespace TruckManagement.Entities
         public Guid? DriverId { get; set; }
         public Guid? CompanyId { get; set; }
 
-        public string? ReleaseVersion { get; set; }
+        public decimal? ReleaseVersion { get; set; }
 
         public bool NightHoursAllowed { get; set; }
         public bool KilometersAllowanceAllowed { get; set; }
@@ -25,7 +25,7 @@ namespace TruckManagement.Entities
         public string EmployeeCity { get; set; } = null!;
 
         public DateTime DateOfBirth { get; set; }
-        public string BSN { get; set; } = null!;
+        public string Bsn { get; set; } = null!;
         public DateTime DateOfEmployment { get; set; }
         public DateTime? LastWorkingDay { get; set; }
 
@@ -44,14 +44,14 @@ namespace TruckManagement.Entities
         public int PayScaleStep { get; set; }
 
         public decimal HourlyWage100Percent { get; set; }
-        public bool DeviatingWage { get; set; }
+        public decimal DeviatingWage { get; set; }
 
         public decimal TravelExpenses { get; set; } // e.g. 0.23
         public decimal MaxTravelExpenses { get; set; } // e.g. 100.00
 
         public int VacationAge { get; set; } // e.g. 44
         public int VacationDays { get; set; } // e.g. 28
-        public double Atv { get; set; } // e.g. 3.5
+        public decimal Atv { get; set; } // e.g. 3.5
         public decimal VacationAllowance { get; set; }
 
         public string CompanyName { get; set; } = null!;
