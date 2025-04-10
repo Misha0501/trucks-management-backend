@@ -13,7 +13,8 @@ namespace TruckManagement.Endpoints
     {
         public static void MapDriversEndpoints(this WebApplication app)
         {
-            app.MapGet("/drivers", [Authorize(Roles = "globalAdmin, customerAdmin, customerAccountant, employer, customer")]
+            app.MapGet("/drivers",
+                [Authorize(Roles = "globalAdmin, customerAdmin, customerAccountant, employer, customer")]
                 async (
                     ApplicationDbContext db,
                     ClaimsPrincipal user,
@@ -24,7 +25,8 @@ namespace TruckManagement.Endpoints
                 {
                     // Validate pagination parameters
                     if (pageNumber < 1 || pageSize < 1)
-                        return ApiResponseFactory.Error("Page number and page size must be greater than zero.", StatusCodes.Status400BadRequest);
+                        return ApiResponseFactory.Error("Page number and page size must be greater than zero.",
+                            StatusCodes.Status400BadRequest);
 
                     // Get the requesting user's ID and roles
                     var currentUserId = userManager.GetUserId(user);
@@ -74,7 +76,8 @@ namespace TruckManagement.Endpoints
                         .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
 
                     if (contactPerson == null)
-                        return ApiResponseFactory.Error("Unauthorized to access drivers.", StatusCodes.Status403Forbidden);
+                        return ApiResponseFactory.Error("Unauthorized to access drivers.",
+                            StatusCodes.Status403Forbidden);
 
                     // Retrieve associated company IDs for the contact person
                     var associatedCompanyIds = contactPerson.ContactPersonClientCompanies
@@ -118,6 +121,78 @@ namespace TruckManagement.Endpoints
                         PageSize = pageSize,
                         Drivers = associatedDrivers
                     });
+                });
+
+            app.MapGet("/employee-contracts/{id}",
+                [Authorize(Roles = "globalAdmin, customerAdmin, employer, customer, driver")]
+                async (
+                    Guid id,
+                    ApplicationDbContext db,
+                    ClaimsPrincipal currentUser,
+                    UserManager<ApplicationUser> userManager
+                ) =>
+                {
+                    try
+                    {
+                        var userId = userManager.GetUserId(currentUser);
+                        if (string.IsNullOrEmpty(userId))
+                        {
+                            return ApiResponseFactory.Error("User not authenticated",
+                                StatusCodes.Status401Unauthorized);
+                        }
+
+                        var contract = await db.EmployeeContracts
+                            .AsNoTracking()
+                            .FirstOrDefaultAsync(ec => ec.Id == id);
+
+                        if (contract == null)
+                        {
+                            return ApiResponseFactory.Error("EmployeeContract not found",
+                                StatusCodes.Status404NotFound);
+                        }
+
+                        // Check access for driver
+                        if (currentUser.IsInRole("driver"))
+                        {
+                            var driver = await db.Drivers.FirstOrDefaultAsync(d => d.AspNetUserId == userId);
+                            if (driver == null || contract.DriverId != driver.Id)
+                            {
+                                return ApiResponseFactory.Error("Access denied: Not your contract.",
+                                    StatusCodes.Status403Forbidden);
+                            }
+                        }
+                        else if (!currentUser.IsInRole("globalAdmin"))
+                        {
+                            // Validate user belongs to company (admin side)
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error("Access denied: No contact person profile found.",
+                                    StatusCodes.Status403Forbidden);
+                            }
+
+                            var userCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Select(cc => cc.CompanyId)
+                                .ToList();
+
+                            if (contract.CompanyId == null || !userCompanyIds.Contains(contract.CompanyId))
+                            {
+                                return ApiResponseFactory.Error("Access denied: Not part of the specified company.",
+                                    StatusCodes.Status403Forbidden);
+                            }
+                        }
+
+                        return ApiResponseFactory.Success(contract);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Error fetching contract detail: {ex.Message}");
+                        return ApiResponseFactory.Error("Unexpected error while retrieving the contract.",
+                            StatusCodes.Status500InternalServerError);
+                    }
                 });
         }
     }
