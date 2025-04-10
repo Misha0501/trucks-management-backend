@@ -38,7 +38,7 @@ public static class JwtTokenHelper
             issuer: issuer,
             audience: audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddHours(1),
+            expires: DateTime.UtcNow.AddMonths(6),
             signingCredentials: credentials
         );
 
