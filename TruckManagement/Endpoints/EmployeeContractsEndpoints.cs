@@ -114,7 +114,7 @@ namespace TruckManagement.Endpoints
                             Id = Guid.NewGuid(),
                             DriverId = driverGuid,
                             CompanyId = companyGuid,
-                            ReleaseVersion = request.ReleaseVersion,
+                            ReleaseVersion = 1.0m,
 
                             NightHoursAllowed = request.NightHoursAllowed,
                             KilometersAllowanceAllowed = request.KilometersAllowanceAllowed,
