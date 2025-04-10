@@ -194,6 +194,73 @@ namespace TruckManagement.Endpoints
                             StatusCodes.Status500InternalServerError);
                     }
                 });
+
+            app.MapDelete("/employee-contracts/{id:guid}",
+                [Authorize(Roles = "globalAdmin, customerAdmin, employer")]
+                async (
+                    Guid id,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    try
+                    {
+                        var userId = userManager.GetUserId(currentUser);
+                        if (string.IsNullOrEmpty(userId))
+                        {
+                            return ApiResponseFactory.Error("User not authenticated.",
+                                StatusCodes.Status401Unauthorized);
+                        }
+
+                        var isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+
+                        var contract = await db.EmployeeContracts.FindAsync(id);
+
+                        if (contract == null)
+                        {
+                            return ApiResponseFactory.Error("Employee contract not found.",
+                                StatusCodes.Status404NotFound);
+                        }
+
+                        if (!isGlobalAdmin && contract.CompanyId != null)
+                        {
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error("You are not authorized to delete this contract.",
+                                    StatusCodes.Status403Forbidden);
+                            }
+
+                            var associatedCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Select(cpc => cpc.CompanyId)
+                                .Distinct()
+                                .ToList();
+
+                            if (!associatedCompanyIds.Contains(contract.CompanyId.Value))
+                            {
+                                return ApiResponseFactory.Error("You are not authorized to delete this contract.",
+                                    StatusCodes.Status403Forbidden);
+                            }
+                        }
+
+                        db.EmployeeContracts.Remove(contract);
+                        await db.SaveChangesAsync();
+
+                        return ApiResponseFactory.Success(new { Message = "Employee contract deleted successfully." },
+                            StatusCodes.Status200OK);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Error deleting employee contract: {ex.Message}");
+                        return ApiResponseFactory.Error("Internal server error while deleting the employee contract.",
+                            StatusCodes.Status500InternalServerError);
+                    }
+                }
+            );
         }
     }
 }
