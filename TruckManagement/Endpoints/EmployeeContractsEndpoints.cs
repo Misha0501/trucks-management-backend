@@ -54,7 +54,7 @@ namespace TruckManagement.Endpoints
 
                             driverGuid = parsedDriverId;
                         }
-                        
+
                         if (string.IsNullOrWhiteSpace(request.CompanyId))
                         {
                             return ApiResponseFactory.Error("CompanyId is required.", StatusCodes.Status400BadRequest);
@@ -278,10 +278,10 @@ namespace TruckManagement.Endpoints
                         // 3) Start an IQueryable
                         IQueryable<EmployeeContract> query = db.EmployeeContracts
                             .Include(c => c.Driver)
-                                .ThenInclude(d => d.User)
+                            .ThenInclude(d => d.User)
                             .Include(c => c.Company)
                             .AsQueryable();
-                        
+
                         // 4) If user is not globalAdmin and not driver => must be contact-person-based
                         //    If user is driver, we handle it later by forcing contract.DriverId==driver’s own Id
                         if (!isGlobalAdmin && !isDriver)
@@ -358,17 +358,21 @@ namespace TruckManagement.Endpoints
                             data = contracts.Select(c => new
                             {
                                 c.Id,
-                                Driver = c.Driver == null ? null : new
-                                {
-                                    c.Driver.Id,
-                                    FullName = c.Driver.User.FirstName + " " + c.Driver.User.LastName,
-                                    c.Driver.AspNetUserId
-                                },
-                                Company = c.Company == null ? null : new
-                                {
-                                    c.Company.Id,
-                                    c.Company.Name
-                                },
+                                Driver = c.Driver == null
+                                    ? null
+                                    : new
+                                    {
+                                        c.Driver.Id,
+                                        FullName = c.Driver.User.FirstName + " " + c.Driver.User.LastName,
+                                        c.Driver.AspNetUserId
+                                    },
+                                Company = c.Company == null
+                                    ? null
+                                    : new
+                                    {
+                                        c.Company.Id,
+                                        c.Company.Name
+                                    },
                                 c.ReleaseVersion,
                                 c.NightHoursAllowed,
                                 c.KilometersAllowanceAllowed,
@@ -561,6 +565,183 @@ namespace TruckManagement.Endpoints
                     }
                 }
             );
+
+            app.MapPut("/employee-contracts/{id:guid}",
+                [Authorize(Roles = "globalAdmin, customerAdmin, employer")]
+                async (
+                    Guid id,
+                    [FromBody] UpdateEmployeeContractRequest request,
+                    ClaimsPrincipal currentUser,
+                    UserManager<ApplicationUser> userManager,
+                    ApplicationDbContext db
+                ) =>
+                {
+                    try
+                    {
+                        // 1) Basic user check
+                        var userId = userManager.GetUserId(currentUser);
+                        if (string.IsNullOrEmpty(userId))
+                        {
+                            return ApiResponseFactory.Error("User not authenticated.",
+                                StatusCodes.Status401Unauthorized);
+                        }
+
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+
+                        // 2) Load existing contract
+                        var contract = await db.EmployeeContracts.FirstOrDefaultAsync(ec => ec.Id == id);
+                        if (contract == null)
+                        {
+                            return ApiResponseFactory.Error("Employee contract not found.",
+                                StatusCodes.Status404NotFound);
+                        }
+
+                        // 3) Validate optional CompanyId
+                        Guid finalCompanyId = contract.CompanyId ?? Guid.Empty;
+                        if (!string.IsNullOrWhiteSpace(request.CompanyId))
+                        {
+                            if (!Guid.TryParse(request.CompanyId, out var parsedCompanyId))
+                            {
+                                return ApiResponseFactory.Error("Invalid CompanyId format.");
+                            }
+
+                            finalCompanyId = parsedCompanyId;
+                        }
+
+                        // 4) Validate optional DriverId
+                        Guid? finalDriverId = contract.DriverId;
+                        if (!string.IsNullOrWhiteSpace(request.DriverId))
+                        {
+                            if (!Guid.TryParse(request.DriverId, out var parsedDriverId))
+                            {
+                                return ApiResponseFactory.Error("Invalid DriverId format.");
+                            }
+
+                            // check if driver exists
+                            var driver = await db.Drivers
+                                .AsNoTracking()
+                                .FirstOrDefaultAsync(d => d.Id == parsedDriverId && !d.IsDeleted);
+                            
+                            if (driver == null)
+                            {
+                                return ApiResponseFactory.Error("The specified driver does not exist or is deleted.");
+                            }
+                            
+                            if (driver.CompanyId == null || driver.CompanyId != finalCompanyId)
+                            {
+                                return ApiResponseFactory.Error("The specified driver does not belong to the selected company.");
+                            }
+
+                            finalDriverId = parsedDriverId;
+                        }
+
+                        // 5) If not global admin, ensure the user is contact-person for finalCompanyId
+                        if (!isGlobalAdmin)
+                        {
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "No contact person profile found. You are not authorized.",
+                                    StatusCodes.Status403Forbidden);
+                            }
+
+                            var associatedCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Select(cpc => cpc.CompanyId)
+                                .Distinct()
+                                .ToList();
+
+                            // ❗ Ensure contract being updated belongs to one of the user's companies
+                            if (contract.CompanyId.HasValue && !associatedCompanyIds.Contains(contract.CompanyId.Value))
+                            {
+                                return ApiResponseFactory.Error("You are not authorized to modify this contract.", StatusCodes.Status403Forbidden);
+                            }
+
+                            // If CompanyId is being changed, make sure it's to a company the contact person is part of
+                            if (!associatedCompanyIds.Contains(finalCompanyId))
+                            {
+                                return ApiResponseFactory.Error("You are not authorized to assign this contract to the specified company.", StatusCodes.Status403Forbidden);
+                            }
+                        }
+
+                        // 6) Update the contract
+                        contract.CompanyId = finalCompanyId;
+                        contract.DriverId = finalDriverId;
+
+                        contract.NightHoursAllowed = request.NightHoursAllowed;
+                        contract.KilometersAllowanceAllowed = request.KilometersAllowanceAllowed;
+                        contract.CommuteKilometers = request.CommuteKilometers;
+
+                        contract.EmployeeFirstName = request.EmployeeFirstName;
+                        contract.EmployeeLastName = request.EmployeeLastName;
+                        contract.EmployeeAddress = request.EmployeeAddress;
+                        contract.EmployeePostcode = request.EmployeePostcode;
+                        contract.EmployeeCity = request.EmployeeCity;
+                        contract.DateOfBirth = request.DateOfBirth;
+                        contract.Bsn = request.Bsn;
+                        contract.DateOfEmployment = request.DateOfEmployment;
+                        contract.LastWorkingDay = request.LastWorkingDay;
+
+                        contract.Function = request.Function;
+                        contract.ProbationPeriod = request.ProbationPeriod;
+                        contract.WorkweekDuration = request.WorkweekDuration;
+                        contract.WorkweekDurationPercentage = request.WorkweekDurationPercentage;
+                        contract.WeeklySchedule = request.WeeklySchedule;
+                        contract.WorkingHours = request.WorkingHours;
+                        contract.NoticePeriod = request.NoticePeriod;
+                        contract.CompensationPerMonthExclBtw = request.CompensationPerMonthExclBtw;
+                        contract.CompensationPerMonthInclBtw = request.CompensationPerMonthInclBtw;
+                        contract.PayScale = request.PayScale;
+                        contract.PayScaleStep = request.PayScaleStep;
+                        contract.HourlyWage100Percent = request.HourlyWage100Percent;
+                        contract.DeviatingWage = request.DeviatingWage;
+                        contract.TravelExpenses = request.TravelExpenses;
+                        contract.MaxTravelExpenses = request.MaxTravelExpenses;
+                        contract.VacationAge = request.VacationAge;
+                        contract.VacationDays = request.VacationDays;
+                        contract.Atv = request.Atv;
+                        contract.VacationAllowance = request.VacationAllowance;
+
+                        contract.CompanyName = request.CompanyName;
+                        contract.EmployerName = request.EmployerName;
+                        contract.CompanyAddress = request.CompanyAddress;
+                        contract.CompanyPostcode = request.CompanyPostcode;
+                        contract.CompanyCity = request.CompanyCity;
+                        contract.CompanyPhoneNumber = request.CompanyPhoneNumber;
+                        contract.CompanyBtw = request.CompanyBtw;
+                        contract.CompanyKvk = request.CompanyKvk;
+
+                        // (Optional) increase ReleaseVersion
+                        contract.ReleaseVersion = (contract.ReleaseVersion ?? 0) + 1;
+
+                        // 7) Save changes
+                        await db.SaveChangesAsync();
+
+                        // 8) Return updated contract details
+                        var responseData = new
+                        {
+                            contract.Id,
+                            contract.CompanyId,
+                            contract.DriverId,
+                            contract.EmployeeFirstName,
+                            contract.EmployeeLastName,
+                            contract.ReleaseVersion
+                        };
+
+                        return ApiResponseFactory.Success(responseData);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"[EmployeeContracts PUT] Error: {ex.Message}");
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while updating the EmployeeContract.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+                });
         }
     }
 }
