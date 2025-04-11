@@ -11,7 +11,11 @@ namespace TruckManagement.Entities
 
         public Guid? DriverId { get; set; }
         public Guid? CompanyId { get; set; }
+        [ForeignKey(nameof(DriverId))]
+        public Driver? Driver { get; set; }
 
+        [ForeignKey(nameof(CompanyId))]
+        public Company? Company { get; set; }
         public decimal? ReleaseVersion { get; set; }
 
         public bool NightHoursAllowed { get; set; }

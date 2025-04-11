@@ -276,8 +276,12 @@ namespace TruckManagement.Endpoints
                         }
 
                         // 3) Start an IQueryable
-                        IQueryable<EmployeeContract> query = db.EmployeeContracts.AsQueryable();
-
+                        IQueryable<EmployeeContract> query = db.EmployeeContracts
+                            .Include(c => c.Driver)
+                                .ThenInclude(d => d.User)
+                            .Include(c => c.Company)
+                            .AsQueryable();
+                        
                         // 4) If user is not globalAdmin and not driver => must be contact-person-based
                         //    If user is driver, we handle it later by forcing contract.DriverId==driver’s own Id
                         if (!isGlobalAdmin && !isDriver)
@@ -354,8 +358,17 @@ namespace TruckManagement.Endpoints
                             data = contracts.Select(c => new
                             {
                                 c.Id,
-                                c.DriverId,
-                                c.CompanyId,
+                                Driver = c.Driver == null ? null : new
+                                {
+                                    c.Driver.Id,
+                                    FullName = c.Driver.User.FirstName + " " + c.Driver.User.LastName,
+                                    c.Driver.AspNetUserId
+                                },
+                                Company = c.Company == null ? null : new
+                                {
+                                    c.Company.Id,
+                                    c.Company.Name
+                                },
                                 c.ReleaseVersion,
                                 c.NightHoursAllowed,
                                 c.KilometersAllowanceAllowed,
