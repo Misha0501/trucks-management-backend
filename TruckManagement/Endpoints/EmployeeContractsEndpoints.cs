@@ -446,6 +446,9 @@ namespace TruckManagement.Endpoints
                         }
 
                         var contract = await db.EmployeeContracts
+                            .Include(ec => ec.Driver)
+                            .ThenInclude(d => d.User)
+                            .Include(ec => ec.Company)
                             .AsNoTracking()
                             .FirstOrDefaultAsync(ec => ec.Id == id);
 
@@ -489,7 +492,68 @@ namespace TruckManagement.Endpoints
                             }
                         }
 
-                        return ApiResponseFactory.Success(contract);
+                        // Shape response with Driver & Company info
+                        var contractResponse = new
+                        {
+                            contract.Id,
+                            Driver = contract.Driver == null
+                                ? null
+                                : new
+                                {
+                                    contract.Driver.Id,
+                                    FullName = contract.Driver.User.FirstName + " " + contract.Driver.User.LastName,
+                                    contract.Driver.AspNetUserId
+                                },
+                            Company = contract.Company == null
+                                ? null
+                                : new
+                                {
+                                    contract.Company.Id,
+                                    contract.Company.Name
+                                },
+                            contract.ReleaseVersion,
+                            contract.NightHoursAllowed,
+                            contract.KilometersAllowanceAllowed,
+                            contract.CommuteKilometers,
+                            contract.EmployeeFirstName,
+                            contract.EmployeeLastName,
+                            contract.EmployeeAddress,
+                            contract.EmployeePostcode,
+                            contract.EmployeeCity,
+                            contract.DateOfBirth,
+                            contract.Bsn,
+                            contract.DateOfEmployment,
+                            contract.LastWorkingDay,
+                            contract.Function,
+                            contract.ProbationPeriod,
+                            contract.WorkweekDuration,
+                            contract.WeeklySchedule,
+                            contract.WorkingHours,
+                            contract.NoticePeriod,
+                            contract.CompensationPerMonthExclBtw,
+                            contract.CompensationPerMonthInclBtw,
+                            contract.PayScale,
+                            contract.PayScaleStep,
+                            contract.HourlyWage100Percent,
+                            contract.DeviatingWage,
+                            contract.TravelExpenses,
+                            contract.MaxTravelExpenses,
+                            contract.VacationAge,
+                            contract.VacationDays,
+                            contract.Atv,
+                            contract.VacationAllowance,
+                            contract.CompanyName,
+                            contract.EmployerName,
+                            contract.CompanyAddress,
+                            contract.CompanyPostcode,
+                            contract.CompanyCity,
+                            contract.CompanyPhoneNumber,
+                            contract.CompanyBtw,
+                            contract.CompanyKvk
+                        };
+
+
+                        return ApiResponseFactory.Success(contractResponse);
                     }
                     catch (Exception ex)
                     {
