@@ -163,7 +163,7 @@ namespace TruckManagement.Endpoints
                             CompanyPhoneNumber = request.CompanyPhoneNumber,
                             CompanyBtw = request.CompanyBtw,
                             CompanyKvk = request.CompanyKvk,
-                            AccessCode =  ContractAccessCodeGenerator.Generate(),
+                            AccessCode = ContractAccessCodeGenerator.Generate(),
                             Status = EmployeeContractStatus.Pending
                         };
 
@@ -826,6 +826,105 @@ namespace TruckManagement.Endpoints
                         Console.Error.WriteLine($"[EmployeeContracts PUT] Error: {ex.Message}");
                         return ApiResponseFactory.Error(
                             "An unexpected error occurred while updating the EmployeeContract.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+                });
+            
+            app.MapGet("/employee-contracts/{id:guid}/public",
+                async (
+                    Guid id,
+                    [FromQuery] string? access,
+                    ApplicationDbContext db
+                ) =>
+                {
+                    try
+                    {
+                        if (string.IsNullOrWhiteSpace(access))
+                        {
+                            return ApiResponseFactory.Error("Please provide access code.", StatusCodes.Status400BadRequest);
+                        }
+
+                        var contract = await db.EmployeeContracts
+                            .Include(ec => ec.Driver)
+                            .ThenInclude(d => d.User)
+                            .Include(ec => ec.Company)
+                            .AsNoTracking()
+                            .FirstOrDefaultAsync(ec => ec.Id == id);
+
+                        // Return generic 401 if contract doesn't exist or code doesn't match (case-insensitive)
+                        if (contract == null || !string.Equals(contract.AccessCode, access,
+                                StringComparison.OrdinalIgnoreCase))
+                        {
+                            return ApiResponseFactory.Error("The contract wasn't found or the access codes don't match.", StatusCodes.Status401Unauthorized);
+                        }
+
+                        var contractResponse = new
+                        {
+                            contract.Id,
+                            Driver = contract.Driver == null
+                                ? null
+                                : new
+                                {
+                                    contract.Driver.Id,
+                                    FullName = contract.Driver.User.FirstName + " " + contract.Driver.User.LastName,
+                                    contract.Driver.AspNetUserId
+                                },
+                            Company = contract.Company == null
+                                ? null
+                                : new
+                                {
+                                    contract.Company.Id,
+                                    contract.Company.Name
+                                },
+                            contract.ReleaseVersion,
+                            contract.NightHoursAllowed,
+                            contract.KilometersAllowanceAllowed,
+                            contract.CommuteKilometers,
+                            contract.EmployeeFirstName,
+                            contract.EmployeeLastName,
+                            contract.EmployeeAddress,
+                            contract.EmployeePostcode,
+                            contract.EmployeeCity,
+                            contract.DateOfBirth,
+                            contract.Bsn,
+                            contract.DateOfEmployment,
+                            contract.LastWorkingDay,
+                            contract.Function,
+                            contract.ProbationPeriod,
+                            contract.WorkweekDuration,
+                            contract.WeeklySchedule,
+                            contract.WorkingHours,
+                            contract.NoticePeriod,
+                            contract.CompensationPerMonthExclBtw,
+                            contract.CompensationPerMonthInclBtw,
+                            contract.PayScale,
+                            contract.PayScaleStep,
+                            contract.HourlyWage100Percent,
+                            contract.DeviatingWage,
+                            contract.TravelExpenses,
+                            contract.MaxTravelExpenses,
+                            contract.VacationAge,
+                            contract.VacationDays,
+                            contract.Atv,
+                            contract.VacationAllowance,
+                            contract.CompanyName,
+                            contract.EmployerName,
+                            contract.CompanyAddress,
+                            contract.CompanyPostcode,
+                            contract.CompanyCity,
+                            contract.CompanyPhoneNumber,
+                            contract.CompanyBtw,
+                            contract.CompanyKvk
+                        };
+
+                        return ApiResponseFactory.Success(contractResponse);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"[Public EmployeeContract GET] Error: {ex.Message}");
+                        return ApiResponseFactory.Error(
+                            "Unexpected error while accessing contract with access code.",
                             StatusCodes.Status500InternalServerError
                         );
                     }
