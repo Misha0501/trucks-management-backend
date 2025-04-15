@@ -6,6 +6,7 @@ using TruckManagement.Data;
 using TruckManagement.Entities;
 using Microsoft.AspNetCore.Identity;
 using TruckManagement.DTOs;
+using TruckManagement.Enums;
 using TruckManagement.Helpers;
 
 namespace TruckManagement.Endpoints
@@ -161,7 +162,9 @@ namespace TruckManagement.Endpoints
                             CompanyCity = request.CompanyCity,
                             CompanyPhoneNumber = request.CompanyPhoneNumber,
                             CompanyBtw = request.CompanyBtw,
-                            CompanyKvk = request.CompanyKvk
+                            CompanyKvk = request.CompanyKvk,
+                            AccessCode =  ContractAccessCodeGenerator.Generate(),
+                            Status = EmployeeContractStatus.Pending
                         };
 
                         // 5) Save to DB
@@ -662,19 +665,19 @@ namespace TruckManagement.Endpoints
 
                         // 3) Validate optional CompanyId
                         Guid? finalCompanyId = null;
-                        
+
                         if (string.IsNullOrWhiteSpace(request.CompanyId))
                         {
                             return ApiResponseFactory.Error("CompanyId is required.", StatusCodes.Status400BadRequest);
                         }
-                        
+
                         if (!string.IsNullOrWhiteSpace(request.CompanyId))
                         {
                             if (!Guid.TryParse(request.CompanyId, out var parsedCompanyId))
                             {
                                 return ApiResponseFactory.Error("Invalid CompanyId format.");
                             }
-                            
+
                             // check if the company actually exists
                             var companyEntity = await db.Companies
                                 .FirstOrDefaultAsync(c => c.Id == parsedCompanyId);
@@ -685,7 +688,7 @@ namespace TruckManagement.Endpoints
                                     StatusCodes.Status400BadRequest
                                 );
                             }
-                            
+
                             finalCompanyId = parsedCompanyId;
                         }
 
