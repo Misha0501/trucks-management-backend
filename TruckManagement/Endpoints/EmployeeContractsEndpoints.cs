@@ -661,19 +661,36 @@ namespace TruckManagement.Endpoints
                         }
 
                         // 3) Validate optional CompanyId
-                        Guid finalCompanyId = contract.CompanyId ?? Guid.Empty;
+                        Guid? finalCompanyId = null;
+                        
+                        if (string.IsNullOrWhiteSpace(request.CompanyId))
+                        {
+                            return ApiResponseFactory.Error("CompanyId is required.", StatusCodes.Status400BadRequest);
+                        }
+                        
                         if (!string.IsNullOrWhiteSpace(request.CompanyId))
                         {
                             if (!Guid.TryParse(request.CompanyId, out var parsedCompanyId))
                             {
                                 return ApiResponseFactory.Error("Invalid CompanyId format.");
                             }
-
+                            
+                            // check if the company actually exists
+                            var companyEntity = await db.Companies
+                                .FirstOrDefaultAsync(c => c.Id == parsedCompanyId);
+                            if (companyEntity == null)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "Specified company does not exist.",
+                                    StatusCodes.Status400BadRequest
+                                );
+                            }
+                            
                             finalCompanyId = parsedCompanyId;
                         }
 
                         // 4) Validate optional DriverId
-                        Guid? finalDriverId = contract.DriverId;
+                        Guid? finalDriverId = null;
                         if (!string.IsNullOrWhiteSpace(request.DriverId))
                         {
                             if (!Guid.TryParse(request.DriverId, out var parsedDriverId))
@@ -684,16 +701,17 @@ namespace TruckManagement.Endpoints
                             // check if driver exists
                             var driver = await db.Drivers
                                 .AsNoTracking()
-                                .FirstOrDefaultAsync(d => d.Id == parsedDriverId && !d.IsDeleted);
-                            
+                                .FirstOrDefaultAsync(d => d.Id == parsedDriverId);
+
                             if (driver == null)
                             {
                                 return ApiResponseFactory.Error("The specified driver does not exist or is deleted.");
                             }
-                            
+
                             if (driver.CompanyId == null || driver.CompanyId != finalCompanyId)
                             {
-                                return ApiResponseFactory.Error("The specified driver does not belong to the selected company.");
+                                return ApiResponseFactory.Error(
+                                    "The specified driver does not belong to the selected company.");
                             }
 
                             finalDriverId = parsedDriverId;
@@ -721,13 +739,16 @@ namespace TruckManagement.Endpoints
                             // ❗ Ensure contract being updated belongs to one of the user's companies
                             if (contract.CompanyId.HasValue && !associatedCompanyIds.Contains(contract.CompanyId.Value))
                             {
-                                return ApiResponseFactory.Error("You are not authorized to modify this contract.", StatusCodes.Status403Forbidden);
+                                return ApiResponseFactory.Error("You are not authorized to modify this contract.",
+                                    StatusCodes.Status403Forbidden);
                             }
 
                             // If CompanyId is being changed, make sure it's to a company the contact person is part of
                             if (!associatedCompanyIds.Contains(finalCompanyId))
                             {
-                                return ApiResponseFactory.Error("You are not authorized to assign this contract to the specified company.", StatusCodes.Status403Forbidden);
+                                return ApiResponseFactory.Error(
+                                    "You are not authorized to assign this contract to the specified company.",
+                                    StatusCodes.Status403Forbidden);
                             }
                         }
 
