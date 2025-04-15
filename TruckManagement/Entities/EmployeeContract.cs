@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using TruckManagement.Enums;
 
 namespace TruckManagement.Entities
 {
@@ -66,5 +67,8 @@ namespace TruckManagement.Entities
         public string? CompanyPhoneNumber { get; set; } = null!;
         public string? CompanyBtw { get; set; } = null!;
         public string? CompanyKvk { get; set; } = null!;
+        
+        public EmployeeContractStatus Status { get; set; } = EmployeeContractStatus.Pending;
+        public string? AccessCode { get; set; }
     }
 }

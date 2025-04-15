@@ -170,6 +170,10 @@ namespace TruckManagement.Data
                         v => DateTime.SpecifyKind(v, DateTimeKind.Utc) // When reading from DB
                     );
             });
+            
+            builder.Entity<EmployeeContract>()
+                .Property(c => c.Status)
+                .HasConversion<string>();
         }
     }
 }
