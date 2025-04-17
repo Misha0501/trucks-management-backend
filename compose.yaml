@@ -17,6 +17,9 @@ services:
       - Smtp__Password=${SMTP_PASSWORD}
       - Smtp__FromAddress=${SMTP_FROM_ADDRESS}
       - FrontEnd__ResetPasswordUrl=${FRONTEND_RESET_PASSWORD_URL}
+      - Storage__SignedContractsPath=/app/storage/signed-contracts
+    volumes:
+      - signed_contracts:/app/storage/signed-contracts
     ports:
       - "9090:8080"
       - "9091:8081"
@@ -49,3 +52,9 @@ services:
 
 volumes:
   postgres_data:
+  signed_contracts:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/www/storage/signed-contracts 

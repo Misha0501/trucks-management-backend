@@ -35,11 +35,18 @@ jobs:
           rsync -av --progress \
             --exclude=".git" \
             --exclude=".idea" \
-            . ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:/var/www/vhosts/${{ secrets.SERVER_DOMAIN }}/httpdocs/
+            . ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:/var/www/vhosts/${{ secrets.SERVER_DOMAIN }}/
 
       - name: Rebuild and Restart Docker Containers
         run: |
           ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "
+          
+          # ① make sure the bind‑mount folder exists and is writable
+          sudo mkdir -p /var/www/storage/signed-contracts &&
+          sudo chown 1000:1000 /var/www/storage/signed-contracts &&
+          chmod 755 /var/www/storage/signed-contracts &&
+            
+          # ② redeploy the stack
           cd /var/www/vhosts/${{ secrets.SERVER_DOMAIN }}/httpdocs && \
           docker compose down && \
           docker compose build && \
