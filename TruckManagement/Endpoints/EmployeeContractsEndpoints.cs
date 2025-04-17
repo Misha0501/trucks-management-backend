@@ -830,7 +830,7 @@ namespace TruckManagement.Endpoints
                         );
                     }
                 });
-            
+
             app.MapGet("/employee-contracts/{id:guid}/public",
                 async (
                     Guid id,
@@ -842,7 +842,8 @@ namespace TruckManagement.Endpoints
                     {
                         if (string.IsNullOrWhiteSpace(access))
                         {
-                            return ApiResponseFactory.Error("Please provide access code.", StatusCodes.Status400BadRequest);
+                            return ApiResponseFactory.Error("Please provide access code.",
+                                StatusCodes.Status400BadRequest);
                         }
 
                         var contract = await db.EmployeeContracts
@@ -856,7 +857,9 @@ namespace TruckManagement.Endpoints
                         if (contract == null || !string.Equals(contract.AccessCode, access,
                                 StringComparison.OrdinalIgnoreCase))
                         {
-                            return ApiResponseFactory.Error("The contract wasn't found or the access codes don't match.", StatusCodes.Status401Unauthorized);
+                            return ApiResponseFactory.Error(
+                                "The contract wasn't found or the access codes don't match.",
+                                StatusCodes.Status401Unauthorized);
                         }
 
                         var contractResponse = new
@@ -929,6 +932,94 @@ namespace TruckManagement.Endpoints
                         );
                     }
                 });
+
+            app.MapPost("/employee-contracts/sign",
+                    async (
+                        [FromForm] SignContractRequest request,
+                        HttpContext http,
+                        ApplicationDbContext db,
+                        IConfiguration config
+                    ) =>
+                    {
+                        try
+                        {
+                            // 1) Log IP, user-agent, or any other request info
+                            var remoteIp = http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                            var userAgent = http.Request.Headers["User-Agent"].ToString();
+                            Console.WriteLine(
+                                $"[Contract SIGN] IP={remoteIp}, UserAgent={userAgent}, ContractID={request.ContractId}");
+
+                            // 2) Parse contractId
+                            if (!Guid.TryParse(request.ContractId, out var parsedContractId))
+                            {
+                                return ApiResponseFactory.Error("Invalid contractId format.",
+                                    StatusCodes.Status400BadRequest);
+                            }
+
+                            // 3) Load contract
+                            var contract = await db.EmployeeContracts
+                                .FirstOrDefaultAsync(ec => ec.Id == parsedContractId);
+
+                            // Return 401 in a generic sense if missing or code mismatch
+                            if (contract == null
+                                || !string.Equals(contract.AccessCode, request.AccessCode,
+                                    StringComparison.OrdinalIgnoreCase))
+                            {
+                                return ApiResponseFactory.Error("Unauthorized access.",
+                                    StatusCodes.Status401Unauthorized);
+                            }
+
+                            // 4) Store or check signature
+                            // Optionally store the signature text in the contract, or in a new "Signature" field
+                            // contract.Signature = request.Signature; 
+                            // Or store in a separate table. It's up to your domain logic.
+
+                            // 5) Mark contract as signed (assuming you have an enum or string for status)
+                            contract.Status = EmployeeContractStatus.Signed;
+                            // Or if status is a string, do: contract.Status = "signed";
+
+                            // 6) If a PDF was uploaded, store it to disk
+                            if (request.PdfFile is { Length: > 0 })
+                            {
+                                var basePath = config["Storage:SignedContractsPath"];
+                                if (string.IsNullOrWhiteSpace(basePath))
+                                {
+                                    return ApiResponseFactory.Error(
+                                        "Storage path for signed contracts is not configured.",
+                                        StatusCodes.Status500InternalServerError);
+                                }
+
+                                Directory.CreateDirectory(basePath); // Ensure directory exists
+                                var filePath = Path.Combine(basePath, $"{contract.Id}.pdf");
+
+                                await using var stream = new FileStream(filePath, FileMode.Create);
+                                await request.PdfFile.CopyToAsync(stream);
+                                Console.WriteLine($"PDF saved to {filePath}");
+                            }
+
+                            // 7) Save changes
+                            await db.SaveChangesAsync();
+
+                            // 8) Return success
+                            // Return whatever contract data or final message you want
+                            var responseData = new
+                            {
+                                contract.Id,
+                                contract.Status,
+                                SignedAt = DateTime.UtcNow,
+                            };
+                            return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.Error.WriteLine($"[employee-contracts/sign] Error: {ex.Message}");
+                            return ApiResponseFactory.Error(
+                                "Unexpected error while signing the contract.",
+                                StatusCodes.Status500InternalServerError
+                            );
+                        }
+                    }).AllowAnonymous()
+                .DisableAntiforgery();
         }
     }
 }
