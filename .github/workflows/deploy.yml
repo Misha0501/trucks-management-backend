@@ -47,7 +47,7 @@ jobs:
           chmod 755 /var/www/storage/signed-contracts &&
             
           # ② redeploy the stack
-          cd /var/www/vhosts/${{ secrets.SERVER_DOMAIN }}/httpdocs && \
+          cd /var/www/vhosts/${{ secrets.SERVER_DOMAIN }}/ && \
           docker compose down && \
           docker compose build && \
           docker compose up -d
