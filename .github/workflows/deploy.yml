@@ -43,8 +43,7 @@ jobs:
           
           # ① make sure the bind‑mount folder exists and is writable
           sudo mkdir -p /var/www/storage/signed-contracts &&
-          sudo chown 1000:1000 /var/www/storage/signed-contracts &&
-          chmod 755 /var/www/storage/signed-contracts &&
+          sudo chmod -R 777 /var/www/storage/signed-contracts &&
             
           # ② redeploy the stack
           cd /var/www/vhosts/${{ secrets.SERVER_DOMAIN }}/ && \
