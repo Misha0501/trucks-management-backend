@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Identity;
 using TruckManagement.DTOs;
 using TruckManagement.Enums;
 using TruckManagement.Helpers;
+using TruckManagement.Services;
 
 namespace TruckManagement.Endpoints
 {
@@ -1089,6 +1090,97 @@ namespace TruckManagement.Endpoints
                     );
                 }
             });
+
+            app.MapPost("/employee-contracts/send-sign-mail",
+                [Authorize(Roles = "globalAdmin, customerAdmin")]
+                async (
+                    SendSignMailRequest request,
+                    ClaimsPrincipal currentUser,
+                    UserManager<ApplicationUser> userManager,
+                    ApplicationDbContext db,
+                    IConfiguration config,
+                    IEmailService emailService) =>
+                {
+                    try
+                    {
+                        // ── 1. Basic payload checks ─────────────────────────────────────────
+                        if (!Guid.TryParse(request.ContractId, out var contractGuid))
+                            return ApiResponseFactory.Error("Invalid contractId format.");
+
+                        if (string.IsNullOrWhiteSpace(request.Email))
+                            return ApiResponseFactory.Error("Target e‑mail address is required.");
+
+                        // ── 2. Load contract (incl. company) ───────────────────────────────
+                        var contract = await db.EmployeeContracts
+                            .Include(c => c.Company)
+                            .AsNoTracking()
+                            .FirstOrDefaultAsync(c => c.Id == contractGuid);
+
+                        if (contract is null)
+                            return ApiResponseFactory.Error("EmployeeContract not found.",
+                                StatusCodes.Status404NotFound);
+
+
+                        // ── 3. Authorisation for customerAdmin ─────────────────────────────
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                        bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+
+                        if (isCustomerAdmin && contract.CompanyId is not null)
+                        {
+                            var userId = userManager.GetUserId(currentUser);
+
+                            // contact‑person record (incl. companies)
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                            if (contactPerson is null ||
+                                !contactPerson.ContactPersonClientCompanies
+                                    .Any(cc => cc.CompanyId == contract.CompanyId))
+                            {
+                                return ApiResponseFactory.Error(
+                                    "You are not authorised to send mails for this company.",
+                                    StatusCodes.Status403Forbidden);
+                            }
+                        }
+
+                        // ── 4. Compose the mail ────────────────────────────────────────────
+                        var frontendBaseUrl = config["FrontEnd:BaseURL"]?.TrimEnd('/');
+                        // e.g. https://app.example.com/contract
+                        if (string.IsNullOrWhiteSpace(frontendBaseUrl))
+                            return ApiResponseFactory.Error(
+                                "FrontEnd:BaseURL is not configured on the server.",
+                                StatusCodes.Status500InternalServerError);
+
+                        var signUrl =
+                            $"{frontendBaseUrl}/sign-contract/{contract.Id}?access={Uri.EscapeDataString(contract.AccessCode!)}";
+
+
+                        var subject = "Please sign your employment contract";
+                        var body = $@"
+                            <p>Hi,</p>
+                            <p>Please review and sign your contract by clicking the link below:</p>
+                            <p><a href=""{signUrl}"">{signUrl}</a></p>
+                            <p>Your access code: <strong>{contract.AccessCode}</strong></p>
+                            <p>Kind regards,<br />The HR team</p>";
+
+                        await emailService.SendEmailAsync(request.Email, subject, body);
+
+                        // ── 5. Done ─────────────────────────────────────────────────────────
+                        return ApiResponseFactory.Success(new
+                        {
+                            contract.Id,
+                            SentTo = request.Email,
+                            SignUrl = signUrl
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"[employee-contracts/send-sign-mail] {ex}");
+                        return ApiResponseFactory.Error("Failed to send sign‑request e‑mail.",
+                            StatusCodes.Status500InternalServerError);
+                    }
+                });
         }
     }
 }
