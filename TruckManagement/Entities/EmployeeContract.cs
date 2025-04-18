@@ -7,16 +7,14 @@ namespace TruckManagement.Entities
 {
     public class EmployeeContract
     {
-        [Key]
+        [Key] 
         public Guid Id { get; set; }
 
         public Guid? DriverId { get; set; }
         public Guid? CompanyId { get; set; }
-        [ForeignKey(nameof(DriverId))]
-        public Driver? Driver { get; set; }
+        [ForeignKey(nameof(DriverId))] public Driver? Driver { get; set; }
 
-        [ForeignKey(nameof(CompanyId))]
-        public Company? Company { get; set; }
+        [ForeignKey(nameof(CompanyId))] public Company? Company { get; set; }
         public decimal? ReleaseVersion { get; set; }
 
         public bool? NightHoursAllowed { get; set; }
@@ -67,8 +65,13 @@ namespace TruckManagement.Entities
         public string? CompanyPhoneNumber { get; set; } = null!;
         public string? CompanyBtw { get; set; } = null!;
         public string? CompanyKvk { get; set; } = null!;
-        
+
         public EmployeeContractStatus Status { get; set; } = EmployeeContractStatus.Pending;
         public string? AccessCode { get; set; }
+        public string? SignedFileName { get; set; }
+        public DateTime? SignedAt { get; set; }
+        public string? SignedByIp { get; set; }
+        public string? SignedUserAgent { get; set; }
+        public string? SignatureText { get; set; }
     }
 }
