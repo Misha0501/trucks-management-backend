@@ -918,7 +918,8 @@ namespace TruckManagement.Endpoints
                             contract.CompanyCity,
                             contract.CompanyPhoneNumber,
                             contract.CompanyBtw,
-                            contract.CompanyKvk
+                            contract.CompanyKvk,
+                            contract.Status
                         };
 
                         return ApiResponseFactory.Success(contractResponse);
