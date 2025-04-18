@@ -414,7 +414,8 @@ namespace TruckManagement.Endpoints
                                 c.CompanyCity,
                                 c.CompanyPhoneNumber,
                                 c.CompanyBtw,
-                                c.CompanyKvk
+                                c.CompanyKvk,
+                                c.Status
                             })
                         };
 
@@ -552,7 +553,10 @@ namespace TruckManagement.Endpoints
                             contract.CompanyCity,
                             contract.CompanyPhoneNumber,
                             contract.CompanyBtw,
-                            contract.CompanyKvk
+                            contract.CompanyKvk,
+                            contract.Status,
+                            contract.SignedAt,
+                            contract.AccessCode
                         };
 
 
@@ -1019,6 +1023,72 @@ namespace TruckManagement.Endpoints
                     })
                 .AllowAnonymous()
                 .DisableAntiforgery();
+
+            app.MapGet("/employee-contracts/{id:guid}/download", async (
+                Guid id,
+                [FromQuery] string? access,
+                IConfiguration config,
+                ApplicationDbContext db) =>
+            {
+                try
+                {
+                    if (string.IsNullOrWhiteSpace(access))
+                    {
+                        return ApiResponseFactory.Error("Access code is required.", StatusCodes.Status401Unauthorized);
+                    }
+
+                    var contract = await db.EmployeeContracts.FirstOrDefaultAsync(ec => ec.Id == id);
+                    if (contract == null ||
+                        !string.Equals(contract.AccessCode, access, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return ApiResponseFactory.Error("Unauthorized access.", StatusCodes.Status401Unauthorized);
+                    }
+
+                    if (contract.Status != EmployeeContractStatus.Signed ||
+                        string.IsNullOrWhiteSpace(contract.SignedFileName))
+                    {
+                        return ApiResponseFactory.Error("Contract is not signed or file is missing.",
+                            StatusCodes.Status404NotFound);
+                    }
+
+                    var basePath = config["Storage:SignedContractsPath"];
+                    if (string.IsNullOrWhiteSpace(basePath))
+                    {
+                        return ApiResponseFactory.Error("Storage path is not configured.",
+                            StatusCodes.Status500InternalServerError);
+                    }
+
+                    var filePath = Path.Combine(basePath, contract.SignedFileName);
+                    if (!System.IO.File.Exists(filePath))
+                    {
+                        return ApiResponseFactory.Error("Signed contract file not found.",
+                            StatusCodes.Status404NotFound);
+                    }
+
+                    var fileBytes = await File.ReadAllBytesAsync(filePath);
+                    var fileBase64 = Convert.ToBase64String(fileBytes);
+
+                    var contractResponse = new
+                    {
+                        contract.Id,
+                        contract.EmployeeFirstName,
+                        contract.EmployeeLastName,
+                        contract.Status,
+                        FileName = contract.SignedFileName,
+                        ContentBase64 = fileBase64
+                    };
+
+                    return ApiResponseFactory.Success(contractResponse);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[Download Contract] Error: {ex.Message}");
+                    return ApiResponseFactory.Error(
+                        "An unexpected error occurred while downloading the contract.",
+                        StatusCodes.Status500InternalServerError
+                    );
+                }
+            });
         }
     }
 }
