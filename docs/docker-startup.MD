@@ -10,4 +10,4 @@ services:
     volumes:
       - ./TruckManagement/Storage/SignedContracts:/app/storage/signed-contracts
 ```
-This will override the default docker-compose file and mount the local directory to the container.
+This will override the default docker-compose file and mount the local directory to the container. 
