@@ -45,5 +45,19 @@ public static class DateHelper
     {
         return (period - 1) * 4 + weekNrInPeriod;
     }
+    
+    public static (DateTime fromDate, DateTime toDate) GetPeriodDateRange(int year, int period)
+    {
+        // Step 1: Get ISO week 1 start date (Monday)
+        var jan4 = new DateTime(year, 1, 4); // Jan 4 is always in ISO week 1
+        int daysToMonday = DayOfWeek.Monday - jan4.DayOfWeek;
+        var week1Start = jan4.AddDays(daysToMonday);
+
+        // Step 2: Offset to start of the given period
+        var fromDate = week1Start.AddDays((period - 1) * 7 * 4);
+        var toDate = fromDate.AddDays(27); // 4 weeks = 28 days
+
+        return (fromDate, toDate);
+    }
 
 }

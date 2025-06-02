@@ -138,7 +138,8 @@ namespace TruckManagement.Endpoints
                         return ApiResponseFactory.Error("Driver profile not found.", StatusCodes.Status403Forbidden);
 
                     var (year, periodNr, _) = DateHelper.GetPeriod(DateTime.UtcNow);
-
+                    var (fromDate, toDate) = DateHelper.GetPeriodDateRange(year, periodNr);
+                    
                     var approval = await db.PeriodApprovals
                         .Include(a => a.PartRides)
                         .FirstOrDefaultAsync(a => a.DriverId == driver.Id &&
@@ -194,6 +195,8 @@ namespace TruckManagement.Endpoints
                         approval.Year,
                         approval.PeriodNr,
                         approval.Status,
+                        fromDate,
+                        toDate,
                         Weeks = groupedWeeks
                     });
                 });
