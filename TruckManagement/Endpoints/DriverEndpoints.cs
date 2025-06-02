@@ -139,7 +139,7 @@ namespace TruckManagement.Endpoints
 
                     var (year, periodNr, _) = DateHelper.GetPeriod(DateTime.UtcNow);
                     var (fromDate, toDate) = DateHelper.GetPeriodDateRange(year, periodNr);
-                    
+
                     var approval = await db.PeriodApprovals
                         .Include(a => a.PartRides)
                         .FirstOrDefaultAsync(a => a.DriverId == driver.Id &&
@@ -153,12 +153,15 @@ namespace TruckManagement.Endpoints
                             Year = year,
                             PeriodNr = periodNr,
                             Status = "NoApproval",
+                            fromDate,
+                            toDate,
                             Weeks = Enumerable.Range(1, 4).Select(i => new
                             {
                                 WeekInPeriod = i,
                                 WeekNumber = DateHelper.GetWeekNumberOfPeriod(year, periodNr, i),
+                                TotalDecimalHours = 0.0,
                                 PartRides = new List<object>()
-                            }).OrderByDescending(w => w.WeekNumber) 
+                            }).OrderByDescending(w => w.WeekNumber)
                         });
                     }
 
@@ -180,10 +183,14 @@ namespace TruckManagement.Endpoints
                                 })
                                 .ToList();
 
+                            double totalDecimalHours = partRidesForWeek
+                                .Sum(r => r.DecimalHours ?? 0);
+
                             return new
                             {
                                 WeekInPeriod = i,
                                 WeekNumber = weekNumber,
+                                TotalDecimalHours = Math.Round(totalDecimalHours, 2),
                                 PartRides = partRidesForWeek
                             };
                         })
