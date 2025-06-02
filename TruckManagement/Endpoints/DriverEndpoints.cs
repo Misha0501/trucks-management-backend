@@ -157,7 +157,7 @@ namespace TruckManagement.Endpoints
                                 WeekInPeriod = i,
                                 WeekNumber = DateHelper.GetWeekNumberOfPeriod(year, periodNr, i),
                                 PartRides = new List<object>()
-                            })
+                            }).OrderByDescending(w => w.WeekNumber) 
                         });
                     }
 

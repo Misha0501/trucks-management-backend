@@ -21,21 +21,24 @@ public static class DateHelper
         return (periodYear, period, weekInPer);
     }
     
-    public static int GetIso8601WeekOfYear(DateTime time)
+    public static int GetIso8601WeekOfYear(DateTime date)
     {
-        // This presumes that weeks start with Monday. 
-        // Week 1 is the week that has at least four days in the new year.
-        var day = CultureInfo.InvariantCulture.Calendar.GetDayOfWeek(time);
-        if (day == DayOfWeek.Sunday)
-        {
-            time = time.AddDays(-1);
-        }
+        // ISO 8601: Week starts on Monday, and the first week has at least 4 days
+        var day = (int)date.DayOfWeek;
+        if (day == 0) day = 7; // Sunday → 7
 
-        return CultureInfo.InvariantCulture.Calendar.GetWeekOfYear(
-            time,
-            CalendarWeekRule.FirstFourDayWeek,
-            DayOfWeek.Monday
-        );
+        // Adjust date to Thursday of the current week
+        var thursday = date.AddDays(4 - day);
+
+        // Get the first Thursday of the year
+        var firstThursday = new DateTime(thursday.Year, 1, 4);
+
+        day = (int)firstThursday.DayOfWeek;
+        if (day == 0) day = 7;
+
+        var week1 = firstThursday.AddDays(-day + 1);
+
+        return (thursday - week1).Days / 7 + 1;
     }
     
     public static int GetWeekNumberOfPeriod(int year, int period, int weekNrInPeriod)
