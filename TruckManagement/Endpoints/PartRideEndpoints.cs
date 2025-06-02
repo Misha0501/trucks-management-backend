@@ -1809,22 +1809,6 @@ public static class PartRideEndpoints
     }
 
     // Example of an ISO8601 week calculation
-    private static int GetIso8601WeekOfYear(DateTime time)
-    {
-        // This presumes that weeks start with Monday. 
-        // Week 1 is the week that has at least four days in the new year.
-        var day = CultureInfo.InvariantCulture.Calendar.GetDayOfWeek(time);
-        if (day == DayOfWeek.Sunday)
-        {
-            time = time.AddDays(-1);
-        }
-
-        return CultureInfo.InvariantCulture.Calendar.GetWeekOfYear(
-            time,
-            CalendarWeekRule.FirstFourDayWeek,
-            DayOfWeek.Monday
-        );
-    }
 
     private static IQueryable<PartRide> ApplyPartRideFilters(
         IQueryable<PartRide> query,
@@ -2514,7 +2498,7 @@ public static class PartRideEndpoints
             DriverId = TryParseGuid(request.DriverId),
             Costs = request.Costs,
             ClientId = TryParseGuid(request.ClientId),
-            WeekNumber = request.WeekNumber > 0 ? request.WeekNumber : GetIso8601WeekOfYear(segmentDate),
+            WeekNumber = request.WeekNumber > 0 ? request.WeekNumber : DateHelper.GetIso8601WeekOfYear(segmentDate),
             CostsDescription = request.CostsDescription,
             Turnover = request.Turnover,
             Remark = request.Remark,
