@@ -2058,6 +2058,7 @@ public static class PartRideEndpoints
         partRide.SundayHolidayHours = sundayHolidayHours;
         partRide.NumberOfHours = totalHours;
         partRide.PeriodNumber = periodNr;
+        partRide.WeekNrInPeriod = weekNrInPeriod;
         
         var periodApproval = await PeriodApprovalService.GetOrCreateAsync(db, partRide.DriverId.Value, partRide.Date);
         partRide.PeriodApprovalId = periodApproval.Id;
@@ -2535,6 +2536,7 @@ public static class PartRideEndpoints
         }
         var (year, periodNr, weekNrInPeriod) = DateHelper.GetPeriod(partRide.Date);
         partRide.PeriodNumber = periodNr;
+        partRide.WeekNrInPeriod = weekNrInPeriod;
         
         // Save
         db.PartRides.Add(partRide);

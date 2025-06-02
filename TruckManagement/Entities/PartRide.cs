@@ -26,6 +26,7 @@ namespace TruckManagement.Entities
 
         public int? WeekNumber { get; set; }
         public int? PeriodNumber { get; set; }
+        public int? WeekNrInPeriod { get; set; }
         public double? DecimalHours { get; set; }
         public string? CostsDescription { get; set; }
         public decimal? Turnover { get; set; }

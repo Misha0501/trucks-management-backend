@@ -146,14 +146,55 @@ namespace TruckManagement.Endpoints
                                                   a.PeriodNr == periodNr);
 
                     if (approval == null)
-                        return ApiResponseFactory.Success(new { Message = "No rides in current period yet." });
+                    {
+                        return ApiResponseFactory.Success(new
+                        {
+                            Year = year,
+                            PeriodNr = periodNr,
+                            Status = "NoApproval",
+                            Weeks = Enumerable.Range(1, 4).Select(i => new
+                            {
+                                WeekInPeriod = i,
+                                WeekNumber = DateHelper.GetWeekNumberOfPeriod(year, periodNr, i),
+                                PartRides = new List<object>()
+                            })
+                        });
+                    }
+
+                    var groupedWeeks = Enumerable.Range(1, 4).Select(i =>
+                        {
+                            int weekNumber = DateHelper.GetWeekNumberOfPeriod(year, periodNr, i);
+                            var partRidesForWeek = approval.PartRides
+                                .Where(r => r.WeekNrInPeriod == i)
+                                .OrderByDescending(r => r.Date)
+                                .Select(r => new
+                                {
+                                    r.Id,
+                                    r.Date,
+                                    r.Start,
+                                    r.End,
+                                    r.Kilometers,
+                                    r.DecimalHours,
+                                    r.Remark
+                                })
+                                .ToList();
+
+                            return new
+                            {
+                                WeekInPeriod = i,
+                                WeekNumber = weekNumber,
+                                PartRides = partRidesForWeek
+                            };
+                        })
+                        .OrderByDescending(g => g.WeekInPeriod)
+                        .ToList();
 
                     return ApiResponseFactory.Success(new
                     {
                         approval.Year,
                         approval.PeriodNr,
                         approval.Status,
-                        approval.PartRides.Count
+                        Weeks = groupedWeeks
                     });
                 });
 

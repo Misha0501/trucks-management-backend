@@ -37,5 +37,10 @@ public static class DateHelper
             DayOfWeek.Monday
         );
     }
+    
+    public static int GetWeekNumberOfPeriod(int year, int period, int weekNrInPeriod)
+    {
+        return (period - 1) * 4 + weekNrInPeriod;
+    }
 
 }

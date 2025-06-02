@@ -874,6 +874,9 @@ namespace TruckManagement.Migrations
                     b.Property<double>("VariousCompensation")
                         .HasColumnType("double precision");
 
+                    b.Property<int?>("WeekNrInPeriod")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("WeekNumber")
                         .HasColumnType("integer");
 
