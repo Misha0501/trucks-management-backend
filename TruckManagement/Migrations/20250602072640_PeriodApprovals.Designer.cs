@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TruckManagement.Data;
@@ -11,9 +12,11 @@ using TruckManagement.Data;
 namespace TruckManagement.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250602072640_PeriodApprovals")]
+    partial class PeriodApprovals
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -841,9 +844,6 @@ namespace TruckManagement.Migrations
                     b.Property<Guid?>("PeriodApprovalId")
                         .HasColumnType("uuid");
 
-                    b.Property<int?>("PeriodNumber")
-                        .HasColumnType("integer");
-
                     b.Property<string>("Remark")
                         .HasColumnType("text");
 
@@ -1363,7 +1363,7 @@ namespace TruckManagement.Migrations
                         .HasForeignKey("HoursOptionId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("TruckManagement.Entities.PeriodApproval", "PeriodApproval")
+                    b.HasOne("TruckManagement.Entities.PeriodApproval", null)
                         .WithMany("PartRides")
                         .HasForeignKey("PeriodApprovalId");
 
@@ -1384,8 +1384,6 @@ namespace TruckManagement.Migrations
                     b.Navigation("HoursCode");
 
                     b.Navigation("HoursOption");
-
-                    b.Navigation("PeriodApproval");
 
                     b.Navigation("Ride");
                 });

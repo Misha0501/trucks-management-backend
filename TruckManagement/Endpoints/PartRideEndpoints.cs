@@ -2044,6 +2044,8 @@ public static class PartRideEndpoints
             totalHours: netHours,
             homeWorkDistance: homeWorkDistance
         );
+        
+        var (year, periodNr, weekNrInPeriod) = DateHelper.GetPeriod(partRide.Date);
 
         partRide.Rest = restTimeSpan;
         partRide.DecimalHours = netHours;
@@ -2055,6 +2057,11 @@ public static class PartRideEndpoints
         partRide.SaturdayHours = saturdayHours;
         partRide.SundayHolidayHours = sundayHolidayHours;
         partRide.NumberOfHours = totalHours;
+        partRide.PeriodNumber = periodNr;
+        
+        var periodApproval = await PeriodApprovalService.GetOrCreateAsync(db, partRide.DriverId.Value, partRide.Date);
+        partRide.PeriodApprovalId = periodApproval.Id;
+        
     }
 
     private static object ToResponsePartRide(PartRide pr)
@@ -2518,9 +2525,17 @@ public static class PartRideEndpoints
             NumberOfHours = totalHours,
             VariousCompensation = request.VariousCompensation ?? 0,
             HoursOptionId = TryParseGuid(request.HoursOptionId),
-            HoursCodeId = TryParseGuid(request.HoursCodeId)
+            HoursCodeId = TryParseGuid(request.HoursCodeId),
         };
 
+        if (driverId.HasValue)
+        {
+            var periodApproval = await PeriodApprovalService.GetOrCreateAsync(db, driverId.Value, segmentDate);
+            partRide.PeriodApprovalId = periodApproval.Id;
+        }
+        var (year, periodNr, weekNrInPeriod) = DateHelper.GetPeriod(partRide.Date);
+        partRide.PeriodNumber = periodNr;
+        
         // Save
         db.PartRides.Add(partRide);
         await db.SaveChangesAsync();

@@ -25,6 +25,7 @@ namespace TruckManagement.Entities
         public Client? Client { get; set; } = default!;
 
         public int? WeekNumber { get; set; }
+        public int? PeriodNumber { get; set; }
         public double? DecimalHours { get; set; }
         public string? CostsDescription { get; set; }
         public decimal? Turnover { get; set; }
@@ -56,5 +57,8 @@ namespace TruckManagement.Entities
         // Navigation to approvals and comments
         public ICollection<PartRideApproval> Approvals { get; set; } = new List<PartRideApproval>();
         public ICollection<PartRideComment> Comments { get; set; } = new List<PartRideComment>();
+        
+        public Guid? PeriodApprovalId { get; set; }
+        public PeriodApproval? PeriodApproval { get; set; }
     }
 }

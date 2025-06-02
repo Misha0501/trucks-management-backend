@@ -122,6 +122,104 @@ namespace TruckManagement.Endpoints
                         Drivers = associatedDrivers
                     });
                 });
+
+            app.MapGet("/drivers/period/current",
+                [Authorize(Roles = "driver")] async (
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser,
+                    ApplicationDbContext db) =>
+                {
+                    var aspUserId = userManager.GetUserId(currentUser);
+
+                    var driver = await db.Drivers
+                        .FirstOrDefaultAsync(d => d.AspNetUserId == aspUserId && !d.IsDeleted);
+
+                    if (driver == null)
+                        return ApiResponseFactory.Error("Driver profile not found.", StatusCodes.Status403Forbidden);
+
+                    var (year, periodNr, _) = DateHelper.GetPeriod(DateTime.UtcNow);
+
+                    var approval = await db.PeriodApprovals
+                        .Include(a => a.PartRides)
+                        .FirstOrDefaultAsync(a => a.DriverId == driver.Id &&
+                                                  a.Year == year &&
+                                                  a.PeriodNr == periodNr);
+
+                    if (approval == null)
+                        return ApiResponseFactory.Success(new { Message = "No rides in current period yet." });
+
+                    return ApiResponseFactory.Success(new
+                    {
+                        approval.Year,
+                        approval.PeriodNr,
+                        approval.Status,
+                        approval.PartRides.Count
+                    });
+                });
+
+            app.MapGet("/drivers/period/pending",
+                [Authorize(Roles = "driver")] async (
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser,
+                    ApplicationDbContext db) =>
+                {
+                    var aspUserId = userManager.GetUserId(currentUser);
+
+                    var driver = await db.Drivers
+                        .FirstOrDefaultAsync(d => d.AspNetUserId == aspUserId && !d.IsDeleted);
+
+                    if (driver == null)
+                        return ApiResponseFactory.Error("Driver profile not found.", StatusCodes.Status403Forbidden);
+
+                    var pending = await db.PeriodApprovals
+                        .Where(a => a.DriverId == driver.Id &&
+                                    (a.Status == PeriodApprovalStatus.PendingDriver ||
+                                     a.Status == PeriodApprovalStatus.PendingAdmin ||
+                                     a.Status == PeriodApprovalStatus.Invalidated))
+                        .OrderBy(a => a.Year)
+                        .ThenBy(a => a.PeriodNr)
+                        .Select(a => new
+                        {
+                            a.Year,
+                            a.PeriodNr,
+                            a.Status,
+                            RideCount = a.PartRides.Count
+                        })
+                        .ToListAsync();
+
+                    return ApiResponseFactory.Success(pending);
+                });
+
+            app.MapGet("/drivers/period/archived",
+                [Authorize(Roles = "driver")] async (
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser,
+                    ApplicationDbContext db) =>
+                {
+                    var aspUserId = userManager.GetUserId(currentUser);
+
+                    var driver = await db.Drivers
+                        .FirstOrDefaultAsync(d => d.AspNetUserId == aspUserId && !d.IsDeleted);
+
+                    if (driver == null)
+                        return ApiResponseFactory.Error("Driver profile not found.", StatusCodes.Status403Forbidden);
+
+                    var archived = await db.PeriodApprovals
+                        .Where(a => a.DriverId == driver.Id &&
+                                    a.Status == PeriodApprovalStatus.Signed)
+                        .OrderByDescending(a => a.Year)
+                        .ThenByDescending(a => a.PeriodNr)
+                        .Select(a => new
+                        {
+                            a.Year,
+                            a.PeriodNr,
+                            a.Status,
+                            RideCount = a.PartRides.Count
+                        })
+                        .ToListAsync();
+
+                    return ApiResponseFactory.Success(archived);
+                });
         }
     }
 }
