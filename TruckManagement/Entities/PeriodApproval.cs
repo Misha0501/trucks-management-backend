@@ -30,7 +30,7 @@ public class PeriodApproval
     public string?   AdminSignedUa   { get; set; }
     public string?   AdminPdfPath    { get; set; }
 
-    public PeriodApprovalStatus Status { get; set; } = PeriodApprovalStatus.PendingDriver;
+    public PeriodApprovalStatus Status { get; set; } = PeriodApprovalStatus.PendingAdmin;
 
     public ICollection<PartRide> PartRides { get; set; } = new List<PartRide>();
 }
