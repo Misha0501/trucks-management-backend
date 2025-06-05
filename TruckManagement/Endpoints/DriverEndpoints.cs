@@ -124,7 +124,7 @@ namespace TruckManagement.Endpoints
                 });
 
             app.MapGet("/drivers/periods/current",
-                [Authorize(Roles = "driver")] async (
+                [Authorize(Roles = "driver, globalAdmin")] async (
                     UserManager<ApplicationUser> userManager,
                     ClaimsPrincipal currentUser,
                     ApplicationDbContext db) =>
@@ -207,12 +207,14 @@ namespace TruckManagement.Endpoints
                         Weeks = groupedWeeks
                     });
                 });
-
+            
             app.MapGet("/drivers/periods/pending",
-                [Authorize(Roles = "driver")] async (
+                [Authorize(Roles = "driver, globalAdmin")] async (
                     UserManager<ApplicationUser> userManager,
                     ClaimsPrincipal currentUser,
-                    ApplicationDbContext db) =>
+                    ApplicationDbContext db,
+                    [FromQuery] int pageNumber = 1,
+                    [FromQuery] int pageSize = 10) =>
                 {
                     var aspUserId = userManager.GetUserId(currentUser);
 
@@ -221,28 +223,49 @@ namespace TruckManagement.Endpoints
 
                     if (driver == null)
                         return ApiResponseFactory.Error("Driver profile not found.", StatusCodes.Status403Forbidden);
+                    
+                    var query = db.PeriodApprovals
+                        .Where(a =>
+                            a.DriverId == driver.Id &&
+                            a.Status == PeriodApprovalStatus.PendingDriver);
 
-                    var pending = await db.PeriodApprovals
-                        .Where(a => a.DriverId == driver.Id &&
-                                    (a.Status == PeriodApprovalStatus.PendingDriver ||
-                                     a.Status == PeriodApprovalStatus.PendingAdmin ||
-                                     a.Status == PeriodApprovalStatus.Invalidated))
-                        .OrderBy(a => a.Year)
-                        .ThenBy(a => a.PeriodNr)
-                        .Select(a => new
-                        {
-                            a.Year,
-                            a.PeriodNr,
-                            a.Status,
-                            RideCount = a.PartRides.Count
-                        })
+                    var totalCount = await query.CountAsync();
+                    var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+                    var rawApprovals = await query
+                        .OrderByDescending(a => a.Year)
+                        .ThenByDescending(a => a.PeriodNr)
+                        .Skip((pageNumber - 1) * pageSize)
+                        .Take(pageSize)
                         .ToListAsync();
 
-                    return ApiResponseFactory.Success(pending);
+                    var pending = rawApprovals
+                        .Select(a =>
+                        {
+                            var (fromDate, toDate) = DateHelper.GetPeriodDateRange(a.Year, a.PeriodNr);
+                            return new
+                            {
+                                a.Year,
+                                a.PeriodNr,
+                                a.Status,
+                                fromDate,
+                                toDate
+                            };
+                        })
+                        .ToList();
+
+                    return ApiResponseFactory.Success(new
+                    {
+                        pageNumber,
+                        pageSize,
+                        totalCount,
+                        totalPages,
+                        data = pending
+                    });
                 });
 
             app.MapGet("/drivers/periods/archived",
-                [Authorize(Roles = "driver")] async (
+                [Authorize(Roles = "driver, globalAdmin")] async (
                     UserManager<ApplicationUser> userManager,
                     ClaimsPrincipal currentUser,
                     ApplicationDbContext db,
