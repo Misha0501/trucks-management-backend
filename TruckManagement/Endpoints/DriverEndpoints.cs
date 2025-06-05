@@ -123,7 +123,7 @@ namespace TruckManagement.Endpoints
                     });
                 });
 
-            app.MapGet("/drivers/period/current",
+            app.MapGet("/drivers/periods/current",
                 [Authorize(Roles = "driver")] async (
                     UserManager<ApplicationUser> userManager,
                     ClaimsPrincipal currentUser,
@@ -208,7 +208,7 @@ namespace TruckManagement.Endpoints
                     });
                 });
 
-            app.MapGet("/drivers/period/pending",
+            app.MapGet("/drivers/periods/pending",
                 [Authorize(Roles = "driver")] async (
                     UserManager<ApplicationUser> userManager,
                     ClaimsPrincipal currentUser,
@@ -241,11 +241,13 @@ namespace TruckManagement.Endpoints
                     return ApiResponseFactory.Success(pending);
                 });
 
-            app.MapGet("/drivers/period/archived",
+            app.MapGet("/drivers/periods/archived",
                 [Authorize(Roles = "driver")] async (
                     UserManager<ApplicationUser> userManager,
                     ClaimsPrincipal currentUser,
-                    ApplicationDbContext db) =>
+                    ApplicationDbContext db,
+                    [FromQuery] int pageNumber = 1,
+                    [FromQuery] int pageSize = 10) =>
                 {
                     var aspUserId = userManager.GetUserId(currentUser);
 
@@ -255,21 +257,47 @@ namespace TruckManagement.Endpoints
                     if (driver == null)
                         return ApiResponseFactory.Error("Driver profile not found.", StatusCodes.Status403Forbidden);
 
-                    var archived = await db.PeriodApprovals
-                        .Where(a => a.DriverId == driver.Id &&
-                                    a.Status == PeriodApprovalStatus.Signed)
+                    var (currentYear, currentPeriodNr, _) = DateHelper.GetPeriod(DateTime.UtcNow);
+
+                    var query = db.PeriodApprovals
+                        .Where(a =>
+                            a.DriverId == driver.Id &&
+                            a.Status == PeriodApprovalStatus.Signed &&
+                            !(a.Year == currentYear && a.PeriodNr == currentPeriodNr));
+
+                    var totalCount = await query.CountAsync();
+                    var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+                    var rawApprovals = await query
                         .OrderByDescending(a => a.Year)
                         .ThenByDescending(a => a.PeriodNr)
-                        .Select(a => new
-                        {
-                            a.Year,
-                            a.PeriodNr,
-                            a.Status,
-                            RideCount = a.PartRides.Count
-                        })
+                        .Skip((pageNumber - 1) * pageSize)
+                        .Take(pageSize)
                         .ToListAsync();
 
-                    return ApiResponseFactory.Success(archived);
+                    var archived = rawApprovals
+                        .Select(a =>
+                        {
+                            var (fromDate, toDate) = DateHelper.GetPeriodDateRange(a.Year, a.PeriodNr);
+                            return new
+                            {
+                                a.Year,
+                                a.PeriodNr,
+                                a.Status,
+                                fromDate,
+                                toDate
+                            };
+                        })
+                        .ToList();
+
+                    return ApiResponseFactory.Success(new
+                    {
+                        pageNumber,
+                        pageSize,
+                        totalCount,
+                        totalPages,
+                        data = archived
+                    });
                 });
         }
     }
