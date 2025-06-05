@@ -124,7 +124,8 @@ namespace TruckManagement.Endpoints
                 });
 
             app.MapGet("/drivers/periods/current",
-                [Authorize(Roles = "driver, globalAdmin")] async (
+                [Authorize(Roles = "driver, globalAdmin")]
+                async (
                     UserManager<ApplicationUser> userManager,
                     ClaimsPrincipal currentUser,
                     ApplicationDbContext db) =>
@@ -207,9 +208,10 @@ namespace TruckManagement.Endpoints
                         Weeks = groupedWeeks
                     });
                 });
-            
+
             app.MapGet("/drivers/periods/pending",
-                [Authorize(Roles = "driver, globalAdmin")] async (
+                [Authorize(Roles = "driver, globalAdmin")]
+                async (
                     UserManager<ApplicationUser> userManager,
                     ClaimsPrincipal currentUser,
                     ApplicationDbContext db,
@@ -223,7 +225,7 @@ namespace TruckManagement.Endpoints
 
                     if (driver == null)
                         return ApiResponseFactory.Error("Driver profile not found.", StatusCodes.Status403Forbidden);
-                    
+
                     var query = db.PeriodApprovals
                         .Where(a =>
                             a.DriverId == driver.Id &&
@@ -265,7 +267,8 @@ namespace TruckManagement.Endpoints
                 });
 
             app.MapGet("/drivers/periods/archived",
-                [Authorize(Roles = "driver, globalAdmin")] async (
+                [Authorize(Roles = "driver, globalAdmin")]
+                async (
                     UserManager<ApplicationUser> userManager,
                     ClaimsPrincipal currentUser,
                     ApplicationDbContext db,
@@ -320,6 +323,99 @@ namespace TruckManagement.Endpoints
                         totalCount,
                         totalPages,
                         data = archived
+                    });
+                });
+
+            app.MapGet("/drivers/periods/{periodKey}",
+                [Authorize(Roles = "driver, globalAdmin")]
+                async (
+                    string periodKey,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser,
+                    ApplicationDbContext db) =>
+                {
+                    var aspUserId = userManager.GetUserId(currentUser);
+
+                    var driver = await db.Drivers
+                        .FirstOrDefaultAsync(d => d.AspNetUserId == aspUserId && !d.IsDeleted);
+
+                    if (driver == null)
+                        return ApiResponseFactory.Error("Driver profile not found.", StatusCodes.Status403Forbidden);
+
+                    // Parse format "YYYY-P"
+                    var parts = periodKey.Split('-');
+                    if (parts.Length != 2 || !int.TryParse(parts[0], out var year) ||
+                        !int.TryParse(parts[1], out var periodNr))
+                    {
+                        return ApiResponseFactory.Error("Invalid period key format. Use 'YYYY-P' (e.g., 2024-6).",
+                            StatusCodes.Status400BadRequest);
+                    }
+
+                    var (fromDate, toDate) = DateHelper.GetPeriodDateRange(year, periodNr);
+
+                    var approval = await db.PeriodApprovals
+                        .Include(a => a.PartRides)
+                        .FirstOrDefaultAsync(a => a.DriverId == driver.Id &&
+                                                  a.Year == year &&
+                                                  a.PeriodNr == periodNr);
+
+                    if (approval == null)
+                    {
+                        return ApiResponseFactory.Error("Period not found.", StatusCodes.Status404NotFound);
+                    }
+
+                    double totalDecimalHours = 0.0;
+                    decimal totalEarnings = 0.0m;
+
+                    var groupedWeeks = Enumerable.Range(1, 4).Select(i =>
+                        {
+                            int weekNumber = DateHelper.GetWeekNumberOfPeriod(year, periodNr, i);
+
+                            var partRidesForWeek = approval.PartRides
+                                .Where(r => r.WeekNrInPeriod == i)
+                                .OrderByDescending(r => r.Date)
+                                .Select(r => new
+                                {
+                                    r.Id,
+                                    r.Date,
+                                    r.Start,
+                                    r.End,
+                                    r.Kilometers,
+                                    r.DecimalHours,
+                                    r.TaxFreeCompensation,
+                                    r.VariousCompensation,
+                                    r.Remark
+                                })
+                                .ToList();
+
+                            double weekHours = partRidesForWeek.Sum(r => r.DecimalHours ?? 0);
+                            decimal weekEarnings = partRidesForWeek.Sum(r =>
+                                (decimal)(r.TaxFreeCompensation + r.VariousCompensation));
+
+                            totalDecimalHours += weekHours;
+                            totalEarnings += weekEarnings;
+
+                            return new
+                            {
+                                WeekInPeriod = i,
+                                WeekNumber = weekNumber,
+                                TotalDecimalHours = Math.Round(weekHours, 2),
+                                PartRides = partRidesForWeek
+                            };
+                        })
+                        .OrderByDescending(g => g.WeekInPeriod)
+                        .ToList();
+
+                    return ApiResponseFactory.Success(new
+                    {
+                        approval.Year,
+                        approval.PeriodNr,
+                        approval.Status,
+                        fromDate,
+                        toDate,
+                        TotalDecimalHours = Math.Round(totalDecimalHours, 2),
+                        TotalEarnings = Math.Round(totalEarnings, 2),
+                        Weeks = groupedWeeks
                     });
                 });
         }
