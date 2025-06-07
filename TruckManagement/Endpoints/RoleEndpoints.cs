@@ -22,7 +22,7 @@ public static class RoleEndpoints
                 // Return them as a standardized success response
                 return ApiResponseFactory.Success(roles);
             })
-            .RequireAuthorization(); // or .RequireAuthorization("GlobalAdminOnly") if you want to restrict it to admins
+            .RequireAuthorization();
 
         return app;
     }
