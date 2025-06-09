@@ -72,7 +72,7 @@ public class WorkHoursCalculator
     {
         _cao = cao ?? throw new ArgumentNullException(nameof(cao));
     }
-    
+
     public double CalculateTotalBreak(
         bool breakScheduleOn,
         double startTime,
@@ -84,10 +84,6 @@ public class WorkHoursCalculator
     {
         // 1) In Excel: IF(Admin!E$20="ja", ...) => only proceed if breakScheduleOn == "ja"
         if (!breakScheduleOn)
-            return 0.0;
-
-        // 2) If endTime is 0 => same as Excel's "G6=0 or blank"
-        if (endTime == 0.0)
             return 0.0;
 
         // 3) If codeE6 == timeForTimeCode (e.g. "tvt") or (sick + holiday) > 0 => break is 0
@@ -210,7 +206,7 @@ public class WorkHoursCalculator
 
         // 2) If shift crosses midnight => 0 here, presumably handled elsewhere
         if (endOfShift < startOfShift)
-            return 0.0;
+            return 0.0; // it will be calculated in CalculateUntaxedAllowanceSingleDay
 
         // 3) Calculate total shift length
         double shiftLength = endOfShift - startOfShift;
@@ -297,7 +293,8 @@ public class WorkHoursCalculator
                 else
                 {
                     // totalShift >= 12 => add AC6 lumpsum
-                    result = (totalShift * (double)_cao.StandardUntaxedAllowance) + (double)_cao.ShiftMoreThan12HAllowance;
+                    result = (totalShift * (double)_cao.StandardUntaxedAllowance) +
+                             (double)_cao.ShiftMoreThan12HAllowance;
                 }
             }
 
@@ -312,8 +309,19 @@ public class WorkHoursCalculator
         double manualAdjustment // Was I7 in Excel
     )
     {
-        double totalHours = (shiftEnd - shiftStart) - breakDuration + manualAdjustment;
+        double shiftLength;
 
+        if (shiftEnd < shiftStart)
+        {
+            // Crosses midnight
+            shiftLength = (24.0 - shiftStart) + shiftEnd;
+        }
+        else
+        {
+            shiftLength = shiftEnd - shiftStart;
+        }
+
+        double totalHours = shiftLength - breakDuration + manualAdjustment;
         return Math.Round(totalHours, 2);
     }
 
@@ -376,7 +384,7 @@ public class WorkHoursCalculator
 
             return Math.Round(rate, 2);
         }
-        
+
         // Use MultiDayTripIntermediateUntaxed rates by date
         var defaultRate = (double)_cao.MultiDayUntaxedAllowance;
 

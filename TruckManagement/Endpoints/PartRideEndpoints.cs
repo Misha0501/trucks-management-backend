@@ -103,8 +103,8 @@ public static class PartRideEndpoints
                     // 4) Create either one or two segments
                     var createdPartRides = new List<PartRide>();
 
-                    if (!crossesMidnight)
-                    {
+                    // if (!crossesMidnight)
+                    // {
                         // Single segment (no midnight crossover)
                         var singleRide = await CreateAndSavePartRideSegment(
                             db, request, companyGuid,
@@ -114,34 +114,34 @@ public static class PartRideEndpoints
                             request.HoursCorrection ?? 0
                         );
                         createdPartRides.Add(singleRide);
-                    }
-                    else
-                    {
-                        // SHIFT CROSSING MIDNIGHT => 2 segments
-
-                        // Segment #1: from Start -> 24:00, same date
-                        var midnight = TimeSpan.FromHours(24.0);
-                        var firstRide = await CreateAndSavePartRideSegment(
-                            db, request, companyGuid,
-                            request.Date, request.Start, midnight,
-                            userId,
-                            userRoles,
-                            request.HoursCorrection ?? 0
-                        );
-                        createdPartRides.Add(firstRide);
-
-                        // Segment #2: from 00:00 -> End, next day
-                        var secondRide = await CreateAndSavePartRideSegment(
-                            db, request, companyGuid,
-                            request.Date.AddDays(1),
-                            TimeSpan.Zero,
-                            request.End,
-                            userId,
-                            userRoles,
-                            correctionHours: 0
-                        );
-                        createdPartRides.Add(secondRide);
-                    }
+                    // }
+                    // else
+                    // {
+                    //     // SHIFT CROSSING MIDNIGHT => 2 segments
+                    //
+                    //     // Segment #1: from Start -> 24:00, same date
+                    //     var midnight = TimeSpan.FromHours(24.0);
+                    //     var firstRide = await CreateAndSavePartRideSegment(
+                    //         db, request, companyGuid,
+                    //         request.Date, request.Start, midnight,
+                    //         userId,
+                    //         userRoles,
+                    //         request.HoursCorrection ?? 0
+                    //     );
+                    //     createdPartRides.Add(firstRide);
+                    //
+                    //     // Segment #2: from 00:00 -> End, next day
+                    //     var secondRide = await CreateAndSavePartRideSegment(
+                    //         db, request, companyGuid,
+                    //         request.Date.AddDays(1),
+                    //         TimeSpan.Zero,
+                    //         request.End,
+                    //         userId,
+                    //         userRoles,
+                    //         correctionHours: 0
+                    //     );
+                    //     createdPartRides.Add(secondRide);
+                    // }
 
                     // 5) Return everything in one response
                     var responseData = createdPartRides.Select(pr => new
