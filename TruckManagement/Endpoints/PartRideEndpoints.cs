@@ -2563,7 +2563,7 @@ public static class PartRideEndpoints
             NumberOfHours = totalHours,
             VariousCompensation = request.VariousCompensation ?? 0,
             HoursOptionId = TryParseGuid(request.HoursOptionId),
-            HoursCodeId = TryParseGuid(request.HoursCodeId),
+            HoursCodeId = hoursCode.Id,
         };
 
         if (driverId.HasValue)
