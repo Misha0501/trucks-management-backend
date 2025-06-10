@@ -2005,8 +2005,9 @@ public static class PartRideEndpoints
             arrivalEndTime: endTimeDecimal
         );
 
-        double taxFreeCompensation = untaxedAllowanceSingleDay + untaxedAllowanceDepartureDay +
-                                     untaxedAllowanceIntermediateDay + untaxedAllowanceArrivalDay;
+        double taxFreeCompensation = Math.Round(
+            untaxedAllowanceSingleDay + untaxedAllowanceDepartureDay +
+            untaxedAllowanceIntermediateDay + untaxedAllowanceArrivalDay, 2);
 
         double consignmentAllowance = workHoursCalculator.CalculateConsignmentAllowance(
             hourCode: hoursCode.Name,
@@ -2450,8 +2451,9 @@ public static class PartRideEndpoints
             arrivalEndTime: endTimeDecimal
         );
 
-        double taxFreeCompensation = untaxedAllowanceSingleDay + untaxedAllowanceDepartureDay +
-                                     untaxedAllowanceIntermediateDay + untaxedAllowanceArrivalDay;
+        double taxFreeCompensation = Math.Round(
+            untaxedAllowanceSingleDay + untaxedAllowanceDepartureDay +
+            untaxedAllowanceIntermediateDay + untaxedAllowanceArrivalDay, 2);
 
         double consignmentAllowance = workHoursCalculator.CalculateConsignmentAllowance(
             hourCode: hoursCode.Name,
