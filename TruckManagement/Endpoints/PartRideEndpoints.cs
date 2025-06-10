@@ -480,8 +480,27 @@ public static class PartRideEndpoints
 
                     // Update base fields if provided
                     if (request.Date.HasValue) existingPartRide.Date = request.Date.Value;
-                    if (request.Start.HasValue) existingPartRide.Start = request.Start.Value;
-                    if (request.End.HasValue) existingPartRide.End = request.End.Value;
+                    
+                    // Parse Start and End times if provided
+                    try
+                    {
+                        if (!string.IsNullOrWhiteSpace(request.Start))
+                        {
+                            existingPartRide.Start = TimeUtils.ParseTimeString(request.Start);
+                        }
+                        if (!string.IsNullOrWhiteSpace(request.End))
+                        {
+                            existingPartRide.End = TimeUtils.ParseTimeString(request.End);
+                        }
+                    }
+                    catch (FormatException ex)
+                    {
+                        return ApiResponseFactory.Error(
+                            $"Invalid time format for Start or End: {ex.Message}",
+                            StatusCodes.Status400BadRequest
+                        );
+                    }
+                    
                     existingPartRide.Kilometers = request.Kilometers;
                     existingPartRide.Costs = request.Costs;
                     existingPartRide.WeekNumber = request.WeekNumber;
