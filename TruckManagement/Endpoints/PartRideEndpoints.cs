@@ -9,6 +9,7 @@ using TruckManagement.Data;
 using TruckManagement.DTOs;
 using TruckManagement.Entities;
 using TruckManagement.Enums;
+using TruckManagement.Extensions;
 using TruckManagement.Helpers;
 using TruckManagement.Services;
 using TruckManagement.Utilities;
@@ -110,26 +111,67 @@ public static class PartRideEndpoints
                         request, userId, companyGuid,
                         isGlobalAdmin, isDriver
                     );
+
                     if (validationResult != null)
                     {
                         // if validation fails, it returns an error
                         return validationResult;
                     }
 
-                    // 4) Create either one or two segments
-                    var createdPartRides = new List<PartRide>();
+                    var partRide = new PartRide
+                    {
+                        Id = Guid.NewGuid(),
+                        Date = request.Date,
+                        Start = startTime,
+                        End = endTime,
+                        Kilometers = request.Kilometers,
+                        CarId = TryParseGuid(request.CarId),
+                        DriverId = TryParseGuid(request.DriverId),
+                        Costs = request.Costs,
+                        ClientId = TryParseGuid(request.ClientId),
+                        CostsDescription = request.CostsDescription,
+                        Turnover = request.Turnover,
+                        Remark = request.Remark,
+                        CompanyId = companyGuid,
+                        CharterId = TryParseGuid(request.CharterId),
+                        RideId = TryParseGuid(request.RideId),
+                        CorrectionTotalHours = request.HoursCorrection ?? 0,
+                        StandOver = 0.0,
+                        VariousCompensation = request.VariousCompensation ?? 0,
+                        HoursOptionId = TryParseGuid(request.HoursOptionId),
+                        WeekNumber = request.WeekNumber > 0 ? request.WeekNumber : DateHelper.GetIso8601WeekOfYear(request.Date),
+                        HoursCodeId = TryParseGuid(request.HoursCodeId)
+                                      ?? Guid.Parse("AAAA1111-1111-1111-1111-111111111111")
+                    };
+
+                    var calculator = new PartRideCalculator(db);
+                    var calcContext = new PartRideCalculationContext(
+                        Date: partRide.Date,
+                        Start: partRide.Start,
+                        End: partRide.End,
+                        DriverId: partRide.DriverId,
+                        HoursCodeId: partRide.HoursCodeId.Value,
+                        HoursOptionId: partRide.HoursOptionId,
+                        Kilometers: partRide.Kilometers ?? 0,
+                        CorrectionTotalHours: partRide.CorrectionTotalHours);
+
+                    var result = await calculator.CalculateAsync(calcContext);
+                    partRide.ApplyCalculated(result); // <── SAME NAMES
+
+                    db.PartRides.Add(partRide);
+                    await db.SaveChangesAsync();
 
                     // if (!crossesMidnight)
                     // {
                     // Single segment (no midnight crossover)
-                    var singleRide = await CreateAndSavePartRideSegment(
-                        db, request, companyGuid,
-                        request.Date, startTime, endTime,
-                        userId,
-                        userRoles,
-                        request.HoursCorrection ?? 0
-                    );
-                    createdPartRides.Add(singleRide);
+                    // var singleRide = await CreateAndSavePartRideSegment(
+                    //     db, request, companyGuid,
+                    //     request.Date, startTime, endTime,
+                    //     userId,
+                    //     userRoles,
+                    //     request.HoursCorrection ?? 0
+                    // );
+                    // createdPartRides.Add(singleRide);
                     // }
                     // else
                     // {
@@ -160,37 +202,39 @@ public static class PartRideEndpoints
                     // }
 
                     // 5) Return everything in one response
-                    var responseData = createdPartRides.Select(pr => new
+                    var responseData = new
                     {
-                        pr.Id,
-                        pr.Date,
-                        pr.Start,
-                        pr.End,
-                        pr.Rest,
-                        pr.Kilometers,
-                        pr.Costs,
-                        pr.ClientId,
-                        pr.DriverId,
-                        pr.CompanyId,
-                        pr.WeekNumber,
-                        pr.DecimalHours,
-                        pr.CostsDescription,
-                        pr.Turnover,
-                        pr.Remark,
-                        pr.CorrectionTotalHours,
-                        pr.TaxFreeCompensation,
-                        pr.StandOver,
-                        pr.NightAllowance,
-                        pr.KilometerReimbursement,
-                        pr.ConsignmentFee,
-                        pr.SaturdayHours,
-                        pr.SundayHolidayHours,
-                        pr.VariousCompensation,
-                        pr.HoursOptionId,
-                        HoursOption = pr.HoursOption != null ? pr.HoursOption.Name : null,
-                        pr.HoursCodeId,
-                        HoursCode = pr.HoursCode != null ? pr.HoursCode.Name : null
-                    }).ToList();
+                        partRide.Id,
+                        partRide.Date,
+                        partRide.Start,
+                        partRide.End,
+                        partRide.Rest,
+                        partRide.Kilometers,
+                        partRide.Costs,
+                        partRide.ClientId,
+                        partRide.DriverId,
+                        partRide.CompanyId,
+                        partRide.WeekNumber,
+                        partRide.DecimalHours,
+                        partRide.CostsDescription,
+                        partRide.Turnover,
+                        partRide.Remark,
+                        partRide.CorrectionTotalHours,
+                        partRide.TaxFreeCompensation,
+                        partRide.StandOver,
+                        partRide.NightAllowance,
+                        partRide.KilometerReimbursement,
+                        partRide.ConsignmentFee,
+                        partRide.SaturdayHours,
+                        partRide.SundayHolidayHours,
+                        partRide.VariousCompensation,
+                        partRide.HoursOptionId,
+                        HoursOption = partRide.HoursOption?.Name,
+                        partRide.HoursCodeId,
+                        HoursCode = partRide.HoursCode?.Name,
+                        partRide.WeekNrInPeriod,
+                        partRide.PeriodNumber
+                    };
 
                     return ApiResponseFactory.Success(responseData, StatusCodes.Status201Created);
                 }
