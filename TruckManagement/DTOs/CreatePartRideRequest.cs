@@ -4,8 +4,8 @@ namespace TruckManagement.DTOs
     {
         public string? RideId { get; set; }
         public DateTime Date { get; set; }
-        public TimeSpan Start { get; set; }
-        public TimeSpan End { get; set; }
+        public string Start { get; set; }
+        public string End { get; set; }
         public double Kilometers { get; set; }
         public string? CarId { get; set; }
         public string? DriverId { get; set; }

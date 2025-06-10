@@ -49,11 +49,27 @@ public static class PartRideEndpoints
                             StatusCodes.Status400BadRequest
                         );
                     }
+                    
+                    TimeSpan startTime;
+                    TimeSpan endTime;
+
+                    try
+                    {
+                        startTime = TimeUtils.ParseTimeString(request.Start);
+                        endTime = TimeUtils.ParseTimeString(request.End);
+                    }
+                    catch (FormatException ex)
+                    {
+                        return ApiResponseFactory.Error(
+                            $"Invalid time format for Start or End: {ex.Message}",
+                            StatusCodes.Status400BadRequest
+                        );
+                    }
 
 
                     // 2) Convert Start/End to decimal hours
-                    double startDecimal = request.Start.TotalHours;
-                    double endDecimal = request.End.TotalHours;
+                    double startDecimal = startTime.TotalHours;
+                    double endDecimal = endTime.TotalHours;
 
 
                     // SHIFT crosses midnight if end <= start in decimal hours
@@ -108,7 +124,7 @@ public static class PartRideEndpoints
                         // Single segment (no midnight crossover)
                         var singleRide = await CreateAndSavePartRideSegment(
                             db, request, companyGuid,
-                            request.Date, request.Start, request.End,
+                            request.Date, startTime, endTime,
                             userId,
                             userRoles,
                             request.HoursCorrection ?? 0
