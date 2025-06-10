@@ -16,9 +16,20 @@ namespace TruckManagement.Utilities
             {
                 result = TimeSpan.FromHours(24); // Convert "24:00:00" to 1.00:00:00 (24 hours)
             }
+            else if (trimmedTimeStr.Contains(":"))
+            {
+                result = TimeSpan.Parse(timeStr); // Parse times in "HH:mm:ss" format
+            }
             else
             {
-                result = TimeSpan.Parse(timeStr); // Parse other times like "23:59:59" normally
+                // Try parsing as decimal hours (e.g., "10.5" for 10 hours 30 minutes)
+                if (!double.TryParse(timeStr, out double decimalHours))
+                {
+                    throw new FormatException("Invalid time format. Use 'HH:mm:ss' or decimal hours (e.g., '10.5').");
+                }
+
+                // Convert decimal hours to TimeSpan
+                result = TimeSpan.FromHours(decimalHours);
             }
 
             // Enforce minimum (00:00:00) and maximum (24:00:00 or 1.00:00:00)
