@@ -49,7 +49,7 @@ public static class PartRideEndpoints
                             StatusCodes.Status400BadRequest
                         );
                     }
-                    
+
                     TimeSpan startTime;
                     TimeSpan endTime;
 
@@ -121,15 +121,15 @@ public static class PartRideEndpoints
 
                     // if (!crossesMidnight)
                     // {
-                        // Single segment (no midnight crossover)
-                        var singleRide = await CreateAndSavePartRideSegment(
-                            db, request, companyGuid,
-                            request.Date, startTime, endTime,
-                            userId,
-                            userRoles,
-                            request.HoursCorrection ?? 0
-                        );
-                        createdPartRides.Add(singleRide);
+                    // Single segment (no midnight crossover)
+                    var singleRide = await CreateAndSavePartRideSegment(
+                        db, request, companyGuid,
+                        request.Date, startTime, endTime,
+                        userId,
+                        userRoles,
+                        request.HoursCorrection ?? 0
+                    );
+                    createdPartRides.Add(singleRide);
                     // }
                     // else
                     // {
@@ -480,7 +480,7 @@ public static class PartRideEndpoints
 
                     // Update base fields if provided
                     if (request.Date.HasValue) existingPartRide.Date = request.Date.Value;
-                    
+
                     // Parse Start and End times if provided
                     try
                     {
@@ -488,6 +488,7 @@ public static class PartRideEndpoints
                         {
                             existingPartRide.Start = TimeUtils.ParseTimeString(request.Start);
                         }
+
                         if (!string.IsNullOrWhiteSpace(request.End))
                         {
                             existingPartRide.End = TimeUtils.ParseTimeString(request.End);
@@ -500,7 +501,7 @@ public static class PartRideEndpoints
                             StatusCodes.Status400BadRequest
                         );
                     }
-                    
+
                     existingPartRide.Kilometers = request.Kilometers;
                     existingPartRide.Costs = request.Costs;
                     existingPartRide.WeekNumber = request.WeekNumber;
@@ -527,7 +528,7 @@ public static class PartRideEndpoints
                     double startTimeDecimal = existingPartRide.Start.TotalHours;
                     double endTimeDecimal = existingPartRide.End.TotalHours;
                     bool crossesMidnight = false;
-                    
+
                     // Not crossing if both are 00:00
                     if (startTimeDecimal == 0 && endTimeDecimal == 0)
                     {
@@ -542,65 +543,65 @@ public static class PartRideEndpoints
                         crossesMidnight = endTimeDecimal < startTimeDecimal;
                     }
 
-                    if (!crossesMidnight)
-                    {
-                        // 13a) If NOT crossing midnight, just recalc & save
-                        await RecalculatePartRideValues(db, existingPartRide);
-                        await db.SaveChangesAsync();
+                    // if (!crossesMidnight)
+                    // {
+                    // 13a) If NOT crossing midnight, just recalc & save
+                    await RecalculatePartRideValues(db, existingPartRide);
+                    await db.SaveChangesAsync();
 
-                        // Return single updated PartRide
-                        var responseSingle = ToResponsePartRide(existingPartRide);
-                        return ApiResponseFactory.Success(responseSingle, StatusCodes.Status200OK);
-                    }
-                    else
-                    {
-                        // 13b) SHIFT CROSSES MIDNIGHT
-                        // Keep existing from Start -> 24:00
-                        existingPartRide.End = TimeSpan.FromHours(24);
-                        await RecalculatePartRideValues(db, existingPartRide);
-
-                        // Create NEW PartRide for [00:00 -> new End], date is +1 day
-                        var newPartRide = new PartRide
-                        {
-                            // copy relevant fields from existing
-                            CompanyId = existingPartRide.CompanyId,
-                            DriverId = existingPartRide.DriverId,
-                            CarId = existingPartRide.CarId,
-                            RideId = existingPartRide.RideId,
-                            CharterId = existingPartRide.CharterId,
-                            ClientId = existingPartRide.ClientId,
-
-                            // date is next day
-                            Date = existingPartRide.Date.AddDays(1),
-                            Start = TimeSpan.FromHours(0),
-                            End = TimeSpan.FromHours(endTimeDecimal),
-                            Kilometers = existingPartRide.Kilometers,
-                            Costs = existingPartRide.Costs,
-                            WeekNumber = existingPartRide.WeekNumber,
-                            Turnover = existingPartRide.Turnover,
-                            Remark = existingPartRide.Remark,
-                            CostsDescription = existingPartRide.CostsDescription,
-                            HoursCodeId = existingPartRide.HoursCodeId,
-                            HoursOptionId = existingPartRide.HoursOptionId,
-                            VariousCompensation = 0,
-                            CorrectionTotalHours = 0
-                        };
-
-                        // Recalculate new PartRide
-                        await RecalculatePartRideValues(db, newPartRide);
-
-                        // Add and save both
-                        await db.PartRides.AddAsync(newPartRide);
-                        await db.SaveChangesAsync();
-
-                        // Return both PartRides in the response
-                        var responseData = new
-                        {
-                            ExistingPartRide = ToResponsePartRide(existingPartRide),
-                            NewSegment = ToResponsePartRide(newPartRide)
-                        };
-                        return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
-                    }
+                    // Return single updated PartRide
+                    var responseSingle = ToResponsePartRide(existingPartRide);
+                    return ApiResponseFactory.Success(responseSingle, StatusCodes.Status200OK);
+                    // }
+                    // else
+                    // {
+                    //     // 13b) SHIFT CROSSES MIDNIGHT
+                    //     // Keep existing from Start -> 24:00
+                    //     existingPartRide.End = TimeSpan.FromHours(24);
+                    //     await RecalculatePartRideValues(db, existingPartRide);
+                    //
+                    //     // Create NEW PartRide for [00:00 -> new End], date is +1 day
+                    //     var newPartRide = new PartRide
+                    //     {
+                    //         // copy relevant fields from existing
+                    //         CompanyId = existingPartRide.CompanyId,
+                    //         DriverId = existingPartRide.DriverId,
+                    //         CarId = existingPartRide.CarId,
+                    //         RideId = existingPartRide.RideId,
+                    //         CharterId = existingPartRide.CharterId,
+                    //         ClientId = existingPartRide.ClientId,
+                    //
+                    //         // date is next day
+                    //         Date = existingPartRide.Date.AddDays(1),
+                    //         Start = TimeSpan.FromHours(0),
+                    //         End = TimeSpan.FromHours(endTimeDecimal),
+                    //         Kilometers = existingPartRide.Kilometers,
+                    //         Costs = existingPartRide.Costs,
+                    //         WeekNumber = existingPartRide.WeekNumber,
+                    //         Turnover = existingPartRide.Turnover,
+                    //         Remark = existingPartRide.Remark,
+                    //         CostsDescription = existingPartRide.CostsDescription,
+                    //         HoursCodeId = existingPartRide.HoursCodeId,
+                    //         HoursOptionId = existingPartRide.HoursOptionId,
+                    //         VariousCompensation = 0,
+                    //         CorrectionTotalHours = 0
+                    //     };
+                    //
+                    //     // Recalculate new PartRide
+                    //     await RecalculatePartRideValues(db, newPartRide);
+                    //
+                    //     // Add and save both
+                    //     await db.PartRides.AddAsync(newPartRide);
+                    //     await db.SaveChangesAsync();
+                    //
+                    //     // Return both PartRides in the response
+                    //     var responseData = new
+                    //     {
+                    //         ExistingPartRide = ToResponsePartRide(existingPartRide),
+                    //         NewSegment = ToResponsePartRide(newPartRide)
+                    //     };
+                    //     return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
+                    // }
                 }
                 catch (Exception ex)
                 {
@@ -1941,7 +1942,7 @@ public static class PartRideEndpoints
         {
             hoursOption = await db.HoursOptions.FindAsync(partRide.HoursOptionId.Value);
         }
-        
+
         var caoService = new CaoService(db);
         var caoRow = caoService.GetCaoRow(partRide.Date);
         if (caoRow == null)
@@ -2072,7 +2073,7 @@ public static class PartRideEndpoints
             totalHours: totalHours,
             weeklyPercentage: compensation.PercentageOfWork
         );
-        
+
         double kilometersAllowance = kilometersAllowanceCalculator.CalculateKilometersAllowance(
             extraKilometers: partRide.Kilometers ?? 0,
             hourCode: hoursCode.Name,
@@ -2080,7 +2081,7 @@ public static class PartRideEndpoints
             totalHours: netHours,
             homeWorkDistance: homeWorkDistance
         );
-        
+
         var (year, periodNr, weekNrInPeriod) = DateHelper.GetPeriod(partRide.Date);
 
         partRide.Rest = restTimeSpan;
@@ -2095,10 +2096,9 @@ public static class PartRideEndpoints
         partRide.NumberOfHours = totalHours;
         partRide.PeriodNumber = periodNr;
         partRide.WeekNrInPeriod = weekNrInPeriod;
-        
+
         var periodApproval = await PeriodApprovalService.GetOrCreateAsync(db, partRide.DriverId.Value, partRide.Date);
         partRide.PeriodApprovalId = periodApproval.Id;
-        
     }
 
     private static object ToResponsePartRide(PartRide pr)
@@ -2389,7 +2389,7 @@ public static class PartRideEndpoints
         {
             throw new InvalidOperationException("DriverCompensationSettings not found for the specified driver.");
         }
-        
+
         var caoService = new CaoService(db);
         var caoRow = caoService.GetCaoRow(request.Date);
         if (caoRow == null)
@@ -2405,7 +2405,7 @@ public static class PartRideEndpoints
             date: request.Date,
             hoursOptionName: hoursOption?.Name
         );
-        
+
         // 4a) Untaxed allowances
         double untaxedAllowanceNormalDayPartial = workHoursCalculator.CalculateUntaxedAllowanceNormalDayPartial(
             startOfShift: startTimeDecimal,
@@ -2518,7 +2518,7 @@ public static class PartRideEndpoints
             totalHours: totalHours,
             weeklyPercentage: compensation.PercentageOfWork
         );
-        
+
         double kilometersAllowance = kilometersAllowanceCalculator.CalculateKilometersAllowance(
             extraKilometers: request.Kilometers,
             hourCode: hoursCode.Name,
@@ -2526,7 +2526,7 @@ public static class PartRideEndpoints
             totalHours: netHours,
             homeWorkDistance: homeWorkDistance
         );
-        
+
         // 4f) Decide how you combine partial vs single-day allowances:
         //     e.g., sum them or pick the larger. We'll just sum them here:
 
@@ -2571,10 +2571,11 @@ public static class PartRideEndpoints
             var periodApproval = await PeriodApprovalService.GetOrCreateAsync(db, driverId.Value, segmentDate);
             partRide.PeriodApprovalId = periodApproval.Id;
         }
+
         var (year, periodNr, weekNrInPeriod) = DateHelper.GetPeriod(partRide.Date);
         partRide.PeriodNumber = periodNr;
         partRide.WeekNrInPeriod = weekNrInPeriod;
-        
+
         // Save
         db.PartRides.Add(partRide);
         await db.SaveChangesAsync();
