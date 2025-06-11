@@ -54,6 +54,7 @@ namespace TruckManagement.Entities
         // HoursCode reference
         public Guid? HoursCodeId { get; set; }
         public HoursCode? HoursCode { get; set; }
+        public ICollection<PartRideFile> Files { get; set; } = new List<PartRideFile>();
         
         // Navigation to approvals and comments
         public ICollection<PartRideApproval> Approvals { get; set; } = new List<PartRideApproval>();

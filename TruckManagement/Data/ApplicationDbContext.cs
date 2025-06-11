@@ -33,6 +33,7 @@ namespace TruckManagement.Data
         public DbSet<EmployeeContract> EmployeeContracts { get; set; } = default!;
         
         public DbSet<PeriodApproval> PeriodApprovals { get; set; } = default!;
+        public DbSet<PartRideFile> PartRideFiles { get; set; } = default!;
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -176,6 +177,24 @@ namespace TruckManagement.Data
             builder.Entity<EmployeeContract>()
                 .Property(c => c.Status)
                 .HasConversion<string>();
+            
+            builder.Entity<PartRide>(entity =>
+            {
+                entity.HasKey(p => p.Id);
+
+                entity.HasMany(p => p.Files)
+                    .WithOne(f => f.PartRide)
+                    .HasForeignKey(f => f.PartRideId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            builder.Entity<PartRideFile>(entity =>
+            {
+                entity.HasKey(f => f.Id);
+                entity.Property(f => f.FileName).IsRequired();
+                entity.Property(f => f.FilePath).IsRequired();
+                entity.Property(f => f.ContentType).IsRequired();
+            });
         }
     }
 }
