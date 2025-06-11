@@ -99,5 +99,6 @@
 /.env
 
 /TruckManagement/Storage/SignedContracts/
+/TruckManagement/Storage/
 
 docker-compose.override.yml
