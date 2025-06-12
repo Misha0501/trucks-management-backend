@@ -554,81 +554,13 @@ public static class PartRideEndpoints
                     // 13) Check if updated End crosses midnight relative to Start
                     double startTimeDecimal = existingPartRide.Start.TotalHours;
                     double endTimeDecimal = existingPartRide.End.TotalHours;
-                    bool crossesMidnight = false;
 
-                    // Not crossing if both are 00:00
-                    if (startTimeDecimal == 0 && endTimeDecimal == 0)
-                    {
-                        crossesMidnight = false;
-                    }
-                    else if (startTimeDecimal == endTimeDecimal)
-                    {
-                        crossesMidnight = true;
-                    }
-                    else
-                    {
-                        crossesMidnight = endTimeDecimal < startTimeDecimal;
-                    }
-
-                    // if (!crossesMidnight)
-                    // {
-                    // 13a) If NOT crossing midnight, just recalc & save
                     await RecalculatePartRideValues(db, existingPartRide);
                     await db.SaveChangesAsync();
 
                     // Return single updated PartRide
                     var responseSingle = ToResponsePartRide(existingPartRide);
                     return ApiResponseFactory.Success(responseSingle, StatusCodes.Status200OK);
-                    // }
-                    // else
-                    // {
-                    //     // 13b) SHIFT CROSSES MIDNIGHT
-                    //     // Keep existing from Start -> 24:00
-                    //     existingPartRide.End = TimeSpan.FromHours(24);
-                    //     await RecalculatePartRideValues(db, existingPartRide);
-                    //
-                    //     // Create NEW PartRide for [00:00 -> new End], date is +1 day
-                    //     var newPartRide = new PartRide
-                    //     {
-                    //         // copy relevant fields from existing
-                    //         CompanyId = existingPartRide.CompanyId,
-                    //         DriverId = existingPartRide.DriverId,
-                    //         CarId = existingPartRide.CarId,
-                    //         RideId = existingPartRide.RideId,
-                    //         CharterId = existingPartRide.CharterId,
-                    //         ClientId = existingPartRide.ClientId,
-                    //
-                    //         // date is next day
-                    //         Date = existingPartRide.Date.AddDays(1),
-                    //         Start = TimeSpan.FromHours(0),
-                    //         End = TimeSpan.FromHours(endTimeDecimal),
-                    //         Kilometers = existingPartRide.Kilometers,
-                    //         Costs = existingPartRide.Costs,
-                    //         WeekNumber = existingPartRide.WeekNumber,
-                    //         Turnover = existingPartRide.Turnover,
-                    //         Remark = existingPartRide.Remark,
-                    //         CostsDescription = existingPartRide.CostsDescription,
-                    //         HoursCodeId = existingPartRide.HoursCodeId,
-                    //         HoursOptionId = existingPartRide.HoursOptionId,
-                    //         VariousCompensation = 0,
-                    //         CorrectionTotalHours = 0
-                    //     };
-                    //
-                    //     // Recalculate new PartRide
-                    //     await RecalculatePartRideValues(db, newPartRide);
-                    //
-                    //     // Add and save both
-                    //     await db.PartRides.AddAsync(newPartRide);
-                    //     await db.SaveChangesAsync();
-                    //
-                    //     // Return both PartRides in the response
-                    //     var responseData = new
-                    //     {
-                    //         ExistingPartRide = ToResponsePartRide(existingPartRide),
-                    //         NewSegment = ToResponsePartRide(newPartRide)
-                    //     };
-                    //     return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
-                    // }
                 }
                 catch (Exception ex)
                 {
