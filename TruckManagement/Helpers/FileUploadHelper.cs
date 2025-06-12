@@ -18,7 +18,7 @@ public static class FileUploadHelper
             ? companyId.Value.ToString()
             : "Uncategorized";
 
-        var companyReceiptsPath = Path.Combine(basePathCompanies, safeCompanyId, "WorkDayReceipts");
+        var companyReceiptsPath = Path.Combine(basePathCompanies, safeCompanyId, "WorkDayReceipts", partRideId.ToString());        
         Directory.CreateDirectory(companyReceiptsPath);
 
         foreach (var id in uploadIds.Distinct())
