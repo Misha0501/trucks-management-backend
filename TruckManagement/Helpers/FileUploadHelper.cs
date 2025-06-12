@@ -20,11 +20,14 @@ public static class FileUploadHelper
 
         var companyReceiptsPath = Path.Combine(basePathCompanies, safeCompanyId, "WorkDayReceipts", partRideId.ToString());        
         Directory.CreateDirectory(companyReceiptsPath);
-
+        
         foreach (var id in uploadIds.Distinct())
         {
             var tmpFile = Directory.EnumerateFiles(tmpRoot, $"{id}.*").FirstOrDefault();
-            if (tmpFile is null) continue;
+            if (tmpFile is null) 
+            {
+                throw new InvalidOperationException($"Some files were not found in temp storage {tmpFile}");
+            };
 
             var ext = Path.GetExtension(tmpFile);
             var dest = Path.Combine(companyReceiptsPath, $"{id}{ext}");

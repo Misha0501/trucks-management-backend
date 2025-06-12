@@ -31,6 +31,7 @@ public static class PartRideEndpoints
                 IOptions<StorageOptions> cfg
             ) =>
             {
+                using var transaction = await db.Database.BeginTransactionAsync();
                 try
                 {
                     if (request == null)
@@ -181,6 +182,8 @@ public static class PartRideEndpoints
 
                     await db.SaveChangesAsync(); // Save PartRideFile entries
                     
+                    await transaction.CommitAsync(); // ✅ all good
+
                     // if (!crossesMidnight)
                     // {
                     // Single segment (no midnight crossover)
@@ -258,13 +261,16 @@ public static class PartRideEndpoints
 
                     return ApiResponseFactory.Success(responseData, StatusCodes.Status201Created);
                 }
+                catch (InvalidOperationException ex) when (ex.Message.StartsWith("Some files were not found"))
+                {
+                    await transaction.RollbackAsync();
+                    return ApiResponseFactory.Error(ex.Message);
+                }
                 catch (Exception ex)
                 {
-                    Console.Error.WriteLine($"Error creating PartRide: {ex.Message}");
-                    return ApiResponseFactory.Error(
-                        "An unexpected error occurred while creating the PartRide.",
-                        StatusCodes.Status500InternalServerError
-                    );
+                    await transaction.RollbackAsync();
+                    Console.Error.WriteLine($"Error during PartRide creation: {ex.Message}");
+                    return ApiResponseFactory.Error("Failed to create PartRide and upload files.");
                 }
             });
 
