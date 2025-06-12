@@ -238,9 +238,12 @@ public static class PartRideEndpoints
                 [FromBody] UpdatePartRideRequest request,
                 ApplicationDbContext db,
                 UserManager<ApplicationUser> userManager,
-                ClaimsPrincipal currentUser
+                ClaimsPrincipal currentUser,
+                IWebHostEnvironment env,
+                IOptions<StorageOptions> cfg
             ) =>
             {
+                using var transaction = await db.Database.BeginTransactionAsync();
                 try
                 {
                     // Validate PartRide ID
@@ -556,14 +559,31 @@ public static class PartRideEndpoints
                     double endTimeDecimal = existingPartRide.End.TotalHours;
 
                     await RecalculatePartRideValues(db, existingPartRide);
+                    
+                    var newUploadIds = request.NewUploadIds ?? Enumerable.Empty<Guid>();
+
+                    var tmpRoot   = Path.Combine(env.ContentRootPath, cfg.Value.TmpPath);
+                    var finalRoot = Path.Combine(env.ContentRootPath, cfg.Value.BasePathCompanies);
+
+                    FileUploadHelper.MoveUploadsToPartRide(existingPartRide.Id, existingPartRide.CompanyId, newUploadIds, tmpRoot, finalRoot, db);
+                    
+                    
                     await db.SaveChangesAsync();
 
+                    // 4. Commit transaction
+                    await transaction.CommitAsync();
                     // Return single updated PartRide
                     var responseSingle = ToResponsePartRide(existingPartRide);
                     return ApiResponseFactory.Success(responseSingle, StatusCodes.Status200OK);
                 }
+                catch (InvalidOperationException ex) when (ex.Message.StartsWith("Some files were not found"))
+                {
+                    await transaction.RollbackAsync();
+                    return ApiResponseFactory.Error(ex.Message);
+                }
                 catch (Exception ex)
                 {
+                    await transaction.RollbackAsync();
                     Console.Error.WriteLine($"Error updating PartRide: {ex.Message}");
                     return ApiResponseFactory.Error(
                         "An unexpected error occurred while updating the PartRide.",
