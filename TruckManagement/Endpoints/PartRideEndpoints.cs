@@ -163,16 +163,13 @@ public static class PartRideEndpoints
 
 
                     var result = await calculator.CalculateAsync(calcContext);
-                    partRide.ApplyCalculated(result); // <── SAME NAMES
+                    partRide.ApplyCalculated(result);
 
                     db.PartRides.Add(partRide);
                     
                     await db.SaveChangesAsync();
                     
                     // File handling
-                    // var allUploadIds = (request.UploadIds ?? Enumerable.Empty<Guid>())
-                    //     .Concat(request.NewUploadIds ?? Enumerable.Empty<Guid>())
-                    //     .Distinct();
                     var newUploadIds = request.NewUploadIds ?? Enumerable.Empty<Guid>();
 
                     var tmpRoot   = Path.Combine(env.ContentRootPath, cfg.Value.TmpPath);
@@ -183,46 +180,6 @@ public static class PartRideEndpoints
                     await db.SaveChangesAsync(); // Save PartRideFile entries
                     
                     await transaction.CommitAsync(); // ✅ all good
-
-                    // if (!crossesMidnight)
-                    // {
-                    // Single segment (no midnight crossover)
-                    // var singleRide = await CreateAndSavePartRideSegment(
-                    //     db, request, companyGuid,
-                    //     request.Date, startTime, endTime,
-                    //     userId,
-                    //     userRoles,
-                    //     request.HoursCorrection ?? 0
-                    // );
-                    // createdPartRides.Add(singleRide);
-                    // }
-                    // else
-                    // {
-                    //     // SHIFT CROSSING MIDNIGHT => 2 segments
-                    //
-                    //     // Segment #1: from Start -> 24:00, same date
-                    //     var midnight = TimeSpan.FromHours(24.0);
-                    //     var firstRide = await CreateAndSavePartRideSegment(
-                    //         db, request, companyGuid,
-                    //         request.Date, request.Start, midnight,
-                    //         userId,
-                    //         userRoles,
-                    //         request.HoursCorrection ?? 0
-                    //     );
-                    //     createdPartRides.Add(firstRide);
-                    //
-                    //     // Segment #2: from 00:00 -> End, next day
-                    //     var secondRide = await CreateAndSavePartRideSegment(
-                    //         db, request, companyGuid,
-                    //         request.Date.AddDays(1),
-                    //         TimeSpan.Zero,
-                    //         request.End,
-                    //         userId,
-                    //         userRoles,
-                    //         correctionHours: 0
-                    //     );
-                    //     createdPartRides.Add(secondRide);
-                    // }
 
                     // 5) Return everything in one response
                     var responseData = new
