@@ -5,6 +5,7 @@ using TruckManagement.Endpoints;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using TruckManagement.Api.Endpoints;
+using TruckManagement.Options;
 using TruckManagement.Routes;
 using TruckManagement.Seeding;
 using TruckManagement.Services;
@@ -34,6 +35,8 @@ builder.Services.AddCors(options =>
     });
 });
 builder.Services.AddScoped<DriverCompensationService>();
+builder.Services.Configure<StorageOptions>(
+    builder.Configuration.GetSection("Storage"));
 
 var app = builder.Build();
 

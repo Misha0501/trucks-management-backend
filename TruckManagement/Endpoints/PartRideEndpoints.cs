@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using TruckManagement;
 using TruckManagement.Data;
 using TruckManagement.DTOs;
@@ -11,6 +12,7 @@ using TruckManagement.Entities;
 using TruckManagement.Enums;
 using TruckManagement.Extensions;
 using TruckManagement.Helpers;
+using TruckManagement.Options;
 using TruckManagement.Services;
 using TruckManagement.Utilities;
 
@@ -24,7 +26,9 @@ public static class PartRideEndpoints
                 [FromBody] CreatePartRideRequest request,
                 ApplicationDbContext db,
                 UserManager<ApplicationUser> userManager,
-                ClaimsPrincipal currentUser
+                ClaimsPrincipal currentUser,
+                IWebHostEnvironment env,
+                IOptions<StorageOptions> cfg
             ) =>
             {
                 try
@@ -154,13 +158,29 @@ public static class PartRideEndpoints
                         HoursOptionId: partRide.HoursOptionId,
                         Kilometers: partRide.Kilometers ?? 0,
                         CorrectionTotalHours: partRide.CorrectionTotalHours);
+                    
+
 
                     var result = await calculator.CalculateAsync(calcContext);
                     partRide.ApplyCalculated(result); // <── SAME NAMES
 
                     db.PartRides.Add(partRide);
+                    
                     await db.SaveChangesAsync();
+                    
+                    // File handling
+                    // var allUploadIds = (request.UploadIds ?? Enumerable.Empty<Guid>())
+                    //     .Concat(request.NewUploadIds ?? Enumerable.Empty<Guid>())
+                    //     .Distinct();
+                    var newUploadIds = request.NewUploadIds ?? Enumerable.Empty<Guid>();
 
+                    var tmpRoot   = Path.Combine(env.ContentRootPath, cfg.Value.TmpPath);
+                    var finalRoot = Path.Combine(env.ContentRootPath, cfg.Value.ReceiptsPath);
+
+                    FileUploadHelper.MoveUploadsToPartRide(partRide.Id, newUploadIds, tmpRoot, finalRoot, db);
+
+                    await db.SaveChangesAsync(); // Save PartRideFile entries
+                    
                     // if (!crossesMidnight)
                     // {
                     // Single segment (no midnight crossover)

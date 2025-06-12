@@ -21,5 +21,7 @@ namespace TruckManagement.DTOs
         public string? HoursCodeId { get; set; }
         public double? HoursCorrection { get; set; }
         public double? VariousCompensation { get; set; }
+        public List<Guid>? UploadIds { get; set; }
+        public List<Guid>? NewUploadIds { get; set; }
     }
 }
