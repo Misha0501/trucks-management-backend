@@ -8,12 +8,18 @@ public static class FileUploadHelper
 {
     public static void MoveUploadsToPartRide(
         Guid partRideId,
+        Guid? companyId,
         IEnumerable<Guid> uploadIds,
         string tmpRoot,
-        string finalRoot,
+        string basePathCompanies, // <- from cfg.Value.BasePath or BasePathCompanies
         ApplicationDbContext db)
     {
-        Directory.CreateDirectory(finalRoot);
+        var safeCompanyId = companyId.HasValue && companyId.Value != Guid.Empty
+            ? companyId.Value.ToString()
+            : "Uncategorized";
+
+        var companyReceiptsPath = Path.Combine(basePathCompanies, safeCompanyId, "WorkDayReceipts");
+        Directory.CreateDirectory(companyReceiptsPath);
 
         foreach (var id in uploadIds.Distinct())
         {
@@ -21,7 +27,7 @@ public static class FileUploadHelper
             if (tmpFile is null) continue;
 
             var ext = Path.GetExtension(tmpFile);
-            var dest = Path.Combine(finalRoot, $"{id}{ext}");
+            var dest = Path.Combine(companyReceiptsPath, $"{id}{ext}");
             File.Move(tmpFile, dest);
 
             var provider = new FileExtensionContentTypeProvider();

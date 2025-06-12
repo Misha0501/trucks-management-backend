@@ -175,9 +175,9 @@ public static class PartRideEndpoints
                     var newUploadIds = request.NewUploadIds ?? Enumerable.Empty<Guid>();
 
                     var tmpRoot   = Path.Combine(env.ContentRootPath, cfg.Value.TmpPath);
-                    var finalRoot = Path.Combine(env.ContentRootPath, cfg.Value.ReceiptsPath);
+                    var finalRoot = Path.Combine(env.ContentRootPath, cfg.Value.BasePathCompanies);
 
-                    FileUploadHelper.MoveUploadsToPartRide(partRide.Id, newUploadIds, tmpRoot, finalRoot, db);
+                    FileUploadHelper.MoveUploadsToPartRide(partRide.Id, partRide.CompanyId, newUploadIds, tmpRoot, finalRoot, db);
 
                     await db.SaveChangesAsync(); // Save PartRideFile entries
                     
