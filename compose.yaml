@@ -52,7 +52,7 @@ services:
 
 volumes:
   postgres_data:
-  signed_contracts:
+  app_storage:
     driver: local
     driver_opts:
       type: none
