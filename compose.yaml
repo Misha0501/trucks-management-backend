@@ -17,9 +17,9 @@ services:
       - Smtp__Password=${SMTP_PASSWORD}
       - Smtp__FromAddress=${SMTP_FROM_ADDRESS}
       - FrontEnd__ResetPasswordUrl=${FRONTEND_RESET_PASSWORD_URL}
-      - Storage__SignedContractsPath=/app/storage/signed-contracts
+      - Storage__BasePath=/app/storage
     volumes:
-      - signed_contracts:/app/storage/signed-contracts
+      - app_storage:/app/storage
     ports:
       - "9090:8080"
       - "9091:8081"
@@ -57,4 +57,4 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: /var/www/storage/signed-contracts 
+      device: /var/www/storage
