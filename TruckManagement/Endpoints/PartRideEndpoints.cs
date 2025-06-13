@@ -160,12 +160,16 @@ public static class PartRideEndpoints
                         Kilometers: partRide.Kilometers ?? 0,
                         CorrectionTotalHours: partRide.CorrectionTotalHours);
                     
-
-
                     var result = await calculator.CalculateAsync(calcContext);
                     partRide.ApplyCalculated(result);
 
                     db.PartRides.Add(partRide);
+                    
+                    if (partRide.DriverId.HasValue)
+                    {
+                        var periodApproval = await PeriodApprovalService.GetOrCreateAsync(db, partRide.DriverId.Value, partRide.Date);
+                        partRide.PeriodApprovalId = periodApproval.Id;
+                    }
                     
                     await db.SaveChangesAsync();
                     
@@ -176,47 +180,15 @@ public static class PartRideEndpoints
                     var finalRoot = Path.Combine(env.ContentRootPath, cfg.Value.BasePathCompanies);
 
                     FileUploadHelper.MoveUploadsToPartRide(partRide.Id, partRide.CompanyId, newUploadIds, tmpRoot, finalRoot, db);
-
+                    
                     await db.SaveChangesAsync(); // Save PartRideFile entries
                     
                     await transaction.CommitAsync(); // ✅ all good
 
                     // 5) Return everything in one response
-                    var responseData = new
-                    {
-                        partRide.Id,
-                        partRide.Date,
-                        partRide.Start,
-                        partRide.End,
-                        partRide.Rest,
-                        partRide.Kilometers,
-                        partRide.Costs,
-                        partRide.ClientId,
-                        partRide.DriverId,
-                        partRide.CompanyId,
-                        partRide.WeekNumber,
-                        partRide.DecimalHours,
-                        partRide.CostsDescription,
-                        partRide.Turnover,
-                        partRide.Remark,
-                        partRide.CorrectionTotalHours,
-                        partRide.TaxFreeCompensation,
-                        partRide.StandOver,
-                        partRide.NightAllowance,
-                        partRide.KilometerReimbursement,
-                        partRide.ConsignmentFee,
-                        partRide.SaturdayHours,
-                        partRide.SundayHolidayHours,
-                        partRide.VariousCompensation,
-                        partRide.HoursOptionId,
-                        HoursOption = partRide.HoursOption?.Name,
-                        partRide.HoursCodeId,
-                        HoursCode = partRide.HoursCode?.Name,
-                        partRide.WeekNrInPeriod,
-                        partRide.PeriodNumber
-                    };
+                    var response = ToResponsePartRide(partRide);
 
-                    return ApiResponseFactory.Success(responseData, StatusCodes.Status201Created);
+                    return ApiResponseFactory.Success(response, StatusCodes.Status201Created);
                 }
                 catch (InvalidOperationException ex) when (ex.Message.StartsWith("Some files were not found"))
                 {
@@ -553,12 +525,40 @@ public static class PartRideEndpoints
                     {
                         existingPartRide.CompanyId = currentCompanyId;
                     }
-
-                    // 13) Check if updated End crosses midnight relative to Start
-                    double startTimeDecimal = existingPartRide.Start.TotalHours;
-                    double endTimeDecimal = existingPartRide.End.TotalHours;
-
-                    await RecalculatePartRideValues(db, existingPartRide);
+                    
+                    // Recalculate values using reusable calculator logic
+                    // Ensure HoursCodeId is not null before passing to calculation context
+                    if (!existingPartRide.HoursCodeId.HasValue)
+                    {
+                        return ApiResponseFactory.Error(
+                            "HoursCodeId is required for calculation.",
+                            StatusCodes.Status400BadRequest
+                        );
+                    }
+                    // If HoursCodeId is empty, set to default
+                    if (existingPartRide.HoursCodeId.Value == Guid.Empty)
+                    {
+                        existingPartRide.HoursCodeId = Guid.Parse("AAAA1111-1111-1111-1111-111111111111");
+                    }
+                    
+                    var calculator = new PartRideCalculator(db);
+                    var calcContext = new PartRideCalculationContext(
+                        Date: existingPartRide.Date,
+                        Start: existingPartRide.Start,
+                        End: existingPartRide.End,
+                        DriverId: existingPartRide.DriverId,
+                        HoursCodeId: existingPartRide.HoursCodeId.Value,
+                        HoursOptionId: existingPartRide.HoursOptionId,
+                        Kilometers: existingPartRide.Kilometers ?? 0,
+                        CorrectionTotalHours: existingPartRide.CorrectionTotalHours);
+                    var result = await calculator.CalculateAsync(calcContext);
+                    existingPartRide.ApplyCalculated(result);
+                    
+                    if (existingPartRide.DriverId.HasValue)
+                    {
+                        var periodApproval = await PeriodApprovalService.GetOrCreateAsync(db, existingPartRide.DriverId.Value, existingPartRide.Date);
+                        existingPartRide.PeriodApprovalId = periodApproval.Id;
+                    }
                     
                     var newUploadIds = request.NewUploadIds ?? Enumerable.Empty<Guid>();
 
@@ -567,14 +567,13 @@ public static class PartRideEndpoints
 
                     FileUploadHelper.MoveUploadsToPartRide(existingPartRide.Id, existingPartRide.CompanyId, newUploadIds, tmpRoot, finalRoot, db);
                     
-                    
                     await db.SaveChangesAsync();
 
                     // 4. Commit transaction
                     await transaction.CommitAsync();
                     // Return single updated PartRide
-                    var responseSingle = ToResponsePartRide(existingPartRide);
-                    return ApiResponseFactory.Success(responseSingle, StatusCodes.Status200OK);
+                    var response = ToResponsePartRide(existingPartRide);
+                    return ApiResponseFactory.Success(response, StatusCodes.Status200OK);
                 }
                 catch (InvalidOperationException ex) when (ex.Message.StartsWith("Some files were not found"))
                 {
@@ -1895,200 +1894,6 @@ public static class PartRideEndpoints
         return query;
     }
 
-    private static async Task RecalculatePartRideValues(
-        ApplicationDbContext db,
-        PartRide partRide
-    )
-    {
-        // Make sure there's a valid DriverId
-        if (!partRide.DriverId.HasValue)
-        {
-            throw new InvalidOperationException("Cannot recalculate compensation: PartRide has no DriverId.");
-        }
-
-        // Load the compensation settings for the driver
-        var compensation = await db.DriverCompensationSettings
-            .FirstOrDefaultAsync(dcs => dcs.DriverId == partRide.DriverId.Value);
-
-        if (compensation == null)
-        {
-            throw new InvalidOperationException("No DriverCompensationSettings found for this driver.");
-        }
-
-        // Load HoursCode with default fallback
-        Guid defaultHoursCodeId = Guid.Parse("AAAA1111-1111-1111-1111-111111111111");
-        var hoursCodeId = partRide.HoursCodeId ?? defaultHoursCodeId;
-        var hoursCode = await db.HoursCodes.FindAsync(hoursCodeId);
-        if (hoursCode == null)
-        {
-            throw new InvalidOperationException($"HoursCode not found for ID: {hoursCodeId}");
-        }
-
-        // Load HoursOption if exists
-        HoursOption? hoursOption = null;
-        if (partRide.HoursOptionId.HasValue)
-        {
-            hoursOption = await db.HoursOptions.FindAsync(partRide.HoursOptionId.Value);
-        }
-
-        var caoService = new CaoService(db);
-        var caoRow = caoService.GetCaoRow(partRide.Date);
-        if (caoRow == null)
-            throw new InvalidOperationException("No CAO entry for this date.");
-
-        // 3) Create the calculator
-        var workHoursCalculator = new WorkHoursCalculator(caoRow);
-
-        var kilometersAllowanceCalculator = new KilometersAllowance(caoRow);
-
-        var nightAllowanceCalculator = new NightAllowanceCalculator(caoRow); // pass the CAO row
-
-        // Recompute time calculations based on updated Start/End/Rest
-        double startTimeDecimal = partRide.Start.TotalHours;
-        double endTimeDecimal = partRide.End.TotalHours;
-
-        // Calculate additional allowances and totals using helper functions
-        double untaxedAllowanceNormalDayPartial =
-            workHoursCalculator.CalculateUntaxedAllowanceNormalDayPartial(
-                startOfShift: startTimeDecimal,
-                endOfShift: endTimeDecimal,
-                isHoliday: false
-            );
-
-        double untaxedAllowanceSingleDay = workHoursCalculator.CalculateUntaxedAllowanceSingleDay(
-            hourCode: hoursCode.Name,
-            startTime: startTimeDecimal,
-            endTime: endTimeDecimal,
-            untaxedAllowanceNormalDayPartial: untaxedAllowanceNormalDayPartial
-        );
-
-        string holidayName = workHoursCalculator.GetHolidayName(
-            date: partRide.Date,
-            hoursOptionName: hoursOption?.Name
-        );
-
-        double calculatedSickHours = workHoursCalculator.CalculateSickHours(
-            hourCode: hoursCode.Name,
-            holidayName: holidayName,
-            weeklyPercentage: compensation.PercentageOfWork,
-            startTime: startTimeDecimal,
-            endTime: endTimeDecimal
-        );
-
-        double vacationHours = workHoursCalculator.CalculateVacationHours(
-            hourCode: hoursCode.Name,
-            weeklyPercentage: compensation.PercentageOfWork,
-            startTime: startTimeDecimal,
-            endTime: endTimeDecimal
-        );
-
-        double calculatedNightAllowance = nightAllowanceCalculator.CalculateNightAllowance(
-            startTime: startTimeDecimal,
-            endTime: endTimeDecimal,
-            nightHoursAllowed: compensation.NightHoursAllowed,
-            driverRate: (double)compensation.DriverRatePerHour,
-            nightHoursWholeHours: false
-        );
-
-        double totalBreak = workHoursCalculator.CalculateTotalBreak(
-            breakScheduleOn: true,
-            startTime: startTimeDecimal,
-            endTime: endTimeDecimal,
-            hourCode: hoursCode.Name,
-            sickHours: calculatedSickHours,
-            vacationHours: vacationHours
-        );
-
-        double homeWorkDistance = kilometersAllowanceCalculator.HomeWorkDistance(
-            kilometerAllowanceEnabled: compensation.KilometerAllowanceEnabled,
-            oneWayValue: (double)compensation.KilometersOneWayValue
-        );
-        TimeSpan restTimeSpan = TimeSpan.FromHours(totalBreak);
-
-        double totalHours = workHoursCalculator.CalculateTotalHours(
-            shiftStart: startTimeDecimal,
-            shiftEnd: endTimeDecimal,
-            breakDuration: totalBreak,
-            manualAdjustment: partRide.CorrectionTotalHours
-        );
-
-        double untaxedAllowanceDepartureDay = workHoursCalculator.CalculateUntaxedAllowanceDepartureDay(
-            hourCode: hoursCode.Name,
-            departureStartTime: startTimeDecimal
-        );
-
-        double untaxedAllowanceIntermediateDay = workHoursCalculator.CalculateUntaxedAllowanceIntermediateDay(
-            hourCode: hoursCode.Name,
-            hourOption: hoursOption?.Name,
-            startTime: startTimeDecimal,
-            endTime: endTimeDecimal
-        );
-
-        double untaxedAllowanceArrivalDay = workHoursCalculator.CalculateUntaxedAllowanceArrivalDay(
-            hourCode: hoursCode.Name,
-            arrivalEndTime: endTimeDecimal
-        );
-
-        double taxFreeCompensation = Math.Round(
-            untaxedAllowanceSingleDay + untaxedAllowanceDepartureDay +
-            untaxedAllowanceIntermediateDay + untaxedAllowanceArrivalDay, 2);
-
-        double consignmentAllowance = workHoursCalculator.CalculateConsignmentAllowance(
-            hourCode: hoursCode.Name,
-            dateLookup: partRide.Date,
-            startTime: startTimeDecimal,
-            endTime: endTimeDecimal
-        );
-
-        double saturdayHours = workHoursCalculator.CalculateSaturdayHours(
-            date: partRide.Date,
-            holidayName: holidayName,
-            hoursCode: hoursCode.Name,
-            totalHours: totalHours
-        );
-
-        double sundayHolidayHours = workHoursCalculator.CalculateSundayHolidayHours(
-            date: partRide.Date,
-            holidayName: holidayName,
-            hourCode: hoursCode.Name,
-            totalHours: totalHours
-        );
-
-        double netHours = workHoursCalculator.CalculateNetHours(
-            hourCode: hoursCode.Name,
-            day: partRide.Date,
-            isHoliday: !string.IsNullOrWhiteSpace(holidayName),
-            totalHours: totalHours,
-            weeklyPercentage: compensation.PercentageOfWork
-        );
-
-        double kilometersAllowance = kilometersAllowanceCalculator.CalculateKilometersAllowance(
-            extraKilometers: partRide.Kilometers ?? 0,
-            hourCode: hoursCode.Name,
-            hourOption: hoursOption?.Name,
-            totalHours: netHours,
-            homeWorkDistance: homeWorkDistance
-        );
-
-        var (year, periodNr, weekNrInPeriod) = DateHelper.GetPeriod(partRide.Date);
-
-        partRide.Rest = restTimeSpan;
-        partRide.DecimalHours = netHours;
-        partRide.TaxFreeCompensation = taxFreeCompensation;
-        partRide.NightAllowance = calculatedNightAllowance;
-        partRide.StandOver = 0.0;
-        partRide.KilometerReimbursement = kilometersAllowance;
-        partRide.ConsignmentFee = consignmentAllowance;
-        partRide.SaturdayHours = saturdayHours;
-        partRide.SundayHolidayHours = sundayHolidayHours;
-        partRide.NumberOfHours = totalHours;
-        partRide.PeriodNumber = periodNr;
-        partRide.WeekNrInPeriod = weekNrInPeriod;
-
-        var periodApproval = await PeriodApprovalService.GetOrCreateAsync(db, partRide.DriverId.Value, partRide.Date);
-        partRide.PeriodApprovalId = periodApproval.Id;
-    }
-
     private static object ToResponsePartRide(PartRide pr)
     {
         return new
@@ -2117,6 +1922,10 @@ public static class PartRideEndpoints
             pr.SaturdayHours,
             pr.SundayHolidayHours,
             pr.VariousCompensation,
+            pr.PeriodNumber,
+            pr.WeekNrInPeriod,
+            HoursOption = pr.HoursOption?.Name,
+            HoursCode = pr.HoursCode?.Name,
         };
     }
 
@@ -2319,310 +2128,5 @@ public static class PartRideEndpoints
         }
 
         return null;
-    }
-
-    /// <summary>
-    /// Creates and saves a single PartRide segment. 
-    /// If you want to run calculations (e.g. breaks, night allowance), do it here.
-    /// </summary>
-    private static async Task<PartRide> CreateAndSavePartRideSegment(
-        ApplicationDbContext db,
-        CreatePartRideRequest request,
-        Guid companyGuid,
-        DateTime segmentDate,
-        TimeSpan segmentStart,
-        TimeSpan segmentEnd,
-        string creatingUserId,
-        List<string> creatingUserRoles,
-        double correctionHours
-    )
-    {
-        Guid defaultHoursCodeId = Guid.Parse("AAAA1111-1111-1111-1111-111111111111"); // "One day ride"
-
-        // Get HoursCode - use default if not specified
-        var hoursCodeId = TryParseGuid(request.HoursCodeId) ?? defaultHoursCodeId;
-        var hoursCode = await db.HoursCodes.FindAsync(hoursCodeId);
-        if (hoursCode == null)
-        {
-            throw new InvalidOperationException($"HoursCode not found for ID: {hoursCodeId}");
-        }
-
-        // Get HoursOption - can be null
-        HoursOption? hoursOption = null;
-        if (TryParseGuid(request.HoursOptionId) is Guid hoursOptionId)
-        {
-            hoursOption = await db.HoursOptions.FindAsync(hoursOptionId);
-            if (hoursOption == null)
-            {
-                throw new InvalidOperationException($"HoursOption not found for ID: {hoursOptionId}");
-            }
-        }
-
-        // 1) Convert Start/End to decimal hours
-        double startTimeDecimal = segmentStart.TotalHours;
-        double endTimeDecimal = segmentEnd.TotalHours;
-
-        // If you allow crossing midnight in these segments, rawTime could be negative. 
-        // Typically you'd handle that outside or split into two segments.
-
-        // 3) Some basic calculations from your request:
-        //    (If you prefer reading from request directly, feel free.)
-
-        // Fetch DriverCompensationSettings
-        var driverId = TryParseGuid(request.DriverId);
-        var compensation = await db.DriverCompensationSettings
-            .FirstOrDefaultAsync(c => c.DriverId == driverId);
-
-        if (compensation == null)
-        {
-            throw new InvalidOperationException("DriverCompensationSettings not found for the specified driver.");
-        }
-
-        var caoService = new CaoService(db);
-        var caoRow = caoService.GetCaoRow(request.Date);
-        if (caoRow == null)
-            throw new InvalidOperationException("No CAO entry for this date.");
-
-        // 3) Create the calculator
-        var workHoursCalculator = new WorkHoursCalculator(caoRow);
-        var kilometersAllowanceCalculator = new KilometersAllowance(caoRow);
-        var nightAllowanceCalculator = new NightAllowanceCalculator(caoRow); // pass the CAO row
-
-        // 4) RUN THE CALCULATIONS:
-        string holidayName = workHoursCalculator.GetHolidayName(
-            date: request.Date,
-            hoursOptionName: hoursOption?.Name
-        );
-
-        // 4a) Untaxed allowances
-        double untaxedAllowanceNormalDayPartial = workHoursCalculator.CalculateUntaxedAllowanceNormalDayPartial(
-            startOfShift: startTimeDecimal,
-            endOfShift: endTimeDecimal,
-            isHoliday: !string.IsNullOrWhiteSpace(holidayName)
-        );
-
-        double untaxedAllowanceSingleDay = workHoursCalculator.CalculateUntaxedAllowanceSingleDay(
-            hourCode: hoursCode.Name,
-            startTime: startTimeDecimal,
-            endTime: endTimeDecimal,
-            untaxedAllowanceNormalDayPartial: untaxedAllowanceNormalDayPartial
-        );
-
-        // 4b) Sick/Holiday hours
-        double sickHours = workHoursCalculator.CalculateSickHours(
-            hourCode: hoursCode.Name, // Replace with real hour code from request
-            holidayName: holidayName, // Or request.HolidayName if you have it
-            weeklyPercentage: compensation.PercentageOfWork,
-            startTime: startTimeDecimal,
-            endTime: endTimeDecimal
-        );
-        double vacationHours = workHoursCalculator.CalculateVacationHours(
-            hourCode: hoursCode.Name,
-            weeklyPercentage: compensation.PercentageOfWork,
-            startTime: startTimeDecimal,
-            endTime: endTimeDecimal
-        );
-
-        // 4c) Night allowance
-        double nightAllowance = nightAllowanceCalculator.CalculateNightAllowance(
-            startTime: startTimeDecimal,
-            endTime: endTimeDecimal,
-            nightHoursAllowed: compensation.NightHoursAllowed,
-            driverRate: (double)compensation.DriverRatePerHour,
-            nightHoursWholeHours: false
-        );
-
-        // 4d) Break calculation (TotalBreak)
-        double totalBreak = workHoursCalculator.CalculateTotalBreak(
-            breakScheduleOn: true, // Always true
-            startTime: startTimeDecimal,
-            endTime: endTimeDecimal,
-            hourCode: hoursCode.Name,
-            sickHours: sickHours,
-            vacationHours: vacationHours
-        );
-        TimeSpan restTimeSpan = TimeSpan.FromHours(totalBreak);
-
-        // 4e) Compute final “totalHours” after subtracting the break, plus any manual adjustment
-        double manualAdjustment = request.HoursCorrection ?? 0; // or request.ManualAdjustment if you have that
-        double totalHours = workHoursCalculator.CalculateTotalHours(
-            shiftStart: startTimeDecimal,
-            shiftEnd: endTimeDecimal,
-            breakDuration: totalBreak,
-            manualAdjustment: manualAdjustment
-        );
-
-        double homeWorkDistance = kilometersAllowanceCalculator.HomeWorkDistance(
-            kilometerAllowanceEnabled: compensation.KilometerAllowanceEnabled,
-            oneWayValue: compensation.KilometersOneWayValue
-        );
-
-        double untaxedAllowanceDepartureDay = workHoursCalculator.CalculateUntaxedAllowanceDepartureDay(
-            hourCode: hoursCode.Name,
-            departureStartTime: startTimeDecimal
-        );
-
-        double untaxedAllowanceIntermediateDay = workHoursCalculator.CalculateUntaxedAllowanceIntermediateDay(
-            hourCode: hoursCode.Name,
-            hourOption: hoursOption?.Name,
-            startTime: startTimeDecimal,
-            endTime: endTimeDecimal
-        );
-
-        double untaxedAllowanceArrivalDay = workHoursCalculator.CalculateUntaxedAllowanceArrivalDay(
-            hourCode: hoursCode.Name,
-            arrivalEndTime: endTimeDecimal
-        );
-
-        double taxFreeCompensation = Math.Round(
-            untaxedAllowanceSingleDay + untaxedAllowanceDepartureDay +
-            untaxedAllowanceIntermediateDay + untaxedAllowanceArrivalDay, 2);
-
-        double consignmentAllowance = workHoursCalculator.CalculateConsignmentAllowance(
-            hourCode: hoursCode.Name,
-            dateLookup: request.Date,
-            startTime: startTimeDecimal,
-            endTime: endTimeDecimal
-        );
-
-        double saturdayHours = workHoursCalculator.CalculateSaturdayHours(
-            date: request.Date,
-            holidayName: holidayName,
-            hoursCode: hoursCode.Name,
-            totalHours: totalHours
-        );
-
-        double sundayHolidayHours = workHoursCalculator.CalculateSundayHolidayHours(
-            date: request.Date,
-            holidayName: holidayName,
-            hourCode: hoursCode.Name,
-            totalHours: totalHours
-        );
-
-        double netHours = workHoursCalculator.CalculateNetHours(
-            hourCode: hoursCode.Name,
-            day: request.Date,
-            isHoliday: !string.IsNullOrWhiteSpace(holidayName),
-            totalHours: totalHours,
-            weeklyPercentage: compensation.PercentageOfWork
-        );
-
-        double kilometersAllowance = kilometersAllowanceCalculator.CalculateKilometersAllowance(
-            extraKilometers: request.Kilometers,
-            hourCode: hoursCode.Name,
-            hourOption: hoursOption?.Name,
-            totalHours: netHours,
-            homeWorkDistance: homeWorkDistance
-        );
-
-        // 4f) Decide how you combine partial vs single-day allowances:
-        //     e.g., sum them or pick the larger. We'll just sum them here:
-
-        // Build the PartRide
-        var partRide = new PartRide
-        {
-            Id = Guid.NewGuid(),
-            Date = segmentDate,
-            Start = segmentStart,
-            End = segmentEnd,
-            Rest = restTimeSpan,
-            Kilometers = request.Kilometers,
-            CarId = TryParseGuid(request.CarId),
-            DriverId = TryParseGuid(request.DriverId),
-            Costs = request.Costs,
-            ClientId = TryParseGuid(request.ClientId),
-            WeekNumber = request.WeekNumber > 0 ? request.WeekNumber : DateHelper.GetIso8601WeekOfYear(segmentDate),
-            CostsDescription = request.CostsDescription,
-            Turnover = request.Turnover,
-            Remark = request.Remark,
-            CompanyId = companyGuid,
-            CharterId = TryParseGuid(request.CharterId),
-            RideId = TryParseGuid(request.RideId),
-
-            DecimalHours = netHours,
-            CorrectionTotalHours = correctionHours,
-            TaxFreeCompensation = taxFreeCompensation,
-            NightAllowance = nightAllowance,
-            StandOver = 0.0,
-            KilometerReimbursement = kilometersAllowance,
-            ConsignmentFee = consignmentAllowance,
-            SaturdayHours = saturdayHours,
-            SundayHolidayHours = sundayHolidayHours,
-            NumberOfHours = totalHours,
-            VariousCompensation = request.VariousCompensation ?? 0,
-            HoursOptionId = TryParseGuid(request.HoursOptionId),
-            HoursCodeId = hoursCode.Id,
-        };
-
-        if (driverId.HasValue)
-        {
-            var periodApproval = await PeriodApprovalService.GetOrCreateAsync(db, driverId.Value, segmentDate);
-            partRide.PeriodApprovalId = periodApproval.Id;
-        }
-
-        var (year, periodNr, weekNrInPeriod) = DateHelper.GetPeriod(partRide.Date);
-        partRide.PeriodNumber = periodNr;
-        partRide.WeekNrInPeriod = weekNrInPeriod;
-
-        // Save
-        db.PartRides.Add(partRide);
-        await db.SaveChangesAsync();
-
-        // Approval creation 
-        var driverRole = await db.Roles.FirstOrDefaultAsync(r => r.Name == "driver");
-        var contactRole = await db.Roles.FirstOrDefaultAsync(r => r.Name == "customerAdmin");
-
-        // Default: both approvals pending
-        var driverApprovalStatus = ApprovalStatus.Pending;
-        var contactApprovalStatus = ApprovalStatus.Pending;
-
-        string? driverApprover = null;
-        string? contactApprover = null;
-
-        // Logic based on creator's role
-        if (creatingUserRoles.Contains("driver"))
-        {
-            driverApprovalStatus = ApprovalStatus.Approved;
-            driverApprover = creatingUserId;
-        }
-        else if (creatingUserRoles.Contains("customerAdmin") || creatingUserRoles.Contains("customer"))
-        {
-            contactApprovalStatus = ApprovalStatus.Approved;
-            contactApprover = creatingUserId;
-        }
-        // Else: globalAdmin, employer, etc. => both remain pending
-
-        // Create driver approval
-        var driverApproval = new PartRideApproval
-        {
-            Id = Guid.NewGuid(),
-            PartRideId = partRide.Id,
-            RoleId = driverRole?.Id ?? "",
-            Status = driverApprovalStatus,
-            ApprovedByUserId = driverApprovalStatus == ApprovalStatus.Approved
-                ? driverApprover
-                : null,
-            UpdatedAt = DateTime.UtcNow
-        };
-
-        // Create contact-person approval
-        var contactApproval = new PartRideApproval
-        {
-            Id = Guid.NewGuid(),
-            PartRideId = partRide.Id,
-            RoleId = contactRole?.Id ?? "",
-            Status = contactApprovalStatus,
-            ApprovedByUserId = contactApprovalStatus == ApprovalStatus.Approved
-                ? contactApprover
-                : null,
-            UpdatedAt = DateTime.UtcNow
-        };
-
-        // Attach to PartRide and save
-        db.PartRideApprovals.Add(driverApproval);
-        db.PartRideApprovals.Add(contactApproval);
-        await db.SaveChangesAsync();
-
-        return partRide;
     }
 }
