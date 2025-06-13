@@ -842,6 +842,7 @@ public static class PartRideEndpoints
                         .ThenInclude(a => a.Role)
                         .Include(pr => pr.Approvals)
                         .ThenInclude(a => a.ApprovedByUser)
+                        .Include(pr => pr.Files)
                         .FirstOrDefaultAsync(pr => pr.Id == partRideGuid);
 
                     if (partRide == null)
@@ -999,6 +1000,14 @@ public static class PartRideEndpoints
                         partRide.SundayHolidayHours,
                         partRide.VariousCompensation,
                         partRide.NumberOfHours,
+                        Files = partRide.Files.Select(f => new
+                        {
+                            f.Id,
+                            f.FileName,
+                            f.FilePath,
+                            f.ContentType,
+                            f.UploadedAt
+                        }),
                         Approvals = partRide.Approvals.Select(a => new
                         {
                             a.Id,
