@@ -22,7 +22,8 @@ namespace TruckManagement.Endpoints
                 var allowedExtensions = new[] { ".png", ".jpg", ".jpeg", ".heic", ".pdf" };
                 const long maxFileSize = 10 * 1024 * 1024; // 10 MB
 
-                var tmpPath = config["Storage:TmpPath"] ?? "Storage/Tmp";
+                var temporaryBasePath = config["Storage:BasePath"] ?? "Storage";
+                var tmpPath = Path.Combine(temporaryBasePath, "Tmp");
                 var uploadDirectory = Path.Combine(env.ContentRootPath, tmpPath);
                 Directory.CreateDirectory(uploadDirectory);
 
