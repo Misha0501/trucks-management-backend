@@ -11,36 +11,37 @@ public static class FileUploadHelper
         Guid? companyId,
         IEnumerable<Guid> uploadIds,
         string tmpRoot,
-        string basePathCompanies, // <- from cfg.Value.BasePath or BasePathCompanies
+        string basePathCompanies, // e.g., "Storage/Companies"
         ApplicationDbContext db)
     {
         var safeCompanyId = companyId.HasValue && companyId.Value != Guid.Empty
             ? companyId.Value.ToString()
             : "Uncategorized";
 
-        var companyReceiptsPath = Path.Combine(basePathCompanies, safeCompanyId, "WorkDayReceipts", partRideId.ToString());        
-        Directory.CreateDirectory(companyReceiptsPath);
-        
+        var relativeFolderPath = Path.Combine("Storage", "Companies", safeCompanyId, "WorkDayReceipts", partRideId.ToString());
+        var absoluteFolderPath = Path.Combine(basePathCompanies, safeCompanyId, "WorkDayReceipts", partRideId.ToString());
+        Directory.CreateDirectory(absoluteFolderPath);
+
         foreach (var id in uploadIds.Distinct())
         {
             var tmpFile = Directory.EnumerateFiles(tmpRoot, $"{id}.*").FirstOrDefault();
-            if (tmpFile is null) 
-            {
-                throw new InvalidOperationException($"Some files were not found in temp storage {tmpFile}");
-            };
+            if (tmpFile is null)
+                throw new InvalidOperationException($"Some files were not found in temp storage for ID: {id}");
 
             var ext = Path.GetExtension(tmpFile);
-            var dest = Path.Combine(companyReceiptsPath, $"{id}{ext}");
-            File.Move(tmpFile, dest);
+            var relativePath = Path.Combine(relativeFolderPath, $"{id}{ext}");
+            var absolutePath = Path.Combine(absoluteFolderPath, $"{id}{ext}");
+
+            File.Move(tmpFile, absolutePath);
 
             var provider = new FileExtensionContentTypeProvider();
-            provider.TryGetContentType(dest, out var contentType);
+            provider.TryGetContentType(absolutePath, out var contentType);
 
             db.PartRideFiles.Add(new PartRideFile
             {
                 Id = Guid.NewGuid(),
                 PartRideId = partRideId,
-                FilePath = dest,
+                FilePath = relativePath, // ✅ Store relative path
                 FileName = Path.GetFileName(tmpFile),
                 ContentType = contentType ?? "application/octet-stream",
                 UploadedAt = DateTime.UtcNow
