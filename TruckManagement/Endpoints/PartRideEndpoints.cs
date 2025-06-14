@@ -573,6 +573,12 @@ public static class PartRideEndpoints
 
                     FileUploadHelper.MoveUploadsToPartRide(existingPartRide.Id, existingPartRide.CompanyId,
                         newUploads, tmpRoot, finalRoot, db);
+                    
+                    if (request.FileIdsToDelete?.Any() == true)
+                    {
+                        var basePathCompanies = Path.Combine(env.ContentRootPath, cfg.Value.BasePathCompanies);
+                        PartRideFileDeleteHelper.DeletePartRideFiles(existingPartRide.Id, request.FileIdsToDelete, basePathCompanies, db);
+                    }
 
                     await db.SaveChangesAsync();
 

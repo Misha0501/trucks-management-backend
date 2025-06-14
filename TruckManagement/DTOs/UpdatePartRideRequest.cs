@@ -25,5 +25,6 @@ namespace TruckManagement
         public double? VariousCompensation { get; set; }
         public List<Guid>? UploadIds { get; set; }
         public List<UploadFileRequest>? NewUploads { get; set; }
+        public List<Guid>? FileIdsToDelete { get; set; }
     }
 }
