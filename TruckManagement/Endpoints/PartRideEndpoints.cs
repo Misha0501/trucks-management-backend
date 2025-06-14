@@ -177,12 +177,12 @@ public static class PartRideEndpoints
                     await db.SaveChangesAsync();
 
                     // File handling
-                    var newUploadIds = request.NewUploadIds ?? Enumerable.Empty<Guid>();
+                    var newUploads = request.NewUploads ?? new List<UploadFileRequest>();
 
                     var tmpRoot = Path.Combine(env.ContentRootPath, cfg.Value.TmpPath);
                     var finalRoot = Path.Combine(env.ContentRootPath, cfg.Value.BasePathCompanies);
 
-                    FileUploadHelper.MoveUploadsToPartRide(partRide.Id, partRide.CompanyId, newUploadIds, tmpRoot,
+                    FileUploadHelper.MoveUploadsToPartRide(partRide.Id, partRide.CompanyId, newUploads, tmpRoot,
                         finalRoot, db);
 
                     await db.SaveChangesAsync(); // Save PartRideFile entries
@@ -566,13 +566,13 @@ public static class PartRideEndpoints
                         existingPartRide.PeriodApprovalId = periodApproval.Id;
                     }
 
-                    var newUploadIds = request.NewUploadIds ?? Enumerable.Empty<Guid>();
+                    var newUploads = request.NewUploads ?? new List<UploadFileRequest>();
 
                     var tmpRoot = Path.Combine(env.ContentRootPath, cfg.Value.TmpPath);
                     var finalRoot = Path.Combine(env.ContentRootPath, cfg.Value.BasePathCompanies);
 
                     FileUploadHelper.MoveUploadsToPartRide(existingPartRide.Id, existingPartRide.CompanyId,
-                        newUploadIds, tmpRoot, finalRoot, db);
+                        newUploads, tmpRoot, finalRoot, db);
 
                     await db.SaveChangesAsync();
 
@@ -1009,8 +1009,7 @@ public static class PartRideEndpoints
                         Files = partRide.Files.Select(f => new
                         {
                             f.Id,
-                            f.FileName,
-                            f.FilePath,
+                            f.OriginalFileName,
                             f.ContentType,
                             f.UploadedAt
                         }),
@@ -1931,6 +1930,13 @@ public static class PartRideEndpoints
             pr.VariousCompensation,
             pr.PeriodNumber,
             pr.WeekNrInPeriod,
+            Files = pr.Files.Select(f => new
+            {
+                f.Id,
+                f.OriginalFileName,
+                f.ContentType,
+                f.UploadedAt
+            }),
             HoursOption = pr.HoursOption?.Name,
             HoursCode = pr.HoursCode?.Name,
         };

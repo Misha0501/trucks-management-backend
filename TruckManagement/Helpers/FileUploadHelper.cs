@@ -1,7 +1,7 @@
 using TruckManagement.Data;
 using TruckManagement.Entities;
 using Microsoft.AspNetCore.StaticFiles;
-
+using TruckManagement.DTOs;
 namespace TruckManagement.Helpers;
 
 public static class FileUploadHelper
@@ -9,7 +9,7 @@ public static class FileUploadHelper
     public static void MoveUploadsToPartRide(
         Guid partRideId,
         Guid? companyId,
-        IEnumerable<Guid> uploadIds,
+        IEnumerable<UploadFileRequest> uploads,
         string tmpRoot,
         string basePathCompanies, // e.g., "Storage/Companies"
         ApplicationDbContext db)
@@ -22,15 +22,15 @@ public static class FileUploadHelper
         var absoluteFolderPath = Path.Combine(basePathCompanies, safeCompanyId, "WorkDayReceipts", partRideId.ToString());
         Directory.CreateDirectory(absoluteFolderPath);
 
-        foreach (var id in uploadIds.Distinct())
+        foreach (var upload in uploads.DistinctBy(u => u.FileId))
         {
-            var tmpFile = Directory.EnumerateFiles(tmpRoot, $"{id}.*").FirstOrDefault();
+            var tmpFile = Directory.EnumerateFiles(tmpRoot, $"{upload.FileId}.*").FirstOrDefault();
             if (tmpFile is null)
-                throw new InvalidOperationException($"Some files were not found in temp storage for ID: {id}");
+                throw new InvalidOperationException($"Some files were not found in temp storage for ID: {upload.FileId}");
 
             var ext = Path.GetExtension(tmpFile);
-            var relativePath = Path.Combine(relativeFolderPath, $"{id}{ext}");
-            var absolutePath = Path.Combine(absoluteFolderPath, $"{id}{ext}");
+            var relativePath = Path.Combine(relativeFolderPath, $"{upload.FileId}{ext}");
+            var absolutePath = Path.Combine(absoluteFolderPath, $"{upload.FileId}{ext}");
 
             File.Move(tmpFile, absolutePath);
 
@@ -43,6 +43,7 @@ public static class FileUploadHelper
                 PartRideId = partRideId,
                 FilePath = relativePath, // ✅ Store relative path
                 FileName = Path.GetFileName(tmpFile),
+                OriginalFileName = upload.OriginalFileName,
                 ContentType = contentType ?? "application/octet-stream",
                 UploadedAt = DateTime.UtcNow
             });
