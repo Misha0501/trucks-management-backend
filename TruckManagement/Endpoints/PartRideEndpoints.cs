@@ -144,7 +144,9 @@ public static class PartRideEndpoints
                         StandOver = 0.0,
                         VariousCompensation = request.VariousCompensation ?? 0,
                         HoursOptionId = TryParseGuid(request.HoursOptionId),
-                        WeekNumber = request.WeekNumber > 0 ? request.WeekNumber : DateHelper.GetIso8601WeekOfYear(request.Date),
+                        WeekNumber = request.WeekNumber > 0
+                            ? request.WeekNumber
+                            : DateHelper.GetIso8601WeekOfYear(request.Date),
                         HoursCodeId = TryParseGuid(request.HoursCodeId)
                                       ?? Guid.Parse("AAAA1111-1111-1111-1111-111111111111")
                     };
@@ -159,30 +161,32 @@ public static class PartRideEndpoints
                         HoursOptionId: partRide.HoursOptionId,
                         Kilometers: partRide.Kilometers ?? 0,
                         CorrectionTotalHours: partRide.CorrectionTotalHours);
-                    
+
                     var result = await calculator.CalculateAsync(calcContext);
                     partRide.ApplyCalculated(result);
 
                     db.PartRides.Add(partRide);
-                    
+
                     if (partRide.DriverId.HasValue)
                     {
-                        var periodApproval = await PeriodApprovalService.GetOrCreateAsync(db, partRide.DriverId.Value, partRide.Date);
+                        var periodApproval =
+                            await PeriodApprovalService.GetOrCreateAsync(db, partRide.DriverId.Value, partRide.Date);
                         partRide.PeriodApprovalId = periodApproval.Id;
                     }
-                    
+
                     await db.SaveChangesAsync();
-                    
+
                     // File handling
                     var newUploadIds = request.NewUploadIds ?? Enumerable.Empty<Guid>();
 
-                    var tmpRoot   = Path.Combine(env.ContentRootPath, cfg.Value.TmpPath);
+                    var tmpRoot = Path.Combine(env.ContentRootPath, cfg.Value.TmpPath);
                     var finalRoot = Path.Combine(env.ContentRootPath, cfg.Value.BasePathCompanies);
 
-                    FileUploadHelper.MoveUploadsToPartRide(partRide.Id, partRide.CompanyId, newUploadIds, tmpRoot, finalRoot, db);
-                    
+                    FileUploadHelper.MoveUploadsToPartRide(partRide.Id, partRide.CompanyId, newUploadIds, tmpRoot,
+                        finalRoot, db);
+
                     await db.SaveChangesAsync(); // Save PartRideFile entries
-                    
+
                     await transaction.CommitAsync(); // ✅ all good
 
                     // 5) Return everything in one response
@@ -525,7 +529,7 @@ public static class PartRideEndpoints
                     {
                         existingPartRide.CompanyId = currentCompanyId;
                     }
-                    
+
                     // Recalculate values using reusable calculator logic
                     // Ensure HoursCodeId is not null before passing to calculation context
                     if (!existingPartRide.HoursCodeId.HasValue)
@@ -535,12 +539,13 @@ public static class PartRideEndpoints
                             StatusCodes.Status400BadRequest
                         );
                     }
+
                     // If HoursCodeId is empty, set to default
                     if (existingPartRide.HoursCodeId.Value == Guid.Empty)
                     {
                         existingPartRide.HoursCodeId = Guid.Parse("AAAA1111-1111-1111-1111-111111111111");
                     }
-                    
+
                     var calculator = new PartRideCalculator(db);
                     var calcContext = new PartRideCalculationContext(
                         Date: existingPartRide.Date,
@@ -553,20 +558,22 @@ public static class PartRideEndpoints
                         CorrectionTotalHours: existingPartRide.CorrectionTotalHours);
                     var result = await calculator.CalculateAsync(calcContext);
                     existingPartRide.ApplyCalculated(result);
-                    
+
                     if (existingPartRide.DriverId.HasValue)
                     {
-                        var periodApproval = await PeriodApprovalService.GetOrCreateAsync(db, existingPartRide.DriverId.Value, existingPartRide.Date);
+                        var periodApproval = await PeriodApprovalService.GetOrCreateAsync(db,
+                            existingPartRide.DriverId.Value, existingPartRide.Date);
                         existingPartRide.PeriodApprovalId = periodApproval.Id;
                     }
-                    
+
                     var newUploadIds = request.NewUploadIds ?? Enumerable.Empty<Guid>();
 
-                    var tmpRoot   = Path.Combine(env.ContentRootPath, cfg.Value.TmpPath);
+                    var tmpRoot = Path.Combine(env.ContentRootPath, cfg.Value.TmpPath);
                     var finalRoot = Path.Combine(env.ContentRootPath, cfg.Value.BasePathCompanies);
 
-                    FileUploadHelper.MoveUploadsToPartRide(existingPartRide.Id, existingPartRide.CompanyId, newUploadIds, tmpRoot, finalRoot, db);
-                    
+                    FileUploadHelper.MoveUploadsToPartRide(existingPartRide.Id, existingPartRide.CompanyId,
+                        newUploadIds, tmpRoot, finalRoot, db);
+
                     await db.SaveChangesAsync();
 
                     // 4. Commit transaction
