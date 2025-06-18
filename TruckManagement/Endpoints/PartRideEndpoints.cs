@@ -610,7 +610,6 @@ public static class PartRideEndpoints
             async (
                 [FromQuery] string? companyId,
                 [FromQuery] string? clientId,
-                [FromQuery] string? driverId,
                 [FromQuery] string? carId,
                 [FromQuery] int? weekNumber,
                 [FromQuery] decimal? turnoverMin,
@@ -620,12 +619,16 @@ public static class PartRideEndpoints
                 ApplicationDbContext db,
                 UserManager<ApplicationUser> userManager,
                 ClaimsPrincipal currentUser,
+                HttpContext httpContext,
                 [FromQuery] int pageNumber = 1,
                 [FromQuery] int pageSize = 10
             ) =>
             {
                 try
                 {
+                    var driverIdsRaw = httpContext.Request.Query["driverIds"];
+                    var driverGuids = GuidParsingHelper.ParseGuids(driverIdsRaw, "driverIds");
+                    
                     if (pageNumber < 1) pageNumber = 1;
                     if (pageSize < 1) pageSize = 10;
 
@@ -721,13 +724,13 @@ public static class PartRideEndpoints
                         query,
                         companyId,
                         clientId,
-                        driverId,
                         carId,
                         weekNumber,
                         turnoverMin,
                         turnoverMax,
                         decimalHoursMin,
-                        decimalHoursMax
+                        decimalHoursMax,
+                        driverGuids
                     );
 
                     int totalCount = await query.CountAsync();
@@ -809,6 +812,13 @@ public static class PartRideEndpoints
                     };
 
                     return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
+                }
+                catch (ArgumentException ex)
+                {
+                    return ApiResponseFactory.Error(
+                        ex.Message,
+                        StatusCodes.Status400BadRequest
+                    );
                 }
                 catch (Exception ex)
                 {
@@ -1849,13 +1859,13 @@ public static class PartRideEndpoints
         IQueryable<PartRide> query,
         string? companyId,
         string? clientId,
-        string? driverId,
         string? carId,
         int? weekNumber,
         decimal? turnoverMin,
         decimal? turnoverMax,
         double? decimalHoursMin,
-        double? decimalHoursMax
+        double? decimalHoursMax,
+        IEnumerable<Guid>? driverIds = null
     )
     {
         if (!string.IsNullOrWhiteSpace(companyId) && Guid.TryParse(companyId, out var companyGuid))
@@ -1866,11 +1876,6 @@ public static class PartRideEndpoints
         if (!string.IsNullOrWhiteSpace(clientId) && Guid.TryParse(clientId, out var clientGuid))
         {
             query = query.Where(pr => pr.ClientId == clientGuid);
-        }
-
-        if (!string.IsNullOrWhiteSpace(driverId) && Guid.TryParse(driverId, out var driverGuid))
-        {
-            query = query.Where(pr => pr.DriverId == driverGuid);
         }
 
         if (!string.IsNullOrWhiteSpace(carId) && Guid.TryParse(carId, out var carGuid))
@@ -1901,6 +1906,12 @@ public static class PartRideEndpoints
         if (decimalHoursMax.HasValue)
         {
             query = query.Where(pr => pr.DecimalHours <= decimalHoursMax.Value);
+        }
+
+        // Apply filter for driverIds if provided
+        if (driverIds != null && driverIds.Any())
+        {
+            query = query.Where(pr => pr.DriverId.HasValue && driverIds.Contains(pr.DriverId.Value));
         }
 
         return query;
