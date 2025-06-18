@@ -641,7 +641,8 @@ public static class PartRideEndpoints
                     var driverGuids = GuidHelper.ParseGuids(driverIdsRaw, "driverIds");
                     var clientGuids = GuidHelper.ParseGuids(clientIdsRaw, "clientIds");
                     var carIds = GuidHelper.ParseGuids(carIdsRaw, "carIds");
-                    var statusIds = GuidHelper.ParseGuids(statusIdsRaw, "statusIds");
+                    // var statusIds = GuidHelper.ParseGuids(statusIdsRaw, "statusIds");
+                    var statusIds = new List<Guid>([]);
 
                     if (pageNumber < 1) pageNumber = 1;
                     if (pageSize < 1) pageSize = 10;
