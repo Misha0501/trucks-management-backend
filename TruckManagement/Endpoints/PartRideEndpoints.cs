@@ -130,24 +130,24 @@ public static class PartRideEndpoints
                         Start = startTime,
                         End = endTime,
                         Kilometers = request.Kilometers,
-                        CarId = TryParseGuid(request.CarId),
-                        DriverId = TryParseGuid(request.DriverId),
+                        CarId = GuidHelper.TryParseGuidOrThrow(request.CarId, "carId"),
+                        DriverId = GuidHelper.TryParseGuidOrThrow(request.DriverId, "driverId"),
                         Costs = request.Costs,
-                        ClientId = TryParseGuid(request.ClientId),
+                        ClientId = GuidHelper.TryParseGuidOrThrow(request.ClientId, "clientId"),
                         CostsDescription = request.CostsDescription,
                         Turnover = request.Turnover,
                         Remark = request.Remark,
                         CompanyId = companyGuid,
-                        CharterId = TryParseGuid(request.CharterId),
-                        RideId = TryParseGuid(request.RideId),
+                        CharterId = GuidHelper.TryParseGuidOrThrow(request.CharterId, "charterId"),
+                        RideId = GuidHelper.TryParseGuidOrThrow(request.RideId, "rideId"),
                         CorrectionTotalHours = request.HoursCorrection ?? 0,
                         StandOver = 0.0,
                         VariousCompensation = request.VariousCompensation ?? 0,
-                        HoursOptionId = TryParseGuid(request.HoursOptionId),
+                        HoursOptionId = GuidHelper.TryParseGuidOrThrow(request.HoursOptionId, "hoursOptionId"),
                         WeekNumber = request.WeekNumber > 0
                             ? request.WeekNumber
                             : DateHelper.GetIso8601WeekOfYear(request.Date),
-                        HoursCodeId = TryParseGuid(request.HoursCodeId)
+                        HoursCodeId = GuidHelper.TryParseGuidOrThrow(request.HoursCodeId, "hoursCodeId")
                                       ?? Guid.Parse("AAAA1111-1111-1111-1111-111111111111")
                     };
 
@@ -193,6 +193,10 @@ public static class PartRideEndpoints
                     var response = ToResponsePartRide(partRide);
 
                     return ApiResponseFactory.Success(response, StatusCodes.Status201Created);
+                }
+                catch (ArgumentException ex)
+                {
+                    return ApiResponseFactory.Error(ex.Message, StatusCodes.Status400BadRequest);
                 }
                 catch (InvalidOperationException ex) when (ex.Message.StartsWith("Some files were not found"))
                 {
@@ -330,13 +334,13 @@ public static class PartRideEndpoints
                     }
 
                     // Attempt to parse optional references
-                    Guid? newRideId = TryParseGuid(request.RideId);
-                    Guid? newCarId = TryParseGuid(request.CarId);
-                    Guid? newDriverId = TryParseGuid(request.DriverId);
-                    Guid? newCharterId = TryParseGuid(request.CharterId);
-                    Guid? newClientId = TryParseGuid(request.ClientId);
-                    Guid? newHoursCodeId = TryParseGuid(request.HoursCodeId);
-                    Guid? newHoursOptionId = TryParseGuid(request.HoursOptionId);
+                    Guid? newRideId = GuidHelper.TryParseGuidOrThrow(request.RideId, "rideId");
+                    Guid? newCarId = GuidHelper.TryParseGuidOrThrow(request.CarId, "carId");
+                    Guid? newDriverId = GuidHelper.TryParseGuidOrThrow(request.DriverId, "driverId");
+                    Guid? newCharterId = GuidHelper.TryParseGuidOrThrow(request.CharterId, "charterId");
+                    Guid? newClientId = GuidHelper.TryParseGuidOrThrow(request.ClientId, "clientId");
+                    Guid? newHoursCodeId = GuidHelper.TryParseGuidOrThrow(request.HoursCodeId, "hoursCodeId");
+                    Guid? newHoursOptionId = GuidHelper.TryParseGuidOrThrow(request.HoursOptionId, "hoursOptionId");
 
                     // If user is driver, ensure they don't reassign DriverId to someone else
                     if (isDriver && newDriverId.HasValue && newDriverId.Value != existingPartRide.DriverId)
@@ -589,6 +593,10 @@ public static class PartRideEndpoints
                     var response = ToResponsePartRide(existingPartRide);
                     return ApiResponseFactory.Success(response, StatusCodes.Status200OK);
                 }
+                catch (ArgumentException ex)
+                {
+                    return ApiResponseFactory.Error(ex.Message, StatusCodes.Status400BadRequest);
+                }
                 catch (InvalidOperationException ex) when (ex.Message.StartsWith("Some files were not found"))
                 {
                     await transaction.RollbackAsync();
@@ -630,10 +638,10 @@ public static class PartRideEndpoints
                     var clientIdsRaw = httpContext.Request.Query["clientIds"];
                     var carIdsRaw = httpContext.Request.Query["carIds"];
                     var statusIdsRaw = httpContext.Request.Query["statusIds"];
-                    var driverGuids = GuidParsingHelper.ParseGuids(driverIdsRaw, "driverIds");
-                    var clientGuids = GuidParsingHelper.ParseGuids(clientIdsRaw, "clientIds");
-                    var carIds = GuidParsingHelper.ParseGuids(carIdsRaw, "carIds");
-                    var statusIds = GuidParsingHelper.ParseGuids(statusIdsRaw, "statusIds");
+                    var driverGuids = GuidHelper.ParseGuids(driverIdsRaw, "driverIds");
+                    var clientGuids = GuidHelper.ParseGuids(clientIdsRaw, "clientIds");
+                    var carIds = GuidHelper.ParseGuids(carIdsRaw, "carIds");
+                    var statusIds = GuidHelper.ParseGuids(statusIdsRaw, "statusIds");
 
                     if (pageNumber < 1) pageNumber = 1;
                     if (pageSize < 1) pageSize = 10;
@@ -1855,14 +1863,6 @@ public static class PartRideEndpoints
         );
     }
 
-    private static Guid? TryParseGuid(string? input)
-    {
-        if (string.IsNullOrWhiteSpace(input)) return null;
-        return Guid.TryParse(input, out var parsed) ? parsed : null;
-    }
-
-    // Example of an ISO8601 week calculation
-
     private static IQueryable<PartRide> ApplyPartRideFilters(
         IQueryable<PartRide> query,
         string? companyId,
@@ -2000,11 +2000,11 @@ public static class PartRideEndpoints
     )
     {
         // Attempt to parse other GUIDs
-        Guid? rideGuid = TryParseGuid(request.RideId);
-        Guid? carGuid = TryParseGuid(request.CarId);
-        Guid? driverGuid = TryParseGuid(request.DriverId);
-        Guid? charterGuid = TryParseGuid(request.CharterId);
-        Guid? clientGuid = TryParseGuid(request.ClientId);
+        Guid? rideGuid = GuidHelper.TryParseGuidOrThrow(request.RideId, "rideId");
+        Guid? carGuid = GuidHelper.TryParseGuidOrThrow(request.CarId, "carId");
+        Guid? driverGuid = GuidHelper.TryParseGuidOrThrow(request.DriverId, "driverId");
+        Guid? charterGuid = GuidHelper.TryParseGuidOrThrow(request.CharterId, "charterId");
+        Guid? clientGuid = GuidHelper.TryParseGuidOrThrow(request.ClientId, "clientId");
 
         // If the user is a driver => ensure the driver matches the user & company
         if (isDriver)

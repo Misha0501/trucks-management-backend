@@ -1,7 +1,17 @@
 namespace TruckManagement.Helpers;
 
-public static class GuidParsingHelper
+public static class GuidHelper
 {
+    public static Guid? TryParseGuidOrThrow(string? input, string paramName)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return null;
+
+        if (!Guid.TryParse(input, out var parsed))
+            throw new ArgumentException($"Invalid GUID value '{input}' for parameter '{paramName}'.");
+
+        return parsed;
+    }
+
     public static List<Guid> ParseGuids(IEnumerable<string>? rawValues, string paramName)
     {
         if (rawValues is null) return new();
@@ -13,6 +23,7 @@ public static class GuidParsingHelper
                 throw new ArgumentException($"Invalid GUID value '{raw}' for parameter '{paramName}'.");
             result.Add(guid);
         }
+
         return result;
     }
 }
