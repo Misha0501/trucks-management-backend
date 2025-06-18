@@ -609,7 +609,6 @@ public static class PartRideEndpoints
             [Authorize(Roles = "globalAdmin, customerAdmin, employer, customer, customerAccountant, driver")]
             async (
                 [FromQuery] string? companyId,
-                [FromQuery] string? clientId,
                 [FromQuery] string? carId,
                 [FromQuery] int? weekNumber,
                 [FromQuery] decimal? turnoverMin,
@@ -627,7 +626,9 @@ public static class PartRideEndpoints
                 try
                 {
                     var driverIdsRaw = httpContext.Request.Query["driverIds"];
+                    var clientIdsRaw = httpContext.Request.Query["clientIds"];
                     var driverGuids = GuidParsingHelper.ParseGuids(driverIdsRaw, "driverIds");
+                    var clientGuids = GuidParsingHelper.ParseGuids(clientIdsRaw, "clientIds");
                     
                     if (pageNumber < 1) pageNumber = 1;
                     if (pageSize < 1) pageSize = 10;
@@ -723,14 +724,14 @@ public static class PartRideEndpoints
                     query = ApplyPartRideFilters(
                         query,
                         companyId,
-                        clientId,
                         carId,
                         weekNumber,
                         turnoverMin,
                         turnoverMax,
                         decimalHoursMin,
                         decimalHoursMax,
-                        driverGuids
+                        driverGuids,
+                        clientGuids
                     );
 
                     int totalCount = await query.CountAsync();
@@ -1858,26 +1859,20 @@ public static class PartRideEndpoints
     private static IQueryable<PartRide> ApplyPartRideFilters(
         IQueryable<PartRide> query,
         string? companyId,
-        string? clientId,
         string? carId,
         int? weekNumber,
         decimal? turnoverMin,
         decimal? turnoverMax,
         double? decimalHoursMin,
         double? decimalHoursMax,
-        IEnumerable<Guid>? driverIds = null
+        IEnumerable<Guid>? driverIds = null,
+        IEnumerable<Guid>? clientIds = null
     )
     {
         if (!string.IsNullOrWhiteSpace(companyId) && Guid.TryParse(companyId, out var companyGuid))
         {
             query = query.Where(pr => pr.CompanyId == companyGuid);
         }
-
-        if (!string.IsNullOrWhiteSpace(clientId) && Guid.TryParse(clientId, out var clientGuid))
-        {
-            query = query.Where(pr => pr.ClientId == clientGuid);
-        }
-
         if (!string.IsNullOrWhiteSpace(carId) && Guid.TryParse(carId, out var carGuid))
         {
             query = query.Where(pr => pr.CarId == carGuid);
@@ -1912,6 +1907,11 @@ public static class PartRideEndpoints
         if (driverIds != null && driverIds.Any())
         {
             query = query.Where(pr => pr.DriverId.HasValue && driverIds.Contains(pr.DriverId.Value));
+        }
+        // Apply filter for clientIds if provided
+        if (clientIds != null && clientIds.Any())
+        {
+            query = query.Where(pr => pr.ClientId.HasValue && clientIds.Contains(pr.ClientId.Value));
         }
 
         return query;
