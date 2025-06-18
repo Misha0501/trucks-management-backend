@@ -126,7 +126,7 @@ public static class PartRideEndpoints
                     var partRide = new PartRide
                     {
                         Id = Guid.NewGuid(),
-                        Date = request.Date,
+                        Date = DateTime.SpecifyKind(request.Date, DateTimeKind.Utc),
                         Start = startTime,
                         End = endTime,
                         Kilometers = request.Kilometers,
@@ -489,7 +489,7 @@ public static class PartRideEndpoints
                     }
 
                     // Update base fields if provided
-                    if (request.Date.HasValue) existingPartRide.Date = request.Date.Value;
+                    if (request.Date.HasValue) existingPartRide.Date = DateTime.SpecifyKind(request.Date.Value, DateTimeKind.Utc);
 
                     // Parse Start and End times if provided
                     try
