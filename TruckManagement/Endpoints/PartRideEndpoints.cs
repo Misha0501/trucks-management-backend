@@ -573,11 +573,12 @@ public static class PartRideEndpoints
 
                     FileUploadHelper.MoveUploadsToPartRide(existingPartRide.Id, existingPartRide.CompanyId,
                         newUploads, tmpRoot, finalRoot, db);
-                    
+
                     if (request.FileIdsToDelete?.Any() == true)
                     {
                         var basePathCompanies = Path.Combine(env.ContentRootPath, cfg.Value.BasePathCompanies);
-                        PartRideFileDeleteHelper.DeletePartRideFiles(existingPartRide.Id, request.FileIdsToDelete, basePathCompanies, db);
+                        PartRideFileDeleteHelper.DeletePartRideFiles(existingPartRide.Id, request.FileIdsToDelete,
+                            basePathCompanies, db);
                     }
 
                     await db.SaveChangesAsync();
@@ -627,9 +628,13 @@ public static class PartRideEndpoints
                 {
                     var driverIdsRaw = httpContext.Request.Query["driverIds"];
                     var clientIdsRaw = httpContext.Request.Query["clientIds"];
+                    var carIdsRaw = httpContext.Request.Query["carIds"];
+                    var statusIdsRaw = httpContext.Request.Query["statusIds"];
                     var driverGuids = GuidParsingHelper.ParseGuids(driverIdsRaw, "driverIds");
                     var clientGuids = GuidParsingHelper.ParseGuids(clientIdsRaw, "clientIds");
-                    
+                    var carIds = GuidParsingHelper.ParseGuids(carIdsRaw, "carIds");
+                    var statusIds = GuidParsingHelper.ParseGuids(statusIdsRaw, "statusIds");
+
                     if (pageNumber < 1) pageNumber = 1;
                     if (pageSize < 1) pageSize = 10;
 
@@ -731,7 +736,9 @@ public static class PartRideEndpoints
                         decimalHoursMin,
                         decimalHoursMax,
                         driverGuids,
-                        clientGuids
+                        clientGuids,
+                        carIds,
+                        statusIds
                     );
 
                     int totalCount = await query.CountAsync();
@@ -1866,13 +1873,16 @@ public static class PartRideEndpoints
         double? decimalHoursMin,
         double? decimalHoursMax,
         IEnumerable<Guid>? driverIds = null,
-        IEnumerable<Guid>? clientIds = null
+        IEnumerable<Guid>? clientIds = null,
+        IEnumerable<Guid>? carIds = null,
+        IEnumerable<Guid>? statusIds = null
     )
     {
         if (!string.IsNullOrWhiteSpace(companyId) && Guid.TryParse(companyId, out var companyGuid))
         {
             query = query.Where(pr => pr.CompanyId == companyGuid);
         }
+
         if (!string.IsNullOrWhiteSpace(carId) && Guid.TryParse(carId, out var carGuid))
         {
             query = query.Where(pr => pr.CarId == carGuid);
@@ -1906,13 +1916,25 @@ public static class PartRideEndpoints
         // Apply filter for driverIds if provided
         if (driverIds != null && driverIds.Any())
         {
-            query = query.Where(pr => pr.DriverId.HasValue && driverIds.Contains(pr.DriverId.Value));
+            query = query.Where(pr => driverIds.Contains(pr.DriverId ?? Guid.Empty));
         }
+
         // Apply filter for clientIds if provided
         if (clientIds != null && clientIds.Any())
         {
-            query = query.Where(pr => pr.ClientId.HasValue && clientIds.Contains(pr.ClientId.Value));
+            query = query.Where(pr => clientIds.Contains(pr.ClientId ?? Guid.Empty));
         }
+
+        // Apply filter for carIds if provided
+        if (carIds != null && carIds.Any())
+        {
+            query = query.Where(pr => carIds.Contains(pr.CarId ?? Guid.Empty));
+        }
+        // Apply filter for statusIds if provided
+        // if (statusIds != null && statusIds.Any())
+        // {
+        //     query = query.Where(pr => statusIds.Contains(pr.StatusId ?? Guid.Empty));
+        // }
 
         return query;
     }
