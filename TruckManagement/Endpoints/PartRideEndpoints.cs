@@ -624,6 +624,8 @@ public static class PartRideEndpoints
                 [FromQuery] decimal? turnoverMax,
                 [FromQuery] double? decimalHoursMin,
                 [FromQuery] double? decimalHoursMax,
+                [FromQuery] DateTime? startDate,
+                [FromQuery] DateTime? endDate,
                 ApplicationDbContext db,
                 UserManager<ApplicationUser> userManager,
                 ClaimsPrincipal currentUser,
@@ -744,6 +746,8 @@ public static class PartRideEndpoints
                         turnoverMax,
                         decimalHoursMin,
                         decimalHoursMax,
+                        startDate,
+                        endDate,
                         driverGuids,
                         clientGuids,
                         carIds,
@@ -1873,6 +1877,8 @@ public static class PartRideEndpoints
         decimal? turnoverMax,
         double? decimalHoursMin,
         double? decimalHoursMax,
+        DateTime? startDate,
+        DateTime? endDate,
         IEnumerable<Guid>? driverIds = null,
         IEnumerable<Guid>? clientIds = null,
         IEnumerable<Guid>? carIds = null,
@@ -1913,7 +1919,17 @@ public static class PartRideEndpoints
         {
             query = query.Where(pr => pr.DecimalHours <= decimalHoursMax.Value);
         }
+        
+        if (startDate.HasValue)
+        {
+            query = query.Where(pr => pr.Date >= DateTime.SpecifyKind(startDate.Value.Date, DateTimeKind.Utc));
+        }
 
+        if (endDate.HasValue)
+        {
+            query = query.Where(pr => pr.Date <= DateTime.SpecifyKind(endDate.Value.Date, DateTimeKind.Utc));
+        }
+        
         // Apply filter for driverIds if provided
         if (driverIds != null && driverIds.Any())
         {
