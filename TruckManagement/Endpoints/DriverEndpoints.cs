@@ -131,47 +131,46 @@ namespace TruckManagement.Endpoints
                     ClaimsPrincipal currentUser,
                     ApplicationDbContext db) =>
                 {
+                    // -------------------------------------------------------------------
+                    // 1. Resolve driver
+                    // -------------------------------------------------------------------
                     var aspUserId = userManager.GetUserId(currentUser);
-
                     var driver = await db.Drivers
                         .FirstOrDefaultAsync(d => d.AspNetUserId == aspUserId && !d.IsDeleted);
 
                     if (driver == null)
                         return ApiResponseFactory.Error("Driver profile not found.", StatusCodes.Status403Forbidden);
 
+                    // -------------------------------------------------------------------
+                    // 2. Determine current period
+                    // -------------------------------------------------------------------
                     var (year, periodNr, _) = DateHelper.GetPeriod(DateTime.UtcNow);
                     var (fromDate, toDate) = DateHelper.GetPeriodDateRange(year, periodNr);
 
-                    var approval = await db.PeriodApprovals
-                        .Include(a => a.PartRides)
-                        .FirstOrDefaultAsync(a => a.DriverId == driver.Id &&
-                                                  a.Year == year &&
-                                                  a.PeriodNr == periodNr);
+                    // -------------------------------------------------------------------
+                    // 3. Fetch WeekApprovals for that period
+                    // -------------------------------------------------------------------
+                    var weeksQuery = db.WeekApprovals
+                        .AsNoTracking()
+                        .Include(w => w.PartRides)
+                        .Where(w => w.DriverId == driver.Id &&
+                                    w.Year == year &&
+                                    w.PeriodNr == periodNr);
 
-                    if (approval == null)
-                    {
-                        return ApiResponseFactory.Success(new
-                        {
-                            Year = year,
-                            PeriodNr = periodNr,
-                            Status = "NoApproval",
-                            fromDate,
-                            toDate,
-                            Weeks = Enumerable.Range(1, 4).Select(i => new
-                            {
-                                WeekInPeriod = i,
-                                WeekNumber = DateHelper.GetWeekNumberOfPeriod(year, periodNr, i),
-                                TotalDecimalHours = 0.0,
-                                PartRides = new List<object>()
-                            }).OrderByDescending(w => w.WeekNumber)
-                        });
-                    }
+                    var weekApprovals = await weeksQuery.ToListAsync();
 
-                    var groupedWeeks = Enumerable.Range(1, 4).Select(i =>
+                    // -------------------------------------------------------------------
+                    // 4. Build four-week payload (fill empty weeks if needed)
+                    // -------------------------------------------------------------------
+                    var weeks = Enumerable.Range(1, 4).Select(weekInPeriod =>
                         {
-                            int weekNumber = DateHelper.GetWeekNumberOfPeriod(year, periodNr, i);
-                            var partRidesForWeek = approval.PartRides
-                                .Where(r => r.WeekNrInPeriod == i)
+                            int weekNumber = DateHelper.GetWeekNumberOfPeriod(year, periodNr, weekInPeriod);
+                            var wa = weekApprovals
+                                .FirstOrDefault(w =>
+                                    w.PartRides.Any(pr => pr.WeekNumber == weekNumber));
+
+                            // If week has no WeekApproval record yet, create an empty shell
+                            var rides = wa?.PartRides
                                 .OrderByDescending(r => r.Date)
                                 .Select(r => new
                                 {
@@ -183,43 +182,51 @@ namespace TruckManagement.Endpoints
                                     r.DecimalHours,
                                     r.Remark
                                 })
-                                .ToList();
+                                .Cast<dynamic>()
+                                .ToList() ?? new List<dynamic>();
 
-                            double totalDecimalHours = partRidesForWeek
-                                .Sum(r => r.DecimalHours ?? 0);
+                            double totalDecimalHours = rides.Sum(r =>
+                            {
+                                var dhProp = r.GetType().GetProperty("DecimalHours")!;
+                                return (double?)dhProp.GetValue(r)! ?? 0;
+                            });
 
                             return new
                             {
-                                WeekInPeriod = i,
-                                WeekNumber = weekNumber,
+                                WeekInPeriod = weekInPeriod,
+                                WeekNumber = DateHelper.GetWeekNumberOfPeriod(year, periodNr, weekInPeriod),
+                                Status = wa?.Status ?? WeekApprovalStatus.PendingAdmin, // default
                                 TotalDecimalHours = Math.Round(totalDecimalHours, 2),
-                                PartRides = partRidesForWeek
+                                PartRides = rides
                             };
                         })
-                        .OrderByDescending(g => g.WeekInPeriod)
+                        .OrderByDescending(w => w.WeekInPeriod) // newest week first
                         .ToList();
 
+                    // -------------------------------------------------------------------
+                    // 5. Return
+                    // -------------------------------------------------------------------
                     return ApiResponseFactory.Success(new
                     {
-                        approval.Year,
-                        approval.PeriodNr,
-                        approval.Status,
-                        fromDate,
-                        toDate,
-                        Weeks = groupedWeeks
+                        Year = year,
+                        PeriodNr = periodNr,
+                        FromDate = fromDate,
+                        ToDate = toDate,
+                        Weeks = weeks
                     });
                 });
 
             app.MapGet("/drivers/periods/pending",
-                [Authorize(Roles = "driver,globalAdmin")] async (
+                [Authorize(Roles = "driver,globalAdmin")]
+                async (
                     UserManager<ApplicationUser> userMgr,
                     ClaimsPrincipal currentUser,
                     ApplicationDbContext db,
                     [FromQuery] int pageNumber = 1,
-                    [FromQuery] int pageSize   = 10) =>
+                    [FromQuery] int pageSize = 10) =>
                 {
                     var aspUserId = userMgr.GetUserId(currentUser);
-                    var driver    = await db.Drivers
+                    var driver = await db.Drivers
                         .FirstOrDefaultAsync(d => d.AspNetUserId == aspUserId && !d.IsDeleted);
 
                     if (driver == null)
@@ -242,7 +249,7 @@ namespace TruckManagement.Endpoints
                                 ? WeekApprovalStatus.PendingAdmin
                                 : WeekApprovalStatus.PendingDriver,
                             FromDate = DateHelper.GetPeriodDateRange(g.Key.Year, g.Key.PeriodNr).fromDate,
-                            ToDate   = DateHelper.GetPeriodDateRange(g.Key.Year, g.Key.PeriodNr).toDate
+                            ToDate = DateHelper.GetPeriodDateRange(g.Key.Year, g.Key.PeriodNr).toDate
                         });
 
                     var totalCount = await grouped.CountAsync();
