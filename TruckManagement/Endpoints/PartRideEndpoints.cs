@@ -489,7 +489,8 @@ public static class PartRideEndpoints
                     }
 
                     // Update base fields if provided
-                    if (request.Date.HasValue) existingPartRide.Date = DateTime.SpecifyKind(request.Date.Value, DateTimeKind.Utc);
+                    if (request.Date.HasValue)
+                        existingPartRide.Date = DateTime.SpecifyKind(request.Date.Value, DateTimeKind.Utc);
 
                     // Parse Start and End times if provided
                     try
@@ -770,20 +771,8 @@ public static class PartRideEndpoints
                             pr.Rest,
                             pr.Kilometers,
                             pr.Costs,
-                            Client = pr.Client != null
-                                ? new
-                                {
-                                    pr.Client.Id,
-                                    pr.Client.Name
-                                }
-                                : null,
-                            Company = pr.Company != null
-                                ? new
-                                {
-                                    pr.Company.Id,
-                                    pr.Company.Name
-                                }
-                                : null,
+                            Client = pr.Client != null ? new { pr.Client.Id, pr.Client.Name } : null,
+                            Company = pr.Company != null ? new { pr.Company.Id, pr.Company.Name } : null,
                             pr.WeekNumber,
                             pr.DecimalHours,
                             pr.CostsDescription,
@@ -793,9 +782,12 @@ public static class PartRideEndpoints
                                 ? new
                                 {
                                     pr.Driver.Id,
+                                    pr.Driver.User.FirstName,
+                                    pr.Driver.User.LastName,
                                     pr.Driver.AspNetUserId
                                 }
                                 : null,
+                            Car = pr.Car != null ? new { pr.Car.Id, pr.Car.LicensePlate } : null,
                             pr.CarId,
                             pr.CorrectionTotalHours,
                             pr.TaxFreeCompensation,
@@ -806,20 +798,12 @@ public static class PartRideEndpoints
                             pr.SaturdayHours,
                             pr.SundayHolidayHours,
                             pr.VariousCompensation,
-                            HoursOption = pr.HoursOption != null
-                                ? new
-                                {
-                                    pr.HoursOption.Id,
-                                    pr.HoursOption.Name
-                                }
-                                : null,
-                            HoursCode = pr.HoursCode != null
-                                ? new
-                                {
-                                    pr.HoursCode.Id,
-                                    pr.HoursCode.Name
-                                }
-                                : null
+                            Earnings = Math.Round(
+                                pr.TaxFreeCompensation + pr.NightAllowance + pr.KilometerReimbursement + pr.ConsignmentFee + pr.VariousCompensation,
+                                2
+                            ),
+                            HoursOption = pr.HoursOption != null ? new { pr.HoursOption.Id, pr.HoursOption.Name } : null,
+                            HoursCode = pr.HoursCode != null ? new { pr.HoursCode.Id, pr.HoursCode.Name } : null
                         })
                         .ToListAsync();
 
@@ -1919,7 +1903,7 @@ public static class PartRideEndpoints
         {
             query = query.Where(pr => pr.DecimalHours <= decimalHoursMax.Value);
         }
-        
+
         if (startDate.HasValue)
         {
             query = query.Where(pr => pr.Date >= DateTime.SpecifyKind(startDate.Value.Date, DateTimeKind.Utc));
@@ -1929,7 +1913,7 @@ public static class PartRideEndpoints
         {
             query = query.Where(pr => pr.Date <= DateTime.SpecifyKind(endDate.Value.Date, DateTimeKind.Utc));
         }
-        
+
         // Apply filter for driverIds if provided
         if (driverIds != null && driverIds.Any())
         {
