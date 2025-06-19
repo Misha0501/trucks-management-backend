@@ -3,7 +3,7 @@ namespace TruckManagement.Entities;
 public enum PeriodApprovalStatus
 {
     PendingDriver,   // waiting for driver
-    PendingAdmin,    // driver signed, waiting for customer-admin
+    PendingAdmin,    // waiting for admin to allow for signing
     Signed,          // both signed
     Invalidated      // a ride changed after signatures
 }
