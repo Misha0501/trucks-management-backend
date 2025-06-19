@@ -167,12 +167,10 @@ public static class PartRideEndpoints
 
                     db.PartRides.Add(partRide);
 
-                    if (partRide.DriverId.HasValue)
-                    {
-                        var periodApproval =
-                            await PeriodApprovalService.GetOrCreateAsync(db, partRide.DriverId.Value, partRide.Date);
-                        partRide.PeriodApprovalId = periodApproval.Id;
-                    }
+                    var weekApproval = await WeekApprovalService.GetOrCreateAsync(
+                        db, partRide.DriverId!.Value, partRide.Date);
+
+                    weekApproval.PartRides.Add(partRide);
 
                     await db.SaveChangesAsync();
 
@@ -564,11 +562,12 @@ public static class PartRideEndpoints
                     var result = await calculator.CalculateAsync(calcContext);
                     existingPartRide.ApplyCalculated(result);
 
-                    if (existingPartRide.DriverId.HasValue)
+                    var weekApproval = await WeekApprovalService.GetOrCreateAsync(
+                        db, existingPartRide.DriverId!.Value, existingPartRide.Date);
+
+                    if (!weekApproval.PartRides.Any(pr => pr.Id == existingPartRide.Id))
                     {
-                        var periodApproval = await PeriodApprovalService.GetOrCreateAsync(db,
-                            existingPartRide.DriverId.Value, existingPartRide.Date);
-                        existingPartRide.PeriodApprovalId = periodApproval.Id;
+                        weekApproval.PartRides.Add(existingPartRide);
                     }
 
                     var newUploads = request.NewUploads ?? new List<UploadFileRequest>();
@@ -799,10 +798,12 @@ public static class PartRideEndpoints
                             pr.SundayHolidayHours,
                             pr.VariousCompensation,
                             Earnings = Math.Round(
-                                pr.TaxFreeCompensation + pr.NightAllowance + pr.KilometerReimbursement + pr.ConsignmentFee + pr.VariousCompensation,
+                                pr.TaxFreeCompensation + pr.NightAllowance + pr.KilometerReimbursement +
+                                pr.ConsignmentFee + pr.VariousCompensation,
                                 2
                             ),
-                            HoursOption = pr.HoursOption != null ? new { pr.HoursOption.Id, pr.HoursOption.Name } : null,
+                            HoursOption =
+                                pr.HoursOption != null ? new { pr.HoursOption.Id, pr.HoursOption.Name } : null,
                             HoursCode = pr.HoursCode != null ? new { pr.HoursCode.Id, pr.HoursCode.Name } : null
                         })
                         .ToListAsync();

@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using TruckManagement.Data;
 using TruckManagement.Entities;
 using TruckManagement.Helpers;
+using TruckManagement.Services;
 
 namespace TruckManagement.Endpoints
 {
@@ -210,59 +211,55 @@ namespace TruckManagement.Endpoints
                 });
 
             app.MapGet("/drivers/periods/pending",
-                [Authorize(Roles = "driver, globalAdmin")]
-                async (
-                    UserManager<ApplicationUser> userManager,
+                [Authorize(Roles = "driver,globalAdmin")] async (
+                    UserManager<ApplicationUser> userMgr,
                     ClaimsPrincipal currentUser,
                     ApplicationDbContext db,
                     [FromQuery] int pageNumber = 1,
-                    [FromQuery] int pageSize = 10) =>
+                    [FromQuery] int pageSize   = 10) =>
                 {
-                    var aspUserId = userManager.GetUserId(currentUser);
-
-                    var driver = await db.Drivers
+                    var aspUserId = userMgr.GetUserId(currentUser);
+                    var driver    = await db.Drivers
                         .FirstOrDefaultAsync(d => d.AspNetUserId == aspUserId && !d.IsDeleted);
 
                     if (driver == null)
                         return ApiResponseFactory.Error("Driver profile not found.", StatusCodes.Status403Forbidden);
 
-                    var query = db.PeriodApprovals
-                        .Where(a =>
-                            a.DriverId == driver.Id &&
-                            a.Status == PeriodApprovalStatus.PendingDriver);
+                    /* Weeks that are *not* signed yet */
+                    var weeks = WeekApprovalQueryHelper.FilterWeeks(db.WeekApprovals.AsNoTracking(),
+                            driver.Id, null)
+                        .Where(w => w.Status == WeekApprovalStatus.PendingAdmin
+                                    || w.Status == WeekApprovalStatus.PendingDriver);
 
-                    var totalCount = await query.CountAsync();
-                    var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+                    /* Group by period */
+                    var grouped = weeks
+                        .GroupBy(w => new { w.Year, w.PeriodNr })
+                        .Select(g => new
+                        {
+                            g.Key.Year,
+                            g.Key.PeriodNr,
+                            Status = g.Any(w => w.Status == WeekApprovalStatus.PendingAdmin)
+                                ? WeekApprovalStatus.PendingAdmin
+                                : WeekApprovalStatus.PendingDriver,
+                            FromDate = DateHelper.GetPeriodDateRange(g.Key.Year, g.Key.PeriodNr).fromDate,
+                            ToDate   = DateHelper.GetPeriodDateRange(g.Key.Year, g.Key.PeriodNr).toDate
+                        });
 
-                    var rawApprovals = await query
-                        .OrderByDescending(a => a.Year)
-                        .ThenByDescending(a => a.PeriodNr)
+                    var totalCount = await grouped.CountAsync();
+                    var data = await grouped
+                        .OrderByDescending(x => x.Year)
+                        .ThenByDescending(x => x.PeriodNr)
                         .Skip((pageNumber - 1) * pageSize)
                         .Take(pageSize)
                         .ToListAsync();
-
-                    var pending = rawApprovals
-                        .Select(a =>
-                        {
-                            var (fromDate, toDate) = DateHelper.GetPeriodDateRange(a.Year, a.PeriodNr);
-                            return new
-                            {
-                                a.Year,
-                                a.PeriodNr,
-                                a.Status,
-                                fromDate,
-                                toDate
-                            };
-                        })
-                        .ToList();
 
                     return ApiResponseFactory.Success(new
                     {
                         pageNumber,
                         pageSize,
                         totalCount,
-                        totalPages,
-                        data = pending
+                        totalPages = (int)Math.Ceiling(totalCount / (double)pageSize),
+                        data
                     });
                 });
 
