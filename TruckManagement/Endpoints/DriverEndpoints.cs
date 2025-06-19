@@ -279,54 +279,58 @@ namespace TruckManagement.Endpoints
                     [FromQuery] int pageNumber = 1,
                     [FromQuery] int pageSize = 10) =>
                 {
+                    // ------------------------------------------------- 1. Resolve driver
                     var aspUserId = userManager.GetUserId(currentUser);
-
                     var driver = await db.Drivers
                         .FirstOrDefaultAsync(d => d.AspNetUserId == aspUserId && !d.IsDeleted);
 
-                    if (driver == null)
+                    if (driver is null)
                         return ApiResponseFactory.Error("Driver profile not found.", StatusCodes.Status403Forbidden);
 
-                    var (currentYear, currentPeriodNr, _) = DateHelper.GetPeriod(DateTime.UtcNow);
+                    // ------------------------------------------------- 2. Current period (to exclude)
+                    var (currYear, currPeriodNr, _) = DateHelper.GetPeriod(DateTime.UtcNow);
 
-                    var query = db.PeriodApprovals
-                        .Where(a =>
-                            a.DriverId == driver.Id &&
-                            a.Status == PeriodApprovalStatus.Signed &&
-                            !(a.Year == currentYear && a.PeriodNr == currentPeriodNr));
+                    // ------------------------------------------------- 3. Query WeekApprovals
+                    var weeks = db.WeekApprovals.AsNoTracking()
+                        .Where(w => w.DriverId == driver.Id
+                                    && w.Status  == WeekApprovalStatus.Signed
+                                    // keep only periods strictly *before* the current one
+                                    && ((w.Year <  currYear) ||
+                                        (w.Year == currYear && w.PeriodNr < currPeriodNr)));
 
-                    var totalCount = await query.CountAsync();
+                    // ------------------------------------------------- 4. Group by period and keep only FULLY-signed ones
+                    var periodsQuery = weeks
+                        .GroupBy(w => new { w.Year, w.PeriodNr })
+                        .Where(g => g.All(w => w.Status == WeekApprovalStatus.Signed))
+                        .Select(g => new
+                        {
+                            g.Key.Year,
+                            g.Key.PeriodNr,
+                            Status = WeekApprovalStatus.Signed,
+                            // helper to compute date range
+                            FromDate = DateHelper.GetPeriodDateRange(g.Key.Year, g.Key.PeriodNr).fromDate,
+                            ToDate = DateHelper.GetPeriodDateRange(g.Key.Year, g.Key.PeriodNr).toDate
+                        });
+
+                    // ------------------------------------------------- 5. Paging
+                    var totalCount = await periodsQuery.CountAsync();
                     var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
 
-                    var rawApprovals = await query
-                        .OrderByDescending(a => a.Year)
-                        .ThenByDescending(a => a.PeriodNr)
+                    var data = await periodsQuery
+                        .OrderByDescending(p => p.Year)
+                        .ThenByDescending(p => p.PeriodNr)
                         .Skip((pageNumber - 1) * pageSize)
                         .Take(pageSize)
                         .ToListAsync();
 
-                    var archived = rawApprovals
-                        .Select(a =>
-                        {
-                            var (fromDate, toDate) = DateHelper.GetPeriodDateRange(a.Year, a.PeriodNr);
-                            return new
-                            {
-                                a.Year,
-                                a.PeriodNr,
-                                a.Status,
-                                fromDate,
-                                toDate
-                            };
-                        })
-                        .ToList();
-
+                    // ------------------------------------------------- 6. Return
                     return ApiResponseFactory.Success(new
                     {
                         pageNumber,
                         pageSize,
                         totalCount,
                         totalPages,
-                        data = archived
+                        data
                     });
                 });
 
