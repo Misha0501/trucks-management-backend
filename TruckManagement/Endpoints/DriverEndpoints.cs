@@ -334,6 +334,10 @@ namespace TruckManagement.Endpoints
                     });
                 });
 
+            // ---------------------------------------------------------------------------
+            //  PERIOD ♦ DETAIL  – built from WeekApprovals
+            //  GET /drivers/periods/{periodKey}   (periodKey = "YYYY-P")
+            // ---------------------------------------------------------------------------
             app.MapGet("/drivers/periods/{periodKey}",
                 [Authorize(Roles = "driver, globalAdmin")]
                 async (
@@ -342,45 +346,44 @@ namespace TruckManagement.Endpoints
                     ClaimsPrincipal currentUser,
                     ApplicationDbContext db) =>
                 {
+                    // 1) Resolve driver
                     var aspUserId = userManager.GetUserId(currentUser);
-
                     var driver = await db.Drivers
                         .FirstOrDefaultAsync(d => d.AspNetUserId == aspUserId && !d.IsDeleted);
 
-                    if (driver == null)
+                    if (driver is null)
                         return ApiResponseFactory.Error("Driver profile not found.", StatusCodes.Status403Forbidden);
 
-                    // Parse format "YYYY-P"
+                    // 2) Parse periodKey => year‑periodNr
                     var parts = periodKey.Split('-');
-                    if (parts.Length != 2 || !int.TryParse(parts[0], out var year) ||
-                        !int.TryParse(parts[1], out var periodNr))
-                    {
+                    if (parts.Length != 2 || !int.TryParse(parts[0], out var year) || !int.TryParse(parts[1], out var periodNr))
                         return ApiResponseFactory.Error("Invalid period key format. Use 'YYYY-P' (e.g., 2024-6).",
                             StatusCodes.Status400BadRequest);
-                    }
 
                     var (fromDate, toDate) = DateHelper.GetPeriodDateRange(year, periodNr);
 
-                    var approval = await db.PeriodApprovals
-                        .Include(a => a.PartRides)
-                        .FirstOrDefaultAsync(a => a.DriverId == driver.Id &&
-                                                  a.Year == year &&
-                                                  a.PeriodNr == periodNr);
+                    // 3) Load WeekApprovals for driver/period
+                    var waList = await db.WeekApprovals
+                        .AsNoTracking()
+                        .Include(w => w.PartRides)
+                        .Where(w => w.DriverId == driver.Id &&
+                                    w.Year == year &&
+                                    w.PeriodNr == periodNr)
+                        .ToListAsync();
 
-                    if (approval == null)
-                    {
+                    if (!waList.Any())
                         return ApiResponseFactory.Error("Period not found.", StatusCodes.Status404NotFound);
-                    }
 
-                    double totalDecimalHours = 0.0;
-                    decimal totalEarnings = 0.0m;
+                    // 4) Build week buckets (ensure 4 weeks even if some are missing)
+                    double  totalDecimalHours = 0;
+                    decimal totalEarnings     = 0;
 
-                    var groupedWeeks = Enumerable.Range(1, 4).Select(i =>
+                    var weeks = Enumerable.Range(1, 4).Select(weekInPeriod =>
                         {
-                            int weekNumber = DateHelper.GetWeekNumberOfPeriod(year, periodNr, i);
+                            int weekNumber = DateHelper.GetWeekNumberOfPeriod(year, periodNr, weekInPeriod);
+                            var wa = waList.FirstOrDefault(w => w.PartRides.Any(pr => pr.WeekNumber == weekNumber));
 
-                            var partRidesForWeek = approval.PartRides
-                                .Where(r => r.WeekNrInPeriod == i)
+                            var rides = wa?.PartRides
                                 .OrderByDescending(r => r.Date)
                                 .Select(r => new
                                 {
@@ -394,36 +397,42 @@ namespace TruckManagement.Endpoints
                                     r.VariousCompensation,
                                     r.Remark
                                 })
-                                .ToList();
+                                .Cast<dynamic>()
+                                .ToList() ?? new List<dynamic>();
 
-                            double weekHours = partRidesForWeek.Sum(r => r.DecimalHours ?? 0);
-                            decimal weekEarnings = partRidesForWeek.Sum(r =>
-                                (decimal)(r.TaxFreeCompensation + r.VariousCompensation));
+                            // totals
+                            double  weekHours    = rides.Sum(r => (double?)(r.DecimalHours ?? 0) ?? 0);
+                            decimal weekEarnings = rides.Sum(r =>
+                            {
+                                decimal tfc = (decimal)(r.TaxFreeCompensation ?? 0);
+                                decimal vc  = (decimal)(r.VariousCompensation ?? 0);
+                                return tfc + vc;
+                            });
 
                             totalDecimalHours += weekHours;
-                            totalEarnings += weekEarnings;
+                            totalEarnings     += weekEarnings;
 
                             return new
                             {
-                                WeekInPeriod = i,
-                                WeekNumber = weekNumber,
+                                WeekInPeriod = weekInPeriod,
+                                WeekNumber   = weekNumber,
+                                Status       = wa?.Status ?? WeekApprovalStatus.PendingAdmin,
                                 TotalDecimalHours = Math.Round(weekHours, 2),
-                                PartRides = partRidesForWeek
+                                PartRides    = rides
                             };
                         })
-                        .OrderByDescending(g => g.WeekInPeriod)
+                        .OrderByDescending(w => w.WeekInPeriod)
                         .ToList();
 
                     return ApiResponseFactory.Success(new
                     {
-                        approval.Year,
-                        approval.PeriodNr,
-                        approval.Status,
-                        fromDate,
-                        toDate,
+                        Year   = year,
+                        PeriodNr = periodNr,
+                        FromDate = fromDate,
+                        ToDate   = toDate,
                         TotalDecimalHours = Math.Round(totalDecimalHours, 2),
-                        TotalEarnings = Math.Round(totalEarnings, 2),
-                        Weeks = groupedWeeks
+                        TotalEarnings     = Math.Round(totalEarnings, 2),
+                        Weeks  = weeks
                     });
                 });
         }
