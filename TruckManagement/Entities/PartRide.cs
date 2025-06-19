@@ -61,6 +61,6 @@ namespace TruckManagement.Entities
         public ICollection<PartRideComment> Comments { get; set; } = new List<PartRideComment>();
         
         public Guid? PeriodApprovalId { get; set; }
-        public PeriodApproval? PeriodApproval { get; set; }
+        public WeekApproval? WeekApproval { get; set; }
     }
 }
