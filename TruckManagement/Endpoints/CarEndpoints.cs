@@ -139,7 +139,7 @@ namespace TruckManagement.Endpoints
             app.MapGet("/cars",
                 [Authorize(Roles = "globalAdmin, customerAdmin, employer, customer, customerAccountant")]
                 async (
-                    [FromQuery] string? companyId,
+                    HttpContext httpContext,
                     ApplicationDbContext db,
                     UserManager<ApplicationUser> userManager,
                     ClaimsPrincipal currentUser,
@@ -149,21 +149,8 @@ namespace TruckManagement.Endpoints
                 {
                     try
                     {
-                        if (string.IsNullOrWhiteSpace(companyId))
-                        {
-                            return ApiResponseFactory.Error(
-                                "Query parameter 'companyId' is required.",
-                                StatusCodes.Status400BadRequest
-                            );
-                        }
-
-                        if (!Guid.TryParse(companyId, out Guid companyGuid))
-                        {
-                            return ApiResponseFactory.Error(
-                                "Invalid 'companyId' format.",
-                                StatusCodes.Status400BadRequest
-                            );
-                        }
+                        var companyIdsRaw = httpContext.Request.Query["companyIds"];
+                        var companiesIds = GuidHelper.ParseGuids(companyIdsRaw, "companyIds");
 
                         var userId = userManager.GetUserId(currentUser);
                         if (string.IsNullOrEmpty(userId))
@@ -196,21 +183,21 @@ namespace TruckManagement.Endpoints
                                 .Distinct()
                                 .ToList();
 
-                            if (!associatedCompanyIds.Contains(companyGuid))
+                            if (companiesIds.Any(id => !associatedCompanyIds.Contains(id)))
                             {
                                 return ApiResponseFactory.Error(
-                                    "You are not authorized to view cars of this company.",
+                                    "You are not authorized to view cars of one or more requested companies.",
                                     StatusCodes.Status403Forbidden
                                 );
                             }
                         }
 
                         var totalCars = await db.Cars
-                            .Where(c => c.CompanyId == companyGuid)
+                            .Where(c => companiesIds.Contains(c.CompanyId))
                             .CountAsync();
 
                         var cars = await db.Cars
-                            .Where(c => c.CompanyId == companyGuid)
+                            .Where(c => companiesIds.Contains(c.CompanyId))
                             .OrderBy(c => c.LicensePlate)
                             .Skip((pageNumber - 1) * pageSize)
                             .Take(pageSize)
@@ -235,6 +222,13 @@ namespace TruckManagement.Endpoints
                         };
 
                         return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
+                    }
+                    catch (ArgumentException ex)
+                    {
+                        return ApiResponseFactory.Error(
+                            ex.Message,
+                            StatusCodes.Status400BadRequest
+                        );
                     }
                     catch (Exception ex)
                     {
