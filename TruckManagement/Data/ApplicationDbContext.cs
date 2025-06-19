@@ -34,6 +34,7 @@ namespace TruckManagement.Data
         
         public DbSet<PeriodApproval> PeriodApprovals { get; set; } = default!;
         public DbSet<PartRideFile> PartRideFiles { get; set; } = default!;
+        public DbSet<WeekApproval> WeekApprovals { get; set; } = default!;
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
