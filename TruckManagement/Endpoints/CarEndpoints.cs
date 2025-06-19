@@ -162,9 +162,22 @@ namespace TruckManagement.Endpoints
                         }
 
                         bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                        List<Guid> associatedCompanyIds;
 
-                        // Only enforce authorization if user is not a global admin
-                        if (!isGlobalAdmin)
+                        if (isGlobalAdmin)
+                        {
+                            if (!companiesIds.Any())
+                            {
+                                // Global admin and no companyIds provided: show all cars
+                                var allCompanyIds = await db.Companies.Select(c => c.Id).ToListAsync();
+                                associatedCompanyIds = allCompanyIds;
+                            }
+                            else
+                            {
+                                associatedCompanyIds = companiesIds;
+                            }
+                        }
+                        else
                         {
                             var contactPerson = await db.ContactPersons
                                 .Include(cp => cp.ContactPersonClientCompanies)
@@ -178,12 +191,19 @@ namespace TruckManagement.Endpoints
                                 );
                             }
 
-                            var associatedCompanyIds = contactPerson.ContactPersonClientCompanies
+                            associatedCompanyIds = contactPerson.ContactPersonClientCompanies
                                 .Select(cpc => cpc.CompanyId)
+                                .Where(id => id.HasValue)
+                                .Select(id => id.Value)
                                 .Distinct()
                                 .ToList();
 
-                            if (companiesIds.Any(id => !associatedCompanyIds.Contains(id)))
+                            // New logic: use associatedCompanyIds if companiesIds is empty, otherwise check authorization
+                            if (!companiesIds.Any())
+                            {
+                                companiesIds = associatedCompanyIds;
+                            }
+                            else if (companiesIds.Any(id => !associatedCompanyIds.Contains(id)))
                             {
                                 return ApiResponseFactory.Error(
                                     "You are not authorized to view cars of one or more requested companies.",
@@ -193,11 +213,11 @@ namespace TruckManagement.Endpoints
                         }
 
                         var totalCars = await db.Cars
-                            .Where(c => companiesIds.Contains(c.CompanyId))
+                            .Where(c => associatedCompanyIds.Contains(c.CompanyId))
                             .CountAsync();
 
                         var cars = await db.Cars
-                            .Where(c => companiesIds.Contains(c.CompanyId))
+                            .Where(c => associatedCompanyIds.Contains(c.CompanyId))
                             .OrderBy(c => c.LicensePlate)
                             .Skip((pageNumber - 1) * pageSize)
                             .Take(pageSize)
