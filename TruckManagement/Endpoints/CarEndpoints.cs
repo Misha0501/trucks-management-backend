@@ -210,6 +210,8 @@ namespace TruckManagement.Endpoints
                                     StatusCodes.Status403Forbidden
                                 );
                             }
+                            // Non-global admin: use provided companiesIds for the query
+                            associatedCompanyIds = companiesIds;
                         }
 
                         var totalCars = await db.Cars
