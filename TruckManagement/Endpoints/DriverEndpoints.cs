@@ -165,9 +165,7 @@ namespace TruckManagement.Endpoints
                     var weeks = Enumerable.Range(1, 4).Select(weekInPeriod =>
                         {
                             int weekNumber = DateHelper.GetWeekNumberOfPeriod(year, periodNr, weekInPeriod);
-                            var wa = weekApprovals
-                                .FirstOrDefault(w =>
-                                    w.PartRides.Any(pr => pr.WeekNumber == weekNumber));
+                            var wa = weekApprovals.FirstOrDefault(w => w.WeekNr == weekNumber);
 
                             // If week has no WeekApproval record yet, create an empty shell
                             var rides = wa?.PartRides
@@ -191,11 +189,32 @@ namespace TruckManagement.Endpoints
                                 return (double?)dhProp.GetValue(r)! ?? 0;
                             });
 
+                            bool isCurrentWeek = DateHelper.GetIso8601WeekOfYear(DateTime.UtcNow) == weekNumber &&
+                                                 DateTime.UtcNow.Year == year;
+
+                            WeekApprovalStatus? status;
+                            if (wa?.Status != null)
+                            {
+                                status = wa.Status;
+                            }
+                            else if (isCurrentWeek)
+                            {
+                                status = WeekApprovalStatus.PendingAdmin;
+                            }
+                            else if (wa != null && wa.PartRides.Any())
+                            {
+                                status = wa.Status;
+                            }
+                            else
+                            {
+                                status = null;
+                            }
+
                             return new
                             {
                                 WeekInPeriod = weekInPeriod,
-                                WeekNumber = DateHelper.GetWeekNumberOfPeriod(year, periodNr, weekInPeriod),
-                                Status = wa?.Status ?? WeekApprovalStatus.PendingAdmin, // default
+                                WeekNumber = weekNumber,
+                                Status = status,
                                 TotalDecimalHours = Math.Round(totalDecimalHours, 2),
                                 PartRides = rides
                             };
@@ -401,24 +420,29 @@ namespace TruckManagement.Endpoints
                                 .ToList() ?? new List<dynamic>();
 
                             // totals
-                            double  weekHours    = rides.Sum(r => (double?)(r.DecimalHours ?? 0) ?? 0);
+                            double weekHours = rides.Sum(r => (double?)(r.DecimalHours ?? 0) ?? 0);
                             decimal weekEarnings = rides.Sum(r =>
                             {
                                 decimal tfc = (decimal)(r.TaxFreeCompensation ?? 0);
-                                decimal vc  = (decimal)(r.VariousCompensation ?? 0);
+                                decimal vc = (decimal)(r.VariousCompensation ?? 0);
                                 return tfc + vc;
                             });
 
                             totalDecimalHours += weekHours;
-                            totalEarnings     += weekEarnings;
-
+                            totalEarnings += weekEarnings;
+                            
+                            bool isCurrentWeek = DateHelper.GetIso8601WeekOfYear(DateTime.UtcNow) == weekNumber &&
+                                                 DateTime.UtcNow.Year == year;
+                            
                             return new
                             {
                                 WeekInPeriod = weekInPeriod,
-                                WeekNumber   = weekNumber,
-                                Status       = wa?.Status ?? WeekApprovalStatus.PendingAdmin,
+                                WeekNumber = weekNumber,
+                                Status = isCurrentWeek
+                                    ? (wa?.Status ?? WeekApprovalStatus.PendingAdmin)
+                                    : wa?.Status,
                                 TotalDecimalHours = Math.Round(weekHours, 2),
-                                PartRides    = rides
+                                PartRides = rides
                             };
                         })
                         .OrderByDescending(w => w.WeekInPeriod)
