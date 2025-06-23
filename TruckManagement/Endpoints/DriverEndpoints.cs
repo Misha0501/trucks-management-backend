@@ -461,7 +461,7 @@ namespace TruckManagement.Endpoints
                         Weeks = weeks
                     });
                 });
-            
+
             app.MapGet("/drivers/week/details",
                 [Authorize(Roles = "driver")] async (
                     [FromQuery] int? year,
@@ -543,6 +543,70 @@ namespace TruckManagement.Endpoints
                         totalCompensation = Math.Round(totalCompensation, 2),
                         rides
                     });
+                });
+
+            app.MapPost("/drivers/week/sign",
+                [Authorize(Roles = "driver")] async (
+                    [FromQuery] int year,
+                    [FromQuery] int weekNumber,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser,
+                    ApplicationDbContext db
+                ) =>
+                {
+                    try
+                    {
+                        if (year <= 0 || weekNumber <= 0)
+                        {
+                            return ApiResponseFactory.Error(
+                                "Query parameters 'year' and 'weekNumber' are required and must be greater than zero.",
+                                StatusCodes.Status400BadRequest);
+                        }
+
+                        var userId = userManager.GetUserId(currentUser);
+                        var driver =
+                            await db.Drivers.FirstOrDefaultAsync(d => d.AspNetUserId == userId && !d.IsDeleted);
+
+                        if (driver == null)
+                        {
+                            return ApiResponseFactory.Error("Driver profile not found.",
+                                StatusCodes.Status403Forbidden);
+                        }
+
+                        var weekApproval = await db.WeekApprovals
+                            .FirstOrDefaultAsync(wa =>
+                                wa.DriverId == driver.Id &&
+                                wa.Year == year &&
+                                wa.WeekNr == weekNumber &&
+                                wa.Status == WeekApprovalStatus.PendingDriver);
+
+                        if (weekApproval == null)
+                        {
+                            return ApiResponseFactory.Error("Week not found or not eligible for signing.",
+                                StatusCodes.Status404NotFound);
+                        }
+
+                        weekApproval.Status = WeekApprovalStatus.Signed;
+                        weekApproval.DriverSignedAt = DateTime.UtcNow;
+
+                        await db.SaveChangesAsync();
+
+                        return ApiResponseFactory.Success(new
+                        {
+                            Message = "Week signed successfully.",
+                            WeekApprovalId = weekApproval.Id,
+                            Status = weekApproval.Status,
+                            DriverSignedAt = weekApproval.DriverSignedAt
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        // Optionally log the exception here
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while updating the PartRide.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
                 });
         }
     }
