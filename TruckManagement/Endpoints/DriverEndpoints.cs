@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -312,9 +313,9 @@ namespace TruckManagement.Endpoints
                     // ------------------------------------------------- 3. Query WeekApprovals
                     var weeks = db.WeekApprovals.AsNoTracking()
                         .Where(w => w.DriverId == driver.Id
-                                    && w.Status  == WeekApprovalStatus.Signed
+                                    && w.Status == WeekApprovalStatus.Signed
                                     // keep only periods strictly *before* the current one
-                                    && ((w.Year <  currYear) ||
+                                    && ((w.Year < currYear) ||
                                         (w.Year == currYear && w.PeriodNr < currPeriodNr)));
 
                     // ------------------------------------------------- 4. Group by period and keep only FULLY-signed ones
@@ -375,7 +376,8 @@ namespace TruckManagement.Endpoints
 
                     // 2) Parse periodKey => year‑periodNr
                     var parts = periodKey.Split('-');
-                    if (parts.Length != 2 || !int.TryParse(parts[0], out var year) || !int.TryParse(parts[1], out var periodNr))
+                    if (parts.Length != 2 || !int.TryParse(parts[0], out var year) ||
+                        !int.TryParse(parts[1], out var periodNr))
                         return ApiResponseFactory.Error("Invalid period key format. Use 'YYYY-P' (e.g., 2024-6).",
                             StatusCodes.Status400BadRequest);
 
@@ -394,8 +396,8 @@ namespace TruckManagement.Endpoints
                         return ApiResponseFactory.Error("Period not found.", StatusCodes.Status404NotFound);
 
                     // 4) Build week buckets (ensure 4 weeks even if some are missing)
-                    double  totalDecimalHours = 0;
-                    decimal totalEarnings     = 0;
+                    double totalDecimalHours = 0;
+                    decimal totalEarnings = 0;
 
                     var weeks = Enumerable.Range(1, 4).Select(weekInPeriod =>
                         {
@@ -430,10 +432,10 @@ namespace TruckManagement.Endpoints
 
                             totalDecimalHours += weekHours;
                             totalEarnings += weekEarnings;
-                            
+
                             bool isCurrentWeek = DateHelper.GetIso8601WeekOfYear(DateTime.UtcNow) == weekNumber &&
                                                  DateTime.UtcNow.Year == year;
-                            
+
                             return new
                             {
                                 WeekInPeriod = weekInPeriod,
@@ -450,13 +452,96 @@ namespace TruckManagement.Endpoints
 
                     return ApiResponseFactory.Success(new
                     {
-                        Year   = year,
+                        Year = year,
                         PeriodNr = periodNr,
                         FromDate = fromDate,
-                        ToDate   = toDate,
+                        ToDate = toDate,
                         TotalDecimalHours = Math.Round(totalDecimalHours, 2),
-                        TotalEarnings     = Math.Round(totalEarnings, 2),
-                        Weeks  = weeks
+                        TotalEarnings = Math.Round(totalEarnings, 2),
+                        Weeks = weeks
+                    });
+                });
+            
+            app.MapGet("/drivers/week/details",
+                [Authorize(Roles = "driver")] async (
+                    [FromQuery] int? year,
+                    [FromQuery] int? weekNumber,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser,
+                    ApplicationDbContext db
+                ) =>
+                {
+                    if (!year.HasValue || !weekNumber.HasValue || year <= 0 || weekNumber <= 0)
+                    {
+                        return ApiResponseFactory.Error(
+                            "Query parameters 'year' and 'weekNumber' are required and must be greater than zero.",
+                            StatusCodes.Status400BadRequest);
+                    }
+
+                    var userId = userManager.GetUserId(currentUser);
+                    var driver = await db.Drivers.FirstOrDefaultAsync(d => d.AspNetUserId == userId && !d.IsDeleted);
+
+                    if (driver == null)
+                    {
+                        return ApiResponseFactory.Error("Driver profile not found.", StatusCodes.Status403Forbidden);
+                    }
+
+                    var query = db.WeekApprovals
+                        .Include(wa => wa.PartRides)
+                        .ThenInclude(pr => pr.Car)
+                        .Include(wa => wa.PartRides)
+                        .ThenInclude(pr => pr.Client)
+                        .Include(wa => wa.PartRides)
+                        .ThenInclude(pr => pr.Company)
+                        .Include(wa => wa.PartRides)
+                        .ThenInclude(pr => pr.Driver)
+                        .ThenInclude(d => d.User)
+                        .Where(wa => wa.Year == year.Value && wa.WeekNr == weekNumber.Value)
+                        .Where(wa =>
+                            wa.Status == WeekApprovalStatus.Signed || wa.Status == WeekApprovalStatus.PendingDriver);
+
+                    query = query.Where(wa => wa.DriverId == driver.Id);
+
+                    var weekApproval = await query.FirstOrDefaultAsync();
+
+                    if (weekApproval == null)
+                    {
+                        return ApiResponseFactory.Error("Week not found or not accessible.",
+                            StatusCodes.Status404NotFound);
+                    }
+
+                    DateTime weekStart = ISOWeek.ToDateTime(year.Value, weekNumber.Value, DayOfWeek.Monday);
+                    DateTime weekEnd = weekStart.AddDays(6);
+
+                    var rides = weekApproval.PartRides
+                        .Select(pr => new
+                        {
+                            pr.Id,
+                            pr.Date,
+                            pr.Start,
+                            pr.End,
+                            pr.Kilometers,
+                            pr.DecimalHours,
+                            pr.Remark,
+                            Car = pr.Car != null ? new { pr.Car.Id, pr.Car.LicensePlate } : null,
+                            Client = pr.Client != null ? new { pr.Client.Id, pr.Client.Name } : null,
+                            Company = pr.Company != null ? new { pr.Company.Id, pr.Company.Name } : null
+                        }).ToList();
+
+                    double totalCompensation = weekApproval.PartRides.Sum(pr =>
+                        pr.TaxFreeCompensation + pr.NightAllowance + pr.KilometerReimbursement + pr.ConsignmentFee +
+                        pr.VariousCompensation);
+
+                    return ApiResponseFactory.Success(new
+                    {
+                        weekApprovalId = weekApproval.Id,
+                        week = weekNumber.Value,
+                        year = year.Value,
+                        startDate = weekStart,
+                        endDate = weekEnd,
+                        status = weekApproval.Status,
+                        totalCompensation = Math.Round(totalCompensation, 2),
+                        rides
                     });
                 });
         }
