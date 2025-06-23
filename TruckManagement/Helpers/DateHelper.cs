@@ -14,11 +14,12 @@ public static class DateHelper
         var weekInPer = weekIso - (period - 1) * 4;           // 1-4
 
         // ISO weeks 52/53 that fall in January actually belong to previous year’s period-13.
-        var periodYear = weekIso >= 52 && dateUtc.Month == 1
-            ? dateUtc.Year - 1
-            : dateUtc.Year;
+        // var periodYear = weekIso >= 52 && dateUtc.Month == 1
+        //     ? dateUtc.Year - 1
+        //     : dateUtc.Year;
+        var isoWeekYear = ISOWeek.GetYear(dateUtc);
 
-        return (periodYear, period, weekInPer);
+        return (isoWeekYear, period, weekInPer);
     }
     
     public static int GetIso8601WeekOfYear(DateTime date)
