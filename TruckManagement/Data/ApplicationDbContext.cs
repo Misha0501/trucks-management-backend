@@ -35,6 +35,9 @@ namespace TruckManagement.Data
         public DbSet<PeriodApproval> PeriodApprovals { get; set; } = default!;
         public DbSet<PartRideFile> PartRideFiles { get; set; } = default!;
         public DbSet<WeekApproval> WeekApprovals { get; set; } = default!;
+        
+        public DbSet<PartRideDispute> Disputes       => Set<PartRideDispute>();
+        public DbSet<PartRideDisputeComment> DisputeComments => Set<PartRideDisputeComment>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -196,6 +199,16 @@ namespace TruckManagement.Data
                 entity.Property(f => f.FilePath).IsRequired();
                 entity.Property(f => f.ContentType).IsRequired();
             });
+            
+            builder.Entity<PartRideDispute>()
+                .HasIndex(d => new { d.PartRideId, d.Status });
+
+            /* cascade delete comments when a dispute is removed */
+            builder.Entity<PartRideDisputeComment>()
+                .HasOne(c => c.Dispute)
+                .WithMany(d => d.Comments)
+                .HasForeignKey(c => c.DisputeId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 }
