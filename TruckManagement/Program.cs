@@ -83,5 +83,6 @@ app.MapHoursOptionRoutes();
 app.MapEmployeeContractsEndpoints();
 app.MapFileUploadsEndpoints();
 app.MapPartRideFilesEndpoints();
+app.MapDisputeEndpoints();
 
 app.Run();
