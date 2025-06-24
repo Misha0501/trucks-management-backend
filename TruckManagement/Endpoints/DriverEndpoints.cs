@@ -471,78 +471,96 @@ namespace TruckManagement.Endpoints
                     ApplicationDbContext db
                 ) =>
                 {
-                    if (!year.HasValue || !weekNumber.HasValue || year <= 0 || weekNumber <= 0)
+                    try
                     {
-                        return ApiResponseFactory.Error(
-                            "Query parameters 'year' and 'weekNumber' are required and must be greater than zero.",
-                            StatusCodes.Status400BadRequest);
-                    }
-
-                    var userId = userManager.GetUserId(currentUser);
-                    var driver = await db.Drivers.FirstOrDefaultAsync(d => d.AspNetUserId == userId && !d.IsDeleted);
-
-                    if (driver == null)
-                    {
-                        return ApiResponseFactory.Error("Driver profile not found.", StatusCodes.Status403Forbidden);
-                    }
-
-                    var query = db.WeekApprovals
-                        .Include(wa => wa.PartRides)
-                        .ThenInclude(pr => pr.Car)
-                        .Include(wa => wa.PartRides)
-                        .ThenInclude(pr => pr.Client)
-                        .Include(wa => wa.PartRides)
-                        .ThenInclude(pr => pr.Company)
-                        .Include(wa => wa.PartRides)
-                        .ThenInclude(pr => pr.Driver)
-                        .ThenInclude(d => d.User)
-                        .Where(wa => wa.Year == year.Value && wa.WeekNr == weekNumber.Value)
-                        .Where(wa =>
-                            wa.Status == WeekApprovalStatus.Signed || wa.Status == WeekApprovalStatus.PendingDriver);
-
-                    query = query.Where(wa => wa.DriverId == driver.Id);
-
-                    var weekApproval = await query.FirstOrDefaultAsync();
-
-                    if (weekApproval == null)
-                    {
-                        return ApiResponseFactory.Error("Week not found or not accessible.",
-                            StatusCodes.Status404NotFound);
-                    }
-
-                    DateTime weekStart = ISOWeek.ToDateTime(year.Value, weekNumber.Value, DayOfWeek.Monday);
-                    DateTime weekEnd = weekStart.AddDays(6);
-
-                    var rides = weekApproval.PartRides
-                        .Select(pr => new
+                        if (!year.HasValue || !weekNumber.HasValue || year <= 0 || weekNumber <= 0)
                         {
-                            pr.Id,
-                            pr.Date,
-                            pr.Start,
-                            pr.End,
-                            pr.Kilometers,
-                            pr.DecimalHours,
-                            pr.Remark,
-                            Car = pr.Car != null ? new { pr.Car.Id, pr.Car.LicensePlate } : null,
-                            Client = pr.Client != null ? new { pr.Client.Id, pr.Client.Name } : null,
-                            Company = pr.Company != null ? new { pr.Company.Id, pr.Company.Name } : null
-                        }).ToList();
+                            return ApiResponseFactory.Error(
+                                "Query parameters 'year' and 'weekNumber' are required and must be greater than zero.",
+                                StatusCodes.Status400BadRequest);
+                        }
 
-                    double totalCompensation = weekApproval.PartRides.Sum(pr =>
-                        pr.TaxFreeCompensation + pr.NightAllowance + pr.KilometerReimbursement + pr.ConsignmentFee +
-                        pr.VariousCompensation);
+                        var userId = userManager.GetUserId(currentUser);
+                        var driver =
+                            await db.Drivers.FirstOrDefaultAsync(d => d.AspNetUserId == userId && !d.IsDeleted);
 
-                    return ApiResponseFactory.Success(new
+                        if (driver == null)
+                        {
+                            return ApiResponseFactory.Error("Driver profile not found.",
+                                StatusCodes.Status403Forbidden);
+                        }
+
+                        var query = db.WeekApprovals
+                            .Include(wa => wa.PartRides)
+                            .ThenInclude(pr => pr.Car)
+                            .Include(wa => wa.PartRides)
+                            .ThenInclude(pr => pr.Client)
+                            .Include(wa => wa.PartRides)
+                            .ThenInclude(pr => pr.Company)
+                            .Include(wa => wa.PartRides)
+                            .ThenInclude(pr => pr.Driver)
+                            .ThenInclude(d => d.User)
+                            .Where(wa => wa.Year == year.Value && wa.WeekNr == weekNumber.Value)
+                            .Where(wa =>
+                                wa.Status == WeekApprovalStatus.Signed ||
+                                wa.Status == WeekApprovalStatus.PendingDriver);
+
+                        query = query.Where(wa => wa.DriverId == driver.Id);
+
+                        var weekApproval = await query.FirstOrDefaultAsync();
+
+                        if (weekApproval == null)
+                        {
+                            return ApiResponseFactory.Error("Week not found or not accessible.",
+                                StatusCodes.Status404NotFound);
+                        }
+
+                        DateTime weekStart = ISOWeek.ToDateTime(year.Value, weekNumber.Value, DayOfWeek.Monday);
+                        DateTime weekEnd = weekStart.AddDays(6);
+
+                        var rides = weekApproval.PartRides
+                            .Select(pr => new
+                            {
+                                pr.Id,
+                                pr.Date,
+                                pr.Start,
+                                pr.End,
+                                pr.Kilometers,
+                                pr.DecimalHours,
+                                pr.Remark,
+                                Car = pr.Car != null ? new { pr.Car.Id, pr.Car.LicensePlate } : null,
+                                Client = pr.Client != null ? new { pr.Client.Id, pr.Client.Name } : null,
+                                Company = pr.Company != null ? new { pr.Company.Id, pr.Company.Name } : null
+                            }).ToList();
+
+                        double totalCompensation = weekApproval.PartRides.Sum(pr =>
+                            pr.TaxFreeCompensation + pr.NightAllowance + pr.KilometerReimbursement + pr.ConsignmentFee +
+                            pr.VariousCompensation);
+
+                        // TODO: Update vacation hours 
+                        return ApiResponseFactory.Success(new
+                        {
+                            weekApprovalId = weekApproval.Id,
+                            week = weekNumber.Value,
+                            year = year.Value,
+                            startDate = weekStart,
+                            endDate = weekEnd,
+                            status = weekApproval.Status,
+                            vacationHoursLeft = 0,
+                            vacationHoursTaken = 0,
+                            totalCompensation = Math.Round(totalCompensation, 2),
+                            totalHoursWorked = Math.Round(weekApproval.PartRides.Sum(pr => pr.DecimalHours ?? 0), 2),
+                            rides
+                        });
+                    }
+                    catch (Exception ex)
                     {
-                        weekApprovalId = weekApproval.Id,
-                        week = weekNumber.Value,
-                        year = year.Value,
-                        startDate = weekStart,
-                        endDate = weekEnd,
-                        status = weekApproval.Status,
-                        totalCompensation = Math.Round(totalCompensation, 2),
-                        rides
-                    });
+                        // Optionally log the exception here
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while updating the PartRide.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
                 });
 
             app.MapPost("/drivers/week/sign",
