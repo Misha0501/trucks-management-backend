@@ -6,7 +6,9 @@ using Microsoft.EntityFrameworkCore;
 using TruckManagement.Data;
 using TruckManagement.DTOs;
 using TruckManagement.Entities;
+using TruckManagement.Extensions;
 using TruckManagement.Helpers;
+using TruckManagement.Services;
 
 namespace TruckManagement.Endpoints
 {
@@ -262,6 +264,141 @@ namespace TruckManagement.Endpoints
                         Console.Error.WriteLine($"Error adding comment: {ex}");
                         return ApiResponseFactory.Error(
                             "An unexpected error occurred while adding a comment.",
+                            StatusCodes.Status500InternalServerError);
+                    }
+                });
+
+            app.MapPost("/disputes/{id}/accept",
+                [Authorize(Roles =
+                    "driver,customerAdmin,customerAccountant,employer,customer,globalAdmin")]
+                async (
+                    string id,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser) =>
+                {
+                    try
+                    {
+                        /* ---------- 0. basic validation ------------------------------ */
+                        if (!Guid.TryParse(id, out var disputeGuid))
+                            return ApiResponseFactory.Error("Invalid dispute ID.",
+                                StatusCodes.Status400BadRequest);
+
+                        /* ---------- 1. fetch dispute + ride -------------------------- */
+                        var dispute = await db.PartRideDisputes
+                            .Include(d => d.PartRide!)
+                            .FirstOrDefaultAsync(d => d.Id == disputeGuid);
+
+                        if (dispute is null)
+                            return ApiResponseFactory.Error("Dispute not found.",
+                                StatusCodes.Status404NotFound);
+
+                        if (dispute.Status is DisputeStatus.AcceptedByDriver or DisputeStatus.AcceptedByAdmin
+                            or DisputeStatus.Closed)
+                            return ApiResponseFactory.Error("This dispute is already resolved.",
+                                StatusCodes.Status409Conflict);
+
+                        /* ---------- 2. figure out caller identity -------------------- */
+                        var aspUserId = userManager.GetUserId(currentUser);
+                        var isDriver = currentUser.IsInRole("driver");
+                        var isGlobal = currentUser.IsInRole("globalAdmin");
+
+                        /* ---------- 3-a. DRIVER path --------------------------------- */
+                        if (isDriver && !isGlobal)
+                        {
+                            var driver = await db.Drivers
+                                .AsNoTracking()
+                                .FirstOrDefaultAsync(d => d.AspNetUserId == aspUserId && !d.IsDeleted);
+
+                            if (driver == null || dispute.PartRide.DriverId != driver.Id)
+                                return ApiResponseFactory.Error("You are not authorized.",
+                                    StatusCodes.Status403Forbidden);
+
+                            if (dispute.Status != DisputeStatus.PendingDriver)
+                                return ApiResponseFactory.Error("Dispute isn’t waiting for driver signature.",
+                                    StatusCodes.Status409Conflict);
+
+                            /* ---- apply correction ---- */
+                            dispute.PartRide.CorrectionTotalHours += dispute.CorrectionHours;
+
+                            // ── recompute calculated fields ──
+                            var calculator = new PartRideCalculator(db);
+                            var calcContext = new PartRideCalculationContext(
+                                Date: dispute.PartRide.Date,
+                                Start: dispute.PartRide.Start,
+                                End: dispute.PartRide.End,
+                                DriverId: dispute.PartRide.DriverId,
+                                HoursCodeId: dispute.PartRide.HoursCodeId ?? Guid.Empty,
+                                HoursOptionId: dispute.PartRide.HoursOptionId,
+                                Kilometers: dispute.PartRide.Kilometers ?? 0,
+                                CorrectionTotalHours: dispute.PartRide.CorrectionTotalHours
+                            );
+                            var calcResult = await calculator.CalculateAsync(calcContext);
+                            dispute.PartRide.ApplyCalculated(calcResult);
+
+                            dispute.Status = DisputeStatus.AcceptedByDriver;
+                            dispute.ClosedAtUtc = DateTime.UtcNow;
+                        }
+                        /* ---------- 3-b. ADMIN / contact-person path ----------------- */
+                        else
+                        {
+                            //  ❱  contact-person roles share same check logic as earlier routes
+                            if (!isGlobal)
+                            {
+                                var contact = await db.ContactPersons
+                                    .Include(cp => cp.ContactPersonClientCompanies)
+                                    .FirstOrDefaultAsync(cp => cp.AspNetUserId == aspUserId);
+
+                                if (contact == null)
+                                    return ApiResponseFactory.Error("No contact-person profile found.",
+                                        StatusCodes.Status403Forbidden);
+
+                                var companies = contact.ContactPersonClientCompanies
+                                    .Select(c => c.CompanyId)
+                                    .Distinct();
+
+                                if (dispute.PartRide.CompanyId.HasValue &&
+                                    !companies.Contains(dispute.PartRide.CompanyId.Value))
+                                    return ApiResponseFactory.Error("You are not authorized.",
+                                        StatusCodes.Status403Forbidden);
+                            }
+
+                            if (dispute.Status != DisputeStatus.PendingAdmin)
+                                return ApiResponseFactory.Error("Dispute isn’t waiting for admin.",
+                                    StatusCodes.Status409Conflict);
+
+                            dispute.Status = DisputeStatus.AcceptedByAdmin;
+                            dispute.ClosedAtUtc = DateTime.UtcNow;
+                        }
+
+                        await db.SaveChangesAsync();
+
+                        /* ---------- 4. response -------------------------------------- */
+                        var response = new
+                        {
+                            dispute.Id,
+                            dispute.Status,
+                            dispute.CorrectionHours,
+                            dispute.ClosedAtUtc
+                        };
+
+                        return ApiResponseFactory.Success(response, StatusCodes.Status200OK);
+                    }
+                    catch (ArgumentException ex)
+                    {
+                        return ApiResponseFactory.Error(ex.Message, StatusCodes.Status400BadRequest);
+                    }
+                    catch (DbUpdateConcurrencyException)
+                    {
+                        return ApiResponseFactory.Error(
+                            "The dispute was modified by someone else. Please reload and try again.",
+                            StatusCodes.Status409Conflict);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Error accepting dispute: {ex}");
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while accepting the dispute.",
                             StatusCodes.Status500InternalServerError);
                     }
                 });
