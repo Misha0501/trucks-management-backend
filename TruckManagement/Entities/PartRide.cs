@@ -62,5 +62,6 @@ namespace TruckManagement.Entities
         
         public Guid? WeekApprovalId { get; set; }
         public WeekApproval? WeekApproval { get; set; }
+        public ICollection<PartRideDispute> PartRideDisputes { get; set; } = new List<PartRideDispute>();
     }
 }

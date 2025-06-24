@@ -27,7 +27,7 @@ public class PartRideDispute
     public DateTime? ClosedAtUtc { get; set; }
 
     /* ─── Proposed correction in decimal hours (+ / –) ────────────────── */
-    public double Correction { get; set; }
+    public double CorrectionHours { get; set; }
 
     public DisputeStatus Status { get; set; } = DisputeStatus.Open;
 
