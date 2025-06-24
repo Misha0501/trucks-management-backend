@@ -4,7 +4,8 @@ namespace TruckManagement.Entities;
 
 public enum DisputeStatus
 {
-    Open,              // waiting for a reply
+    PendingDriver,              // waiting for a reply from Driver
+    PendingAdmin,              // waiting for a reply form Admin
     AcceptedByDriver,  // driver accepted the admin’s correction
     AcceptedByAdmin,   // admin accepted the driver’s counter-argument
     Closed             // admin closed it without agreement
@@ -29,7 +30,7 @@ public class PartRideDispute
     /* ─── Proposed correction in decimal hours (+ / –) ────────────────── */
     public double CorrectionHours { get; set; }
 
-    public DisputeStatus Status { get; set; } = DisputeStatus.Open;
+    public DisputeStatus Status { get; set; } = DisputeStatus.PendingDriver;
 
     /* ─── Thread of messages (“ping-pong”) ────────────────────────────── */
     public ICollection<PartRideDisputeComment> Comments { get; } = new List<PartRideDisputeComment>();
