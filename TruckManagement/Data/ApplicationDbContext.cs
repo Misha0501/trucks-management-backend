@@ -36,8 +36,8 @@ namespace TruckManagement.Data
         public DbSet<PartRideFile> PartRideFiles { get; set; } = default!;
         public DbSet<WeekApproval> WeekApprovals { get; set; } = default!;
         
-        public DbSet<PartRideDispute> Disputes       => Set<PartRideDispute>();
-        public DbSet<PartRideDisputeComment> DisputeComments => Set<PartRideDisputeComment>();
+        public DbSet<PartRideDispute> PartRideDisputes       => Set<PartRideDispute>();
+        public DbSet<PartRideDisputeComment> PartRideDisputeComments => Set<PartRideDisputeComment>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
