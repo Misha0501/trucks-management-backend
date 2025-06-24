@@ -1193,8 +1193,118 @@ public static class PartRideEndpoints
                     );
                 }
             });
-        
+        app.MapGet("/partrides/{id}/disputes",
+            [Authorize(Roles = "driver,customerAdmin,customerAccountant,employer,customer,globalAdmin")]
+            async (
+                string id,
+                ApplicationDbContext db,
+                UserManager<ApplicationUser> userManager,
+                ClaimsPrincipal currentUser) =>
+            {
+                try
+                {
+                    /* -------------------------------------------------- 1. Validate ID */
+                    if (!Guid.TryParse(id, out var rideGuid))
+                        return ApiResponseFactory.Error(
+                            "Invalid PartRide ID format.", StatusCodes.Status400BadRequest);
 
+                    /* -------------------------------------------------- 2. Load ride */
+                    var partRide = await db.PartRides
+                        .Include(r => r.Company)
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(r => r.Id == rideGuid);
+
+                    if (partRide is null)
+                        return ApiResponseFactory.Error("PartRide not found.", StatusCodes.Status404NotFound);
+
+                    /* -------------------------------------------------- 3. AuthZ check */
+                    var userId = userManager.GetUserId(currentUser);
+                    bool isGlobal = currentUser.IsInRole("globalAdmin");
+                    bool isDriver = currentUser.IsInRole("driver");
+
+                    if (!isGlobal)
+                    {
+                        if (isDriver)
+                        {
+                            // driver may only access his own rides
+                            var driver = await db.Drivers
+                                .AsNoTracking()
+                                .FirstOrDefaultAsync(d => d.AspNetUserId == userId && !d.IsDeleted);
+
+                            if (driver == null || partRide.DriverId != driver.Id)
+                                return ApiResponseFactory.Error(
+                                    "You are not authorized to view disputes for this ride.",
+                                    StatusCodes.Status403Forbidden);
+                        }
+                        else
+                        {
+                            // contact-person roles ➜ must match company
+                            var contact = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                            if (contact == null)
+                                return ApiResponseFactory.Error(
+                                    "No contact-person profile found.", StatusCodes.Status403Forbidden);
+
+                            var companyIds = contact.ContactPersonClientCompanies
+                                .Select(cpc => cpc.CompanyId)
+                                .Distinct()
+                                .ToList();
+
+                            if (partRide.CompanyId is null || !companyIds.Contains(partRide.CompanyId.Value))
+                                return ApiResponseFactory.Error(
+                                    "You are not authorized to view disputes for this ride.",
+                                    StatusCodes.Status403Forbidden);
+                        }
+                    }
+
+                    /* -------------------------------------------------- 4. Load disputes + comments */
+                    var disputes = await db.PartRideDisputes
+                        .AsNoTracking()
+                        .Include(d => d.Comments)
+                        .ThenInclude(c => c.Author)
+                        .Where(d => d.PartRideId == rideGuid)
+                        .OrderByDescending(d => d.CreatedAtUtc)
+                        .Select(d => new
+                        {
+                            d.Id,
+                            d.Correction,
+                            d.CreatedAtUtc,
+                            d.Status,
+                            d.ClosedAtUtc,
+                            Comments = d.Comments
+                                .OrderBy(c => c.CreatedAt)
+                                .Select(c => new
+                                {
+                                    c.Id,
+                                    c.CreatedAt,
+                                    c.Body,
+                                    Author = new
+                                    {
+                                        c.Author.Id,
+                                        c.Author.FirstName,
+                                        c.Author.LastName,
+                                        c.Author.Email
+                                    }
+                                })
+                        })
+                        .ToListAsync();
+
+                    return ApiResponseFactory.Success(new
+                    {
+                        PartRideId = partRide.Id,
+                        Disputes = disputes
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Error fetching disputes: {ex.Message}");
+                    return ApiResponseFactory.Error(
+                        "An unexpected error occurred while retrieving disputes.",
+                        StatusCodes.Status500InternalServerError);
+                }
+            });
     }
 
     private static IQueryable<PartRide> ApplyPartRideFilters(

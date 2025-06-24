@@ -23,7 +23,8 @@ public class PartRideDispute
     [ForeignKey(nameof(OpenedById))]
     public ApplicationUser OpenedBy { get; set; } = default!;   // convenience
 
-    public DateTime OpenedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime? ClosedAtUtc { get; set; }
 
     /* ─── Proposed correction in decimal hours (+ / –) ────────────────── */
     public double Correction { get; set; }
