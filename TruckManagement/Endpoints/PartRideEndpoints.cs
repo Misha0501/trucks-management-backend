@@ -1193,6 +1193,7 @@ public static class PartRideEndpoints
                     );
                 }
             });
+
         app.MapGet("/partrides/{id}/disputes",
             [Authorize(Roles = "driver,customerAdmin,customerAccountant,employer,customer,globalAdmin")]
             async (
@@ -1269,7 +1270,7 @@ public static class PartRideEndpoints
                         .Select(d => new
                         {
                             d.Id,
-                            d.Correction,
+                            d.CorrectionHours,
                             d.CreatedAtUtc,
                             d.Status,
                             d.ClosedAtUtc,
@@ -1302,6 +1303,120 @@ public static class PartRideEndpoints
                     Console.Error.WriteLine($"Error fetching disputes: {ex.Message}");
                     return ApiResponseFactory.Error(
                         "An unexpected error occurred while retrieving disputes.",
+                        StatusCodes.Status500InternalServerError);
+                }
+            });
+
+        app.MapPost("/partrides/{id}/disputes",
+            [Authorize(Roles = "customerAdmin, globalAdmin")]
+            async (
+                string id,
+                [FromBody] CreatePartRideDisputeRequest body,
+                ApplicationDbContext db,
+                UserManager<ApplicationUser> userManager,
+                ClaimsPrincipal currentUser) =>
+            {
+                try
+                {
+                    /* ---- 1. validate route param -------------------------------- */
+                    if (!Guid.TryParse(id, out var partRideGuid))
+                        return ApiResponseFactory.Error("Invalid PartRide ID.", StatusCodes.Status400BadRequest);
+
+                    /* ---- 2. load PartRide + basic auth -------------------------- */
+                    var partRide = await db.PartRides
+                        .Include(pr => pr.Company)
+                        .Include(pr => pr.PartRideDisputes.Where(d => d.Status != DisputeStatus.Closed))
+                        .FirstOrDefaultAsync(pr => pr.Id == partRideGuid);
+
+                    if (partRide is null)
+                        return ApiResponseFactory.Error("PartRide not found.", StatusCodes.Status404NotFound);
+
+                    /* Customer-admin must belong to the same company */
+                    if (!currentUser.IsInRole("globalAdmin"))
+                    {
+                        var adminUserId = userManager.GetUserId(currentUser);
+                        var contactPerson = await db.ContactPersons
+                            .Include(cp => cp.ContactPersonClientCompanies)
+                            .FirstOrDefaultAsync(cp => cp.AspNetUserId == adminUserId && !cp.IsDeleted);
+
+                        var allowedCompanies = contactPerson?.ContactPersonClientCompanies.Select(c => c.CompanyId)
+                            .Where(c => c.HasValue)
+                            .Select(c => c!.Value)
+                            .ToHashSet() ?? new();
+
+                        if (partRide.CompanyId.HasValue && !allowedCompanies.Contains(partRide.CompanyId.Value))
+                            return ApiResponseFactory.Error("You are not authorized to dispute rides for this company.",
+                                StatusCodes.Status403Forbidden);
+                    }
+
+                    /* ---- 3. business rules -------------------------------------- */
+                    if (partRide.PartRideDisputes.Any(d => d.Status == DisputeStatus.PendingDriver ||
+                                                           d.Status == DisputeStatus.PendingAdmin))
+                    {
+                        return ApiResponseFactory.Error(
+                            "There is already an open dispute for this PartRide.",
+                            StatusCodes.Status409Conflict);
+                    }
+
+                    if (body is null || body.CorrectionHours == 0)
+                        return ApiResponseFactory.Error("CorrectionHours must be non-zero",
+                            StatusCodes.Status400BadRequest);
+
+                    var userId = userManager.GetUserId(currentUser)!;
+
+                    /* ---- 4. create dispute + first comment ---------------------- */
+                    var dispute = new PartRideDispute
+                    {
+                        Id = Guid.NewGuid(),
+                        PartRideId = partRide.Id,
+                        CorrectionHours = body.CorrectionHours,
+                        Status = DisputeStatus.PendingDriver,
+                        CreatedAtUtc = DateTime.UtcNow,
+                        OpenedById = userId
+                    };
+
+                    dispute.Comments.Add(new PartRideDisputeComment
+                    {
+                        Id = Guid.NewGuid(),
+                        DisputeId = dispute.Id,
+                        AuthorUserId = userId,
+                        Body = string.IsNullOrWhiteSpace(body.Comment)
+                            ? $"Proposed correction {body.CorrectionHours:+0.##;-0.##} h"
+                            : body.Comment,
+                        CreatedAt = DateTime.UtcNow
+                    });
+
+                    db.PartRideDisputes.Add(dispute);
+                    await db.SaveChangesAsync();
+
+                    /* ---- 5. return payload -------------------------------------- */
+                    var response = new
+                    {
+                        dispute.Id,
+                        dispute.CorrectionHours,
+                        dispute.Status,
+                        dispute.CreatedAtUtc,
+                        Comments = dispute.Comments
+                            .OrderBy(c => c.CreatedAt)
+                            .Select(c => new
+                            {
+                                c.Id,
+                                c.Body,
+                                c.CreatedAt,
+                                AuthorFirstId = c.Author?.Id
+                            })
+                    };
+
+                    return ApiResponseFactory.Success(response, StatusCodes.Status201Created);
+                }
+                catch (ArgumentException ex)
+                {
+                    return ApiResponseFactory.Error(ex.Message, StatusCodes.Status400BadRequest);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Error creating dispute: {ex}");
+                    return ApiResponseFactory.Error("An unexpected error occurred.",
                         StatusCodes.Status500InternalServerError);
                 }
             });
