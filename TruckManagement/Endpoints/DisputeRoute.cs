@@ -402,6 +402,98 @@ namespace TruckManagement.Endpoints
                             StatusCodes.Status500InternalServerError);
                     }
                 });
+
+            app.MapPost("/disputes/{id}/close",
+                [Authorize(Roles =
+                    "customerAdmin,customerAccountant,employer,customer,globalAdmin")]
+                async (
+                    string id,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser) =>
+                {
+                    try
+                    {
+                        /* ---------- 0. validate ID ------------------------------------ */
+                        if (!Guid.TryParse(id, out var disputeGuid))
+                            return ApiResponseFactory.Error("Invalid dispute ID.",
+                                StatusCodes.Status400BadRequest);
+
+                        /* ---------- 1. load dispute (+ ride) -------------------------- */
+                        var dispute = await db.PartRideDisputes
+                            .Include(d => d.PartRide)
+                            .FirstOrDefaultAsync(d => d.Id == disputeGuid);
+
+                        if (dispute is null)
+                            return ApiResponseFactory.Error("Dispute not found.",
+                                StatusCodes.Status404NotFound);
+
+                        /* ---------- 2. only unresolved can be closed ------------------ */
+                        if (dispute.Status is DisputeStatus.AcceptedByDriver
+                            or DisputeStatus.AcceptedByAdmin
+                            or DisputeStatus.Closed)
+                        {
+                            return ApiResponseFactory.Error(
+                                "This dispute is already resolved or closed.",
+                                StatusCodes.Status409Conflict);
+                        }
+
+                        /* ---------- 3. authorization (contact-person roles) ----------- */
+                        var aspUserId = userManager.GetUserId(currentUser);
+                        var isGlobal = currentUser.IsInRole("globalAdmin");
+
+                        if (!isGlobal)
+                        {
+                            var contact = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == aspUserId);
+
+                            if (contact == null)
+                                return ApiResponseFactory.Error("No contact-person profile found.",
+                                    StatusCodes.Status403Forbidden);
+
+                            var allowedCompanies = contact.ContactPersonClientCompanies
+                                .Select(c => c.CompanyId)
+                                .Distinct();
+
+                            if (dispute.PartRide.CompanyId.HasValue &&
+                                !allowedCompanies.Contains(dispute.PartRide.CompanyId.Value))
+                                return ApiResponseFactory.Error("You are not authorized.",
+                                    StatusCodes.Status403Forbidden);
+                        }
+
+                        /* ---------- 4. close the dispute ------------------------------ */
+                        dispute.Status = DisputeStatus.Closed;
+                        dispute.ClosedAtUtc = DateTime.UtcNow;
+
+                        await db.SaveChangesAsync();
+
+                        /* ---------- 5. response -------------------------------------- */
+                        return ApiResponseFactory.Success(new
+                        {
+                            dispute.Id,
+                            dispute.Status,
+                            dispute.ClosedAtUtc
+                        });
+                    }
+                    catch (ArgumentException ex)
+                    {
+                        return ApiResponseFactory.Error(ex.Message, StatusCodes.Status400BadRequest);
+                    }
+                    catch (DbUpdateConcurrencyException)
+                    {
+                        return ApiResponseFactory.Error(
+                            "The dispute was modified by someone else. Please reload and try again.",
+                            StatusCodes.Status409Conflict);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Error closing dispute: {ex}");
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while closing the dispute.",
+                            StatusCodes.Status500InternalServerError);
+                    }
+                });
         }
     }
 }
