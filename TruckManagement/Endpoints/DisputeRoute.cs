@@ -16,6 +16,177 @@ namespace TruckManagement.Endpoints
     {
         public static void MapDisputeEndpoints(this WebApplication app)
         {
+            app.MapGet("/disputes",
+                [Authorize(Roles =
+                    "driver,customerAdmin,customerAccountant,employer,customer,globalAdmin")]
+                async (
+                    [FromQuery] string? driverId, // single driverId
+                    [FromQuery] DateTime? date, // exact date
+                    [FromQuery] DateTime? dateFrom, // range start (UTC)
+                    [FromQuery] DateTime? dateTo, // range end   (UTC)
+                    HttpContext http, // for companyIds[]
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser,
+                    [FromQuery] int pageNumber = 1,
+                    [FromQuery] int pageSize = 10
+                ) =>
+                {
+                    try
+                    {
+                        /* ---------- 1. parse & normalise query -------------------- */
+                        if (pageNumber < 1) pageNumber = 1;
+                        if (pageSize < 1) pageSize = 10;
+
+                        var companyIdsRaw = http.Request.Query["companyIds"];
+                        var companyGuids = GuidHelper.ParseGuids(companyIdsRaw, "companyIds");
+
+                        Guid? driverGuidFilter = null;
+                        if (!string.IsNullOrWhiteSpace(driverId))
+                        {
+                            if (!Guid.TryParse(driverId, out var tmp))
+                                return ApiResponseFactory.Error("Invalid driverId.",
+                                    StatusCodes.Status400BadRequest);
+                            driverGuidFilter = tmp;
+                        }
+
+                        /* ---------- 2. establish caller’s scope ------------------- */
+                        var aspUserId = userManager.GetUserId(currentUser);
+                        var isGlobal = currentUser.IsInRole("globalAdmin");
+                        var isDriver = currentUser.IsInRole("driver");
+
+                        Guid? callerDriverId = null;
+                        List<Guid> callerCompanies = new(); // for contact-person roles
+
+                        if (isDriver && !isGlobal)
+                        {
+                            var driver = await db.Drivers
+                                .AsNoTracking()
+                                .FirstOrDefaultAsync(d => d.AspNetUserId == aspUserId && !d.IsDeleted);
+
+                            if (driver is null)
+                                return ApiResponseFactory.Error(
+                                    "You are not registered as a driver.", StatusCodes.Status403Forbidden);
+
+                            callerDriverId = driver.Id;
+                        }
+                        else if (!isGlobal) // contact-person roles
+                        {
+                            var contact = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == aspUserId);
+
+                            if (contact is null)
+                                return ApiResponseFactory.Error(
+                                    "No contact-person profile found.", StatusCodes.Status403Forbidden);
+
+                            callerCompanies = contact.ContactPersonClientCompanies
+                                .Select(c => c.CompanyId)
+                                .Where(id => id.HasValue)
+                                .Select(id => id.Value)
+                                .ToList(); 
+                        }
+
+                        /* ---------- 3. base query ---------------------------------- */
+                        IQueryable<PartRideDispute> q = db.PartRideDisputes
+                            .AsNoTracking()
+                            .Include(d => d.PartRide)
+                            .ThenInclude(pr => pr.Driver!.User)
+                            .Include(d => d.PartRide)
+                            .ThenInclude(pr => pr.Company);
+
+                        /* ---------- 4. caller-scope filtering ---------------------- */
+                        if (isDriver && !isGlobal)
+                        {
+                            q = q.Where(d => d.PartRide.DriverId == callerDriverId);
+                        }
+                        else if (!isGlobal) // contact-person
+                        {
+                            q = q.Where(d =>
+                                d.PartRide.CompanyId.HasValue &&
+                                callerCompanies.Contains(d.PartRide.CompanyId.Value));
+                        }
+
+                        /* ---------- 5. additional filters ------------------------- */
+                        if (driverGuidFilter.HasValue)
+                            q = q.Where(d => d.PartRide.DriverId == driverGuidFilter);
+
+                        if (companyGuids.Any())
+                            q = q.Where(d =>
+                                d.PartRide.CompanyId.HasValue &&
+                                companyGuids.Contains(d.PartRide.CompanyId.Value));
+
+                        if (date.HasValue) // exact day (UTC)
+                        {
+                            var day = date.Value.Date;
+                            q = q.Where(d => d.PartRide.Date.Date == day);
+                        }
+                        else
+                        {
+                            if (dateFrom.HasValue)
+                                q = q.Where(d => d.PartRide.Date >= dateFrom.Value.Date);
+
+                            if (dateTo.HasValue)
+                                q = q.Where(d => d.PartRide.Date <= dateTo.Value.Date);
+                        }
+
+                        /* ---------- 6. paging ------------------------------------- */
+                        var totalCount = await q.CountAsync();
+                        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+                        var list = await q
+                            .OrderByDescending(d => d.CreatedAtUtc)
+                            .Skip((pageNumber - 1) * pageSize)
+                            .Take(pageSize)
+                            .Select(d => new
+                            {
+                                d.Id,
+                                d.Status,
+                                d.CorrectionHours,
+                                d.CreatedAtUtc,
+                                Driver = d.PartRide.Driver != null
+                                    ? new
+                                    {
+                                        d.PartRide.Driver.Id,
+                                        d.PartRide.Driver.User.FirstName,
+                                        d.PartRide.Driver.User.LastName
+                                    }
+                                    : null,
+                                Company = d.PartRide.Company != null
+                                    ? new { d.PartRide.Company.Id, d.PartRide.Company.Name }
+                                    : null,
+                                PartRide = new
+                                {
+                                    d.PartRide.Id,
+                                    d.PartRide.Date,
+                                    d.PartRide.DecimalHours
+                                }
+                            })
+                            .ToListAsync();
+
+                        /* ---------- 7. result -------------------------------------- */
+                        return ApiResponseFactory.Success(new
+                        {
+                            pageNumber,
+                            pageSize,
+                            totalCount,
+                            totalPages,
+                            data = list
+                        });
+                    }
+                    catch (ArgumentException ex)
+                    {
+                        return ApiResponseFactory.Error(ex.Message, StatusCodes.Status400BadRequest);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Error fetching disputes: {ex}");
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while retrieving disputes.",
+                            StatusCodes.Status500InternalServerError);
+                    }
+                });
+            
             app.MapGet("/disputes/{id}",
                 [Authorize(Roles =
                     "driver,customerAdmin,customerAccountant,employer,customer,globalAdmin")]
