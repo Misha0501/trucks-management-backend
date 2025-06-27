@@ -259,15 +259,22 @@ namespace TruckManagement.Endpoints
                         }
 
                         /* ---------- 4. projection --------------------------------- */
+                        var d = dispute; // for brevity in projection below
                         var response = new
                         {
-                            dispute.Id,
-                            dispute.PartRideId,
-                            dispute.CorrectionHours,
-                            dispute.Status,
-                            dispute.CreatedAtUtc,
-                            dispute.ClosedAtUtc,
-                            Comments = dispute.Comments
+                            d.Id,
+                            d.CorrectionHours,
+                            d.Status,
+                            d.CreatedAtUtc,
+                            d.ClosedAtUtc,
+                            PartRide = new
+                            {
+                                d.PartRide.Id,
+                                d.PartRide.Date,
+                                d.PartRide.DecimalHours,
+                                NewDecimalHours = d.PartRide.DecimalHours + d.CorrectionHours
+                            },
+                            Comments = d.Comments
                                 .OrderBy(c => c.CreatedAt)
                                 .Select(c => new
                                 {
