@@ -43,6 +43,9 @@ namespace TruckManagement.Endpoints
                         var driverIdsRaw = http.Request.Query["driverIds"];
                         var driverGuids = GuidHelper.ParseGuids(driverIdsRaw, "driverIds");
 
+                        var clientIdsRaw = http.Request.Query["clientIds"];
+                        var clientGuids = GuidHelper.ParseGuids(clientIdsRaw, "clientIds");
+
                         /* ---------- 2. establish caller’s scope ------------------- */
                         var aspUserId = userManager.GetUserId(currentUser);
                         var isGlobal = currentUser.IsInRole("globalAdmin");
@@ -109,6 +112,11 @@ namespace TruckManagement.Endpoints
                                 d.PartRide.CompanyId.HasValue &&
                                 companyGuids.Contains(d.PartRide.CompanyId.Value));
 
+                        if (clientGuids.Any())
+                            q = q.Where(d =>
+                                d.PartRide.ClientId.HasValue &&
+                                clientGuids.Contains(d.PartRide.ClientId.Value));
+
                         if (date.HasValue) // exact day (UTC)
                         {
                             var day = date.Value.Date;
@@ -147,6 +155,9 @@ namespace TruckManagement.Endpoints
                                     : null,
                                 Company = d.PartRide.Company != null
                                     ? new { d.PartRide.Company.Id, d.PartRide.Company.Name }
+                                    : null,
+                                Client = d.PartRide.Client != null
+                                    ? new { d.PartRide.Client.Id, d.PartRide.Client.Name }
                                     : null,
                                 PartRide = new
                                 {
