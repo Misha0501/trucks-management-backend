@@ -20,11 +20,10 @@ namespace TruckManagement.Endpoints
                 [Authorize(Roles =
                     "driver,customerAdmin,customerAccountant,employer,customer,globalAdmin")]
                 async (
-                    [FromQuery] string? driverId, // single driverId
                     [FromQuery] DateTime? date, // exact date
                     [FromQuery] DateTime? dateFrom, // range start (UTC)
                     [FromQuery] DateTime? dateTo, // range end   (UTC)
-                    HttpContext http, // for companyIds[]
+                    HttpContext http, // for companyIds[] and driverIds[]
                     ApplicationDbContext db,
                     UserManager<ApplicationUser> userManager,
                     ClaimsPrincipal currentUser,
@@ -41,14 +40,8 @@ namespace TruckManagement.Endpoints
                         var companyIdsRaw = http.Request.Query["companyIds"];
                         var companyGuids = GuidHelper.ParseGuids(companyIdsRaw, "companyIds");
 
-                        Guid? driverGuidFilter = null;
-                        if (!string.IsNullOrWhiteSpace(driverId))
-                        {
-                            if (!Guid.TryParse(driverId, out var tmp))
-                                return ApiResponseFactory.Error("Invalid driverId.",
-                                    StatusCodes.Status400BadRequest);
-                            driverGuidFilter = tmp;
-                        }
+                        var driverIdsRaw = http.Request.Query["driverIds"];
+                        var driverGuids = GuidHelper.ParseGuids(driverIdsRaw, "driverIds");
 
                         /* ---------- 2. establish caller’s scope ------------------- */
                         var aspUserId = userManager.GetUserId(currentUser);
@@ -108,8 +101,8 @@ namespace TruckManagement.Endpoints
                         }
 
                         /* ---------- 5. additional filters ------------------------- */
-                        if (driverGuidFilter.HasValue)
-                            q = q.Where(d => d.PartRide.DriverId == driverGuidFilter);
+                        if (driverGuids.Any())
+                            q = q.Where(d => d.PartRide.DriverId.HasValue && driverGuids.Contains(d.PartRide.DriverId.Value));
 
                         if (companyGuids.Any())
                             q = q.Where(d =>
