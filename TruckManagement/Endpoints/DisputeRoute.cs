@@ -48,6 +48,14 @@ namespace TruckManagement.Endpoints
 
                         var carIdsRaw = http.Request.Query["carIds"];
                         var carGuids = GuidHelper.ParseGuids(carIdsRaw, "carIds");
+                        
+                        // Filter by dispute statuses if provided
+                        var statusRaw = http.Request.Query["statuses"];
+                        var statusList = statusRaw
+                            .Select(s => Enum.TryParse<DisputeStatus>(s, true, out var parsed) ? parsed : (DisputeStatus?)null)
+                            .Where(s => s.HasValue)
+                            .Select(s => s.Value)
+                            .ToList();
 
                         /* ---------- 2. establish caller’s scope ------------------- */
                         var aspUserId = userManager.GetUserId(currentUser);
@@ -138,6 +146,9 @@ namespace TruckManagement.Endpoints
                             if (dateTo.HasValue)
                                 q = q.Where(d => d.PartRide.Date <= dateTo.Value.Date);
                         }
+
+                        if (statusList.Any())
+                            q = q.Where(d => statusList.Contains(d.Status));
 
                         /* ---------- 6. paging ------------------------------------- */
                         var totalCount = await q.CountAsync();
