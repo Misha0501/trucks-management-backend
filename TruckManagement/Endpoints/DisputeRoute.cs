@@ -136,15 +136,15 @@ namespace TruckManagement.Endpoints
                         if (date.HasValue) // exact day (UTC)
                         {
                             var day = date.Value.Date;
-                            q = q.Where(d => d.PartRide.Date.Date == day);
+                            q = q.Where(d => d.PartRide.Date.Date == DateTime.SpecifyKind(day, DateTimeKind.Utc));
                         }
                         else
                         {
                             if (dateFrom.HasValue)
-                                q = q.Where(d => d.PartRide.Date >= dateFrom.Value.Date);
+                                q = q.Where(d => d.PartRide.Date >= DateTime.SpecifyKind(dateFrom.Value.Date, DateTimeKind.Utc));
 
                             if (dateTo.HasValue)
-                                q = q.Where(d => d.PartRide.Date <= dateTo.Value.Date);
+                                q = q.Where(d => d.PartRide.Date <= DateTime.SpecifyKind(dateTo.Value.Date, DateTimeKind.Utc));
                         }
 
                         if (statusList.Any())
