@@ -428,6 +428,88 @@ namespace TruckManagement.Endpoints
                     }
                 });
 
+            /* =======================================================================
+   DELETE /disputes/{id}
+   ======================================================================= */
+            app.MapDelete("/disputes/{id}",
+                [Authorize(Roles = "customerAdmin,customerAccountant,employer,customer,globalAdmin")]
+                async (
+                    string id,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser) =>
+                {
+                    try
+                    {
+                        /* ---------- 1. validate route id -------------------------------- */
+                        if (!Guid.TryParse(id, out var disputeGuid))
+                            return ApiResponseFactory.Error(
+                                "Invalid dispute ID.", StatusCodes.Status400BadRequest);
+
+                        /* ---------- 2. load dispute (+ company) ------------------------- */
+                        var dispute = await db.PartRideDisputes
+                            .Include(d => d.PartRide)
+                            .FirstOrDefaultAsync(d => d.Id == disputeGuid);
+
+                        if (dispute is null)
+                            return ApiResponseFactory.Error(
+                                "Dispute not found.", StatusCodes.Status404NotFound);
+
+                        /* ---------- 3. authorisation ------------------------------------ */
+                        var aspUserId = userManager.GetUserId(currentUser);
+                        var isGlobal = currentUser.IsInRole("globalAdmin");
+
+                        if (!isGlobal) // contact-person roles
+                        {
+                            var contact = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == aspUserId);
+
+                            if (contact is null)
+                                return ApiResponseFactory.Error(
+                                    "No contact-person profile found.", StatusCodes.Status403Forbidden);
+
+                            var allowedCompanies = contact.ContactPersonClientCompanies
+                                .Select(c => c.CompanyId)
+                                .Distinct();
+
+                            if (dispute.PartRide.CompanyId.HasValue &&
+                                !allowedCompanies.Contains(dispute.PartRide.CompanyId.Value))
+                                return ApiResponseFactory.Error(
+                                    "You are not authorised to delete this dispute.",
+                                    StatusCodes.Status403Forbidden);
+                        }
+
+                        /* ---------- 4. delete ------------------------------------------ */
+                        db.PartRideDisputes.Remove(dispute);
+                        await db.SaveChangesAsync();
+
+                        /* ---------- 5. response ---------------------------------------- */
+                        return ApiResponseFactory.Success(new
+                        {
+                            dispute.Id,
+                            Message = "Dispute deleted successfully."
+                        }, StatusCodes.Status200OK);
+                    }
+                    catch (ArgumentException ex)
+                    {
+                        return ApiResponseFactory.Error(ex.Message, StatusCodes.Status400BadRequest);
+                    }
+                    catch (DbUpdateConcurrencyException)
+                    {
+                        return ApiResponseFactory.Error(
+                            "The dispute was modified or removed by someone else. Refresh and try again.",
+                            StatusCodes.Status409Conflict);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Error deleting dispute: {ex}");
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while deleting the dispute.",
+                            StatusCodes.Status500InternalServerError);
+                    }
+                });
+
             app.MapPost("/disputes/{id}/comments",
                 [Authorize(Roles =
                     "driver,customerAdmin,customerAccountant,employer,customer,globalAdmin")]
