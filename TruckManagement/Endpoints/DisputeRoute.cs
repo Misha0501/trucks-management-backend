@@ -48,11 +48,12 @@ namespace TruckManagement.Endpoints
 
                         var carIdsRaw = http.Request.Query["carIds"];
                         var carGuids = GuidHelper.ParseGuids(carIdsRaw, "carIds");
-                        
+
                         // Filter by dispute statuses if provided
                         var statusRaw = http.Request.Query["statuses"];
                         var statusList = statusRaw
-                            .Select(s => Enum.TryParse<DisputeStatus>(s, true, out var parsed) ? parsed : (DisputeStatus?)null)
+                            .Select(s =>
+                                Enum.TryParse<DisputeStatus>(s, true, out var parsed) ? parsed : (DisputeStatus?)null)
                             .Where(s => s.HasValue)
                             .Select(s => s.Value)
                             .ToList();
@@ -91,7 +92,7 @@ namespace TruckManagement.Endpoints
                                 .Select(c => c.CompanyId)
                                 .Where(id => id.HasValue)
                                 .Select(id => id.Value)
-                                .ToList(); 
+                                .ToList();
                         }
 
                         /* ---------- 3. base query ---------------------------------- */
@@ -116,7 +117,8 @@ namespace TruckManagement.Endpoints
 
                         /* ---------- 5. additional filters ------------------------- */
                         if (driverGuids.Any())
-                            q = q.Where(d => d.PartRide.DriverId.HasValue && driverGuids.Contains(d.PartRide.DriverId.Value));
+                            q = q.Where(d =>
+                                d.PartRide.DriverId.HasValue && driverGuids.Contains(d.PartRide.DriverId.Value));
 
                         if (companyGuids.Any())
                             q = q.Where(d =>
@@ -141,10 +143,12 @@ namespace TruckManagement.Endpoints
                         else
                         {
                             if (dateFrom.HasValue)
-                                q = q.Where(d => d.PartRide.Date >= DateTime.SpecifyKind(dateFrom.Value.Date, DateTimeKind.Utc));
+                                q = q.Where(d =>
+                                    d.PartRide.Date >= DateTime.SpecifyKind(dateFrom.Value.Date, DateTimeKind.Utc));
 
                             if (dateTo.HasValue)
-                                q = q.Where(d => d.PartRide.Date <= DateTime.SpecifyKind(dateTo.Value.Date, DateTimeKind.Utc));
+                                q = q.Where(d =>
+                                    d.PartRide.Date <= DateTime.SpecifyKind(dateTo.Value.Date, DateTimeKind.Utc));
                         }
 
                         if (statusList.Any())
@@ -212,7 +216,7 @@ namespace TruckManagement.Endpoints
                             StatusCodes.Status500InternalServerError);
                     }
                 });
-            
+
             app.MapGet("/disputes/{id}",
                 [Authorize(Roles =
                     "driver,customerAdmin,customerAccountant,employer,customer,globalAdmin")]
@@ -324,6 +328,102 @@ namespace TruckManagement.Endpoints
                         Console.Error.WriteLine($"Error fetching dispute: {ex}");
                         return ApiResponseFactory.Error(
                             "An unexpected error occurred while retrieving dispute.",
+                            StatusCodes.Status500InternalServerError);
+                    }
+                });
+
+            app.MapPut("/disputes/{id}",
+                [Authorize(Roles =
+                    "customerAdmin,customerAccountant,employer,customer,globalAdmin")]
+                async (
+                    string id,
+                    [FromBody] UpdateDisputeRequest body,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser) =>
+                {
+                    try
+                    {
+                        /* --- 0. validate -------------------------------------------------- */
+                        if (!Guid.TryParse(id, out var disputeGuid))
+                            return ApiResponseFactory.Error("Invalid dispute ID.",
+                                StatusCodes.Status400BadRequest);
+
+                        if (body?.CorrectionHours is null)
+                            return ApiResponseFactory.Error("correctionHours is required.",
+                                StatusCodes.Status400BadRequest);
+
+                        /* --- 1. load dispute  -------------------------------------------- */
+                        var dispute = await db.PartRideDisputes
+                            .Include(d => d.PartRide)
+                            .FirstOrDefaultAsync(d => d.Id == disputeGuid);
+
+                        if (dispute is null)
+                            return ApiResponseFactory.Error("Dispute not found.",
+                                StatusCodes.Status404NotFound);
+
+                        /* --- 2. check status --------------------------------------------- */
+                        if (dispute.Status is DisputeStatus.AcceptedByDriver
+                            or DisputeStatus.AcceptedByAdmin
+                            or DisputeStatus.Closed)
+                            return ApiResponseFactory.Error(
+                                "This dispute has already been resolved – it can’t be edited.",
+                                StatusCodes.Status409Conflict);
+
+                        /* --- 3. authorisation (contact-person vs. global) ----------------- */
+                        var aspUserId = userManager.GetUserId(currentUser);
+                        var isGlobal = currentUser.IsInRole("globalAdmin");
+
+                        if (!isGlobal)
+                        {
+                            var contact = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == aspUserId);
+
+                            if (contact is null)
+                                return ApiResponseFactory.Error(
+                                    "No contact-person profile found.", StatusCodes.Status403Forbidden);
+
+                            var allowedCompanies = contact.ContactPersonClientCompanies
+                                .Select(c => c.CompanyId)
+                                .Distinct();
+
+                            if (dispute.PartRide.CompanyId.HasValue &&
+                                !allowedCompanies.Contains(dispute.PartRide.CompanyId.Value))
+                                return ApiResponseFactory.Error(
+                                    "You are not authorised to edit this dispute.",
+                                    StatusCodes.Status403Forbidden);
+                        }
+
+                        /* --- 4. update + state flip -------------------------------------- */
+                        dispute.CorrectionHours = body.CorrectionHours.Value;
+                        db.Entry(dispute).State = EntityState.Modified;
+
+                        await db.SaveChangesAsync();
+
+                        /* --- 5. response -------------------------------------------------- */
+                        return ApiResponseFactory.Success(new
+                        {
+                            dispute.Id,
+                            dispute.Status,
+                            dispute.CorrectionHours
+                        }, StatusCodes.Status200OK);
+                    }
+                    catch (ArgumentException ex)
+                    {
+                        return ApiResponseFactory.Error(ex.Message, StatusCodes.Status400BadRequest);
+                    }
+                    catch (DbUpdateConcurrencyException)
+                    {
+                        return ApiResponseFactory.Error(
+                            "Someone else modified the dispute – reload and try again.",
+                            StatusCodes.Status409Conflict);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Error updating dispute: {ex}");
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while updating the dispute.",
                             StatusCodes.Status500InternalServerError);
                     }
                 });
