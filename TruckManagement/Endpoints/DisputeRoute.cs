@@ -168,7 +168,7 @@ namespace TruckManagement.Endpoints
                                 d.Status,
                                 d.CorrectionHours,
                                 d.CreatedAtUtc,
-                                Driver = d.PartRide.Driver != null
+                                Driver = d.PartRide.Driver != null && d.PartRide.Driver.User != null
                                     ? new
                                     {
                                         d.PartRide.Driver.Id,
@@ -239,6 +239,11 @@ namespace TruckManagement.Endpoints
                             .ThenInclude(pr => pr.Company)
                             .Include(d => d.PartRide)
                             .ThenInclude(pr => pr.Driver)
+                            .ThenInclude(drv => drv.User)
+                            .Include(d => d.PartRide)
+                            .ThenInclude(pr => pr.Car)
+                            .Include(d => d.PartRide)
+                            .ThenInclude(pr => pr.Client)
                             .Include(d => d.Comments)
                             .ThenInclude(c => c.Author)
                             .FirstOrDefaultAsync(d => d.Id == disputeGuid);
@@ -301,8 +306,29 @@ namespace TruckManagement.Endpoints
                             {
                                 d.PartRide.Id,
                                 d.PartRide.Date,
+                                d.PartRide.Start,
+                                d.PartRide.End,
+                                d.PartRide.Rest,
+                                d.PartRide.CorrectionTotalHours,
                                 d.PartRide.DecimalHours,
-                                NewDecimalHours = d.PartRide.DecimalHours + d.CorrectionHours
+                                NewDecimalHours = d.PartRide.DecimalHours + d.CorrectionHours,
+                                Driver = d.PartRide.Driver != null && d.PartRide.Driver.User != null ? new
+                                    {
+                                        DriverId = d.PartRide.Driver.Id,
+                                        d.PartRide.Driver.User.FirstName,
+                                        d.PartRide.Driver.User.LastName,
+                                        AspNetUserId = d.PartRide.Driver.User.Id
+                                    }
+                                    : null,
+                                Company = d.PartRide.Company != null
+                                    ? new { d.PartRide.Company.Id, d.PartRide.Company.Name }
+                                    : null,
+                                Client = d.PartRide.Client != null
+                                    ? new { d.PartRide.Client.Id, d.PartRide.Client.Name }
+                                    : null,
+                                Car = d.PartRide.Car != null
+                                    ? new { d.PartRide.Car.Id, d.PartRide.Car.LicensePlate }
+                                    : null,
                             },
                             Comments = d.Comments
                                 .OrderBy(c => c.CreatedAt)
