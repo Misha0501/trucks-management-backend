@@ -1,3 +1,11 @@
+public enum PartRideStatus
+{
+    PendingAdmin,
+    Dispute,
+    Accepted,
+    Rejected
+}
+
 namespace TruckManagement.Entities
 {
     public class PartRide
@@ -63,5 +71,7 @@ namespace TruckManagement.Entities
         public Guid? WeekApprovalId { get; set; }
         public WeekApproval? WeekApproval { get; set; }
         public ICollection<PartRideDispute> PartRideDisputes { get; set; } = new List<PartRideDispute>();
+
+        public PartRideStatus Status { get; set; } = PartRideStatus.PendingAdmin;
     }
 }
