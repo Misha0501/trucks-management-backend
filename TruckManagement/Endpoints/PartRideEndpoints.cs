@@ -110,7 +110,8 @@ public static class PartRideEndpoints
 
                     bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
                     bool isDriver = currentUser.IsInRole("driver");
-
+                    bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+                    
                     var validationResult = await ValidateReferencesAndRolesAsync(
                         db, userManager, currentUser,
                         request, userId, companyGuid,
@@ -144,6 +145,9 @@ public static class PartRideEndpoints
                         StandOver = 0.0,
                         VariousCompensation = request.VariousCompensation ?? 0,
                         HoursOptionId = GuidHelper.TryParseGuidOrThrow(request.HoursOptionId, "hoursOptionId"),
+                        Status = isCustomerAdmin
+                                ? PartRideStatus.Accepted
+                                : PartRideStatus.PendingAdmin,
                         WeekNumber = request.WeekNumber > 0
                             ? request.WeekNumber
                             : DateHelper.GetIso8601WeekOfYear(request.Date),
@@ -777,6 +781,7 @@ public static class PartRideEndpoints
                             pr.CostsDescription,
                             pr.Turnover,
                             pr.Remark,
+                            pr.Status,
                             Driver = pr.Driver != null
                                 ? new
                                 {
@@ -955,6 +960,7 @@ public static class PartRideEndpoints
                         partRide.Rest,
                         partRide.Kilometers,
                         partRide.Costs,
+                        partRide.Status,
                         Client = partRide.Client != null
                             ? new
                             {
@@ -1387,6 +1393,9 @@ public static class PartRideEndpoints
                     });
 
                     db.PartRideDisputes.Add(dispute);
+                    // Mark the parent ride as being in dispute
+                    partRide.Status = PartRideStatus.Dispute;
+                    
                     await db.SaveChangesAsync();
 
                     /* ---- 5. return payload -------------------------------------- */
