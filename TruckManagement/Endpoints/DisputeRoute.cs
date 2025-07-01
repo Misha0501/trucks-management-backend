@@ -331,7 +331,7 @@ namespace TruckManagement.Endpoints
                                     : null,
                             },
                             Comments = d.Comments
-                                .OrderBy(c => c.CreatedAt)
+                                .OrderByDescending(c => c.CreatedAt)
                                 .Select(c => new
                                 {
                                     c.Id,
