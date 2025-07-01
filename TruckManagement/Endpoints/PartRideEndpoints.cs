@@ -258,6 +258,15 @@ public static class PartRideEndpoints
                             StatusCodes.Status401Unauthorized
                         );
                     }
+                    
+                    // Prevent editing while a dispute is open on this PartRide
+                    if (existingPartRide.Status == PartRideStatus.Dispute)
+                    {
+                        return ApiResponseFactory.Error(
+                            "This PartRide is currently under dispute and cannot be edited until the dispute is resolved.",
+                            StatusCodes.Status409Conflict
+                        );
+                    }
 
                     bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
                     bool isDriver = currentUser.IsInRole("driver");
