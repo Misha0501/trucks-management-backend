@@ -312,7 +312,8 @@ namespace TruckManagement.Endpoints
                                 d.PartRide.CorrectionTotalHours,
                                 d.PartRide.DecimalHours,
                                 NewDecimalHours = d.PartRide.DecimalHours + d.CorrectionHours,
-                                Driver = d.PartRide.Driver != null && d.PartRide.Driver.User != null ? new
+                                Driver = d.PartRide.Driver != null && d.PartRide.Driver.User != null
+                                    ? new
                                     {
                                         DriverId = d.PartRide.Driver.Id,
                                         d.PartRide.Driver.User.FirstName,
@@ -506,9 +507,21 @@ namespace TruckManagement.Endpoints
                                     StatusCodes.Status403Forbidden);
                         }
 
+                        // ---------- 3.5 begin transaction & reset ride status if needed ---
+                        await using var tx = await db.Database.BeginTransactionAsync();
+
+                        // If the underlying PartRide is still marked as "Dispute",
+                        // revert it back to "PendingAdmin" because the dispute is disappearing.
+                        if (dispute.PartRide.Status == PartRideStatus.Dispute)
+                        {
+                            dispute.PartRide.Status = PartRideStatus.PendingAdmin;
+                            db.Entry(dispute.PartRide).State = EntityState.Modified;
+                        }
+
                         /* ---------- 4. delete ------------------------------------------ */
                         db.PartRideDisputes.Remove(dispute);
                         await db.SaveChangesAsync();
+                        await tx.CommitAsync();
 
                         /* ---------- 5. response ---------------------------------------- */
                         return ApiResponseFactory.Success(new
@@ -710,6 +723,9 @@ namespace TruckManagement.Endpoints
                             return ApiResponseFactory.Error("This dispute is already resolved.",
                                 StatusCodes.Status409Conflict);
 
+                        // Begin a transaction
+                        await using var tx = await db.Database.BeginTransactionAsync();
+
                         /* ---------- 2. figure out caller identity -------------------- */
                         var aspUserId = userManager.GetUserId(currentUser);
                         var isDriver = currentUser.IsInRole("driver");
@@ -748,6 +764,10 @@ namespace TruckManagement.Endpoints
                             var calcResult = await calculator.CalculateAsync(calcContext);
                             dispute.PartRide.ApplyCalculated(calcResult);
 
+                            // mark ride waiting for admin final approval
+                            dispute.PartRide.Status = PartRideStatus.PendingAdmin;
+                            db.Entry(dispute.PartRide).State = EntityState.Modified;
+
                             dispute.Status = DisputeStatus.AcceptedByDriver;
                             dispute.ClosedAtUtc = DateTime.UtcNow;
                         }
@@ -779,11 +799,16 @@ namespace TruckManagement.Endpoints
                                 return ApiResponseFactory.Error("Dispute isn’t waiting for admin.",
                                     StatusCodes.Status409Conflict);
 
+                            // ride fully accepted
+                            dispute.PartRide.Status = PartRideStatus.Accepted;
+                            db.Entry(dispute.PartRide).State = EntityState.Modified;
+
                             dispute.Status = DisputeStatus.AcceptedByAdmin;
                             dispute.ClosedAtUtc = DateTime.UtcNow;
                         }
 
                         await db.SaveChangesAsync();
+                        await tx.CommitAsync();
 
                         /* ---------- 4. response -------------------------------------- */
                         var response = new
@@ -874,11 +899,20 @@ namespace TruckManagement.Endpoints
                                     StatusCodes.Status403Forbidden);
                         }
 
+                        // --- start transaction ---
+                        await using var tx = await db.Database.BeginTransactionAsync();
+
                         /* ---------- 4. close the dispute ------------------------------ */
+                        // mark underlying ride back to "PendingAdmin"
+                        dispute.PartRide.Status = PartRideStatus.PendingAdmin;
+                        db.Entry(dispute.PartRide).State = EntityState.Modified;
+
                         dispute.Status = DisputeStatus.Closed;
                         dispute.ClosedAtUtc = DateTime.UtcNow;
+                        db.Entry(dispute).State = EntityState.Modified;
 
                         await db.SaveChangesAsync();
+                        await tx.CommitAsync();
 
                         /* ---------- 5. response -------------------------------------- */
                         return ApiResponseFactory.Success(new
