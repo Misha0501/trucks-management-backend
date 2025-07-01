@@ -466,6 +466,8 @@ namespace TruckManagement.Endpoints
                     UserManager<ApplicationUser> userManager,
                     ClaimsPrincipal currentUser) =>
                 {
+                    // ---------- 3.5 begin transaction & reset ride status if needed ---
+                    await using var tx = await db.Database.BeginTransactionAsync();
                     try
                     {
                         /* ---------- 1. validate route id -------------------------------- */
@@ -507,9 +509,6 @@ namespace TruckManagement.Endpoints
                                     StatusCodes.Status403Forbidden);
                         }
 
-                        // ---------- 3.5 begin transaction & reset ride status if needed ---
-                        await using var tx = await db.Database.BeginTransactionAsync();
-
                         // If the underlying PartRide is still marked as "Dispute",
                         // revert it back to "PendingAdmin" because the dispute is disappearing.
                         if (dispute.PartRide.Status == PartRideStatus.Dispute)
@@ -532,16 +531,19 @@ namespace TruckManagement.Endpoints
                     }
                     catch (ArgumentException ex)
                     {
+                        await tx.RollbackAsync(); 
                         return ApiResponseFactory.Error(ex.Message, StatusCodes.Status400BadRequest);
                     }
                     catch (DbUpdateConcurrencyException)
                     {
+                        await tx.RollbackAsync(); 
                         return ApiResponseFactory.Error(
                             "The dispute was modified or removed by someone else. Refresh and try again.",
                             StatusCodes.Status409Conflict);
                     }
                     catch (Exception ex)
                     {
+                        await tx.RollbackAsync(); 
                         Console.Error.WriteLine($"Error deleting dispute: {ex}");
                         return ApiResponseFactory.Error(
                             "An unexpected error occurred while deleting the dispute.",
@@ -702,6 +704,8 @@ namespace TruckManagement.Endpoints
                     UserManager<ApplicationUser> userManager,
                     ClaimsPrincipal currentUser) =>
                 {
+                    // Begin a transaction
+                    await using var tx = await db.Database.BeginTransactionAsync();
                     try
                     {
                         /* ---------- 0. basic validation ------------------------------ */
@@ -722,9 +726,6 @@ namespace TruckManagement.Endpoints
                             or DisputeStatus.Closed)
                             return ApiResponseFactory.Error("This dispute is already resolved.",
                                 StatusCodes.Status409Conflict);
-
-                        // Begin a transaction
-                        await using var tx = await db.Database.BeginTransactionAsync();
 
                         /* ---------- 2. figure out caller identity -------------------- */
                         var aspUserId = userManager.GetUserId(currentUser);
@@ -823,16 +824,19 @@ namespace TruckManagement.Endpoints
                     }
                     catch (ArgumentException ex)
                     {
+                        await tx.RollbackAsync(); 
                         return ApiResponseFactory.Error(ex.Message, StatusCodes.Status400BadRequest);
                     }
                     catch (DbUpdateConcurrencyException)
                     {
+                        await tx.RollbackAsync(); 
                         return ApiResponseFactory.Error(
                             "The dispute was modified by someone else. Please reload and try again.",
                             StatusCodes.Status409Conflict);
                     }
                     catch (Exception ex)
                     {
+                        await tx.RollbackAsync(); 
                         Console.Error.WriteLine($"Error accepting dispute: {ex}");
                         return ApiResponseFactory.Error(
                             "An unexpected error occurred while accepting the dispute.",
@@ -849,6 +853,8 @@ namespace TruckManagement.Endpoints
                     UserManager<ApplicationUser> userManager,
                     ClaimsPrincipal currentUser) =>
                 {
+                    // --- start transaction ---
+                    await using var tx = await db.Database.BeginTransactionAsync();
                     try
                     {
                         /* ---------- 0. validate ID ------------------------------------ */
@@ -899,9 +905,6 @@ namespace TruckManagement.Endpoints
                                     StatusCodes.Status403Forbidden);
                         }
 
-                        // --- start transaction ---
-                        await using var tx = await db.Database.BeginTransactionAsync();
-
                         /* ---------- 4. close the dispute ------------------------------ */
                         // mark underlying ride back to "PendingAdmin"
                         dispute.PartRide.Status = PartRideStatus.PendingAdmin;
@@ -924,16 +927,19 @@ namespace TruckManagement.Endpoints
                     }
                     catch (ArgumentException ex)
                     {
+                        await tx.RollbackAsync(); 
                         return ApiResponseFactory.Error(ex.Message, StatusCodes.Status400BadRequest);
                     }
                     catch (DbUpdateConcurrencyException)
                     {
+                        await tx.RollbackAsync(); 
                         return ApiResponseFactory.Error(
                             "The dispute was modified by someone else. Please reload and try again.",
                             StatusCodes.Status409Conflict);
                     }
                     catch (Exception ex)
                     {
+                        await tx.RollbackAsync(); 
                         Console.Error.WriteLine($"Error closing dispute: {ex}");
                         return ApiResponseFactory.Error(
                             "An unexpected error occurred while closing the dispute.",

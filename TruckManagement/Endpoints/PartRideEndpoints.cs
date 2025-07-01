@@ -1331,6 +1331,7 @@ public static class PartRideEndpoints
                 UserManager<ApplicationUser> userManager,
                 ClaimsPrincipal currentUser) =>
             {
+                using var transaction = await db.Database.BeginTransactionAsync();
                 try
                 {
                     /* ---- 1. validate route param -------------------------------- */
@@ -1406,6 +1407,7 @@ public static class PartRideEndpoints
                     partRide.Status = PartRideStatus.Dispute;
                     
                     await db.SaveChangesAsync();
+                    await transaction.CommitAsync();
 
                     /* ---- 5. return payload -------------------------------------- */
                     var response = new
@@ -1429,10 +1431,12 @@ public static class PartRideEndpoints
                 }
                 catch (ArgumentException ex)
                 {
+                    await transaction.RollbackAsync();
                     return ApiResponseFactory.Error(ex.Message, StatusCodes.Status400BadRequest);
                 }
                 catch (Exception ex)
                 {
+                    await transaction.RollbackAsync();
                     Console.Error.WriteLine($"Error creating dispute: {ex}");
                     return ApiResponseFactory.Error("An unexpected error occurred.",
                         StatusCodes.Status500InternalServerError);
