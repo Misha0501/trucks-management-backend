@@ -1549,6 +1549,7 @@ public static class PartRideEndpoints
             pr.VariousCompensation,
             pr.PeriodNumber,
             pr.WeekNrInPeriod,
+            pr.Status,
             Files = pr.Files.Select(f => new
             {
                 f.Id,
