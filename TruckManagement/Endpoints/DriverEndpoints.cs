@@ -193,7 +193,8 @@ namespace TruckManagement.Endpoints
                                         r.End,
                                         r.Kilometers,
                                         r.DecimalHours,
-                                        r.Remark
+                                        r.Remark,
+                                        Status = r.Status
                                     })
                                     .Cast<dynamic>()
                                     .ToList() ?? new List<dynamic>();
@@ -466,7 +467,8 @@ namespace TruckManagement.Endpoints
                                         r.DecimalHours,
                                         r.TaxFreeCompensation,
                                         r.VariousCompensation,
-                                        r.Remark
+                                        r.Remark,
+                                        r.Status
                                     })
                                     .Cast<dynamic>()
                                     .ToList() ?? new List<dynamic>();
