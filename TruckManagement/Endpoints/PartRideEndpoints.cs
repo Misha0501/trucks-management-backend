@@ -652,12 +652,11 @@ public static class PartRideEndpoints
                     var driverIdsRaw = httpContext.Request.Query["driverIds"];
                     var clientIdsRaw = httpContext.Request.Query["clientIds"];
                     var carIdsRaw = httpContext.Request.Query["carIds"];
-                    var statusIdsRaw = httpContext.Request.Query["statusIds"];
                     var driverGuids = GuidHelper.ParseGuids(driverIdsRaw, "driverIds");
                     var clientGuids = GuidHelper.ParseGuids(clientIdsRaw, "clientIds");
                     var carIds = GuidHelper.ParseGuids(carIdsRaw, "carIds");
-                    // var statusIds = GuidHelper.ParseGuids(statusIdsRaw, "statusIds");
-                    var statusIds = new List<Guid>([]);
+                    var statusEnums = StatusFilterHelper.ParseStatusIds(
+                        httpContext.Request.Query["statusIds"]);
 
                     if (pageNumber < 1) pageNumber = 1;
                     if (pageSize < 1) pageSize = 10;
@@ -764,7 +763,7 @@ public static class PartRideEndpoints
                         driverGuids,
                         clientGuids,
                         carIds,
-                        statusIds
+                        statusEnums
                     );
 
                     int totalCount = await query.CountAsync();
@@ -1464,7 +1463,7 @@ public static class PartRideEndpoints
         IEnumerable<Guid>? driverIds = null,
         IEnumerable<Guid>? clientIds = null,
         IEnumerable<Guid>? carIds = null,
-        IEnumerable<Guid>? statusIds = null
+        IEnumerable<PartRideStatus>? statusIds = null
     )
     {
         if (!string.IsNullOrWhiteSpace(companyId) && Guid.TryParse(companyId, out var companyGuid))
@@ -1529,11 +1528,12 @@ public static class PartRideEndpoints
         {
             query = query.Where(pr => carIds.Contains(pr.CarId ?? Guid.Empty));
         }
-        // Apply filter for statusIds if provided
-        // if (statusIds != null && statusIds.Any())
-        // {
-        //     query = query.Where(pr => statusIds.Contains(pr.StatusId ?? Guid.Empty));
-        // }
+
+        // Apply filter for statusIds (enum) if provided
+        if (statusIds != null && statusIds.Any())
+        {
+            query = query.Where(pr => statusIds.Contains(pr.Status));
+        }
 
         return query;
     }
