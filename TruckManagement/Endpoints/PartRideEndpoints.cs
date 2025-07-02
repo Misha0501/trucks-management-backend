@@ -1116,6 +1116,12 @@ public static class PartRideEndpoints
                         return ApiResponseFactory.Error("PartRide not found.", StatusCodes.Status404NotFound);
                     }
 
+                    // Prevent deletion if PartRide is in dispute
+                    if (existingPartRide.Status == PartRideStatus.Dispute)
+                    {
+                        return ApiResponseFactory.Error("Cannot delete a PartRide that is currently in dispute.", StatusCodes.Status400BadRequest);
+                    }
+
                     // Get current user info
                     var userId = userManager.GetUserId(currentUser);
                     if (string.IsNullOrEmpty(userId))
