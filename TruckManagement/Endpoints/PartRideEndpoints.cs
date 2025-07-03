@@ -130,6 +130,7 @@ public static class PartRideEndpoints
                         Date = DateTime.SpecifyKind(request.Date, DateTimeKind.Utc),
                         Start = startTime,
                         End = endTime,
+                        Rest = request.Rest,
                         TotalKilometers = request.TotalKilometers,
                         ExtraKilometers = request.ExtraKilometers,
                         CarId = GuidHelper.TryParseGuidOrThrow(request.CarId, "carId"),
@@ -161,6 +162,7 @@ public static class PartRideEndpoints
                         Date: partRide.Date,
                         Start: partRide.Start,
                         End: partRide.End,
+                        Rest: partRide.Rest,
                         DriverId: partRide.DriverId,
                         HoursCodeId: partRide.HoursCodeId.Value,
                         HoursOptionId: partRide.HoursOptionId,
@@ -528,6 +530,7 @@ public static class PartRideEndpoints
                     existingPartRide.TotalKilometers = request.TotalKilometers;
                     existingPartRide.ExtraKilometers = request.ExtraKilometers;
                     existingPartRide.Costs = request.Costs;
+                    existingPartRide.Rest = request.Rest;
                     existingPartRide.WeekNumber = request.WeekNumber;
                     existingPartRide.Turnover = request.Turnover;
                     existingPartRide.Remark = request.Remark;
@@ -569,6 +572,7 @@ public static class PartRideEndpoints
                         Date: existingPartRide.Date,
                         Start: existingPartRide.Start,
                         End: existingPartRide.End,
+                        Rest: existingPartRide.Rest,
                         DriverId: existingPartRide.DriverId,
                         HoursCodeId: existingPartRide.HoursCodeId.Value,
                         HoursOptionId: existingPartRide.HoursOptionId,

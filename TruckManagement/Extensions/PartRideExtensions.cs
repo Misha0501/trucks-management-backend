@@ -15,7 +15,7 @@ public static class PartRideExtensions
         pr.ConsignmentFee         = r.ConsignmentFee;
         pr.SaturdayHours          = r.SaturdayHours;
         pr.SundayHolidayHours     = r.SundayHolidayHours;
-        pr.Rest                   = r.Rest;
+        pr.RestCalculated         = r.RestCalculated;
         pr.PeriodNumber           = r.PeriodNumber;
         pr.WeekNrInPeriod         = r.WeekNrInPeriod;
     }

@@ -13,6 +13,7 @@ public record PartRideCalculationContext(
     DateTime Date,
     TimeSpan Start,
     TimeSpan End,
+    TimeSpan Rest,
     Guid?    DriverId,
     Guid     HoursCodeId,
     Guid?    HoursOptionId,
@@ -31,7 +32,7 @@ public record PartRideCalculationResult(
     double   ConsignmentFee,
     double   SaturdayHours,
     double   SundayHolidayHours,
-    TimeSpan Rest,
+    TimeSpan RestCalculated,
     int      PeriodNumber,
     int      WeekNrInPeriod);
 
@@ -75,6 +76,7 @@ public sealed class PartRideCalculator
         // 3. Calculations (same as before, variable names unchanged)
         double startTimeDecimal = c.Start.TotalHours;
         double endTimeDecimal   = c.End.TotalHours;
+        double restTimeDecimal   = c.Rest.TotalHours;
 
         string holidayName = work.GetHolidayName(c.Date, hoursOption?.Name);
 
@@ -127,7 +129,7 @@ public sealed class PartRideCalculator
             startTime       : startTimeDecimal,
             endTime         : endTimeDecimal);
 
-        double totalBreak = work.CalculateTotalBreak(
+        double totalBreakCalculated = work.CalculateTotalBreak(
             breakScheduleOn: true,
             startTime      : startTimeDecimal,
             endTime        : endTimeDecimal,
@@ -138,7 +140,7 @@ public sealed class PartRideCalculator
         double totalHours = work.CalculateTotalHours(
             shiftStart     : startTimeDecimal,
             shiftEnd       : endTimeDecimal,
-            breakDuration  : totalBreak,
+            breakDuration  : restTimeDecimal,
             manualAdjustment: c.CorrectionTotalHours);
 
         double netHours = work.CalculateNetHours(
@@ -196,7 +198,7 @@ public sealed class PartRideCalculator
             ConsignmentFee        : consignmentFee,
             SaturdayHours         : saturdayHours,
             SundayHolidayHours    : sundayHolidayHours,
-            Rest                  : TimeSpan.FromHours(totalBreak),
+            RestCalculated                  : TimeSpan.FromHours(totalBreakCalculated),
             PeriodNumber          : periodNr,
             WeekNrInPeriod        : weekNrInPeriod);
     }

@@ -9,7 +9,7 @@ namespace TruckManagement
         public DateTime? Date { get; set; }
         public string? Start { get; set; }
         public string? End { get; set; } 
-        public TimeSpan? Rest { get; set; }
+        public TimeSpan Rest { get; set; }
         public double? TotalKilometers { get; set; }
         public double? ExtraKilometers { get; set; }
         public string? CarId { get; set; }

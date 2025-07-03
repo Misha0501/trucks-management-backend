@@ -756,6 +756,7 @@ namespace TruckManagement.Endpoints
                                 Date: dispute.PartRide.Date,
                                 Start: dispute.PartRide.Start,
                                 End: dispute.PartRide.End,
+                                Rest: dispute.PartRide.Rest,
                                 DriverId: dispute.PartRide.DriverId,
                                 HoursCodeId: dispute.PartRide.HoursCodeId ?? Guid.Empty,
                                 HoursOptionId: dispute.PartRide.HoursOptionId,
