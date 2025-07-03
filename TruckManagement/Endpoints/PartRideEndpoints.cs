@@ -111,7 +111,7 @@ public static class PartRideEndpoints
                     bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
                     bool isDriver = currentUser.IsInRole("driver");
                     bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
-                    
+
                     var validationResult = await ValidateReferencesAndRolesAsync(
                         db, userManager, currentUser,
                         request, userId, companyGuid,
@@ -146,8 +146,8 @@ public static class PartRideEndpoints
                         VariousCompensation = request.VariousCompensation ?? 0,
                         HoursOptionId = GuidHelper.TryParseGuidOrThrow(request.HoursOptionId, "hoursOptionId"),
                         Status = isCustomerAdmin
-                                ? PartRideStatus.Accepted
-                                : PartRideStatus.PendingAdmin,
+                            ? PartRideStatus.Accepted
+                            : PartRideStatus.PendingAdmin,
                         WeekNumber = request.WeekNumber > 0
                             ? request.WeekNumber
                             : DateHelper.GetIso8601WeekOfYear(request.Date),
@@ -258,7 +258,7 @@ public static class PartRideEndpoints
                             StatusCodes.Status401Unauthorized
                         );
                     }
-                    
+
                     // Prevent editing while a dispute is open on this PartRide
                     if (existingPartRide.Status == PartRideStatus.Dispute)
                     {
@@ -1118,7 +1118,8 @@ public static class PartRideEndpoints
                     // Prevent deletion if PartRide is in dispute
                     if (existingPartRide.Status == PartRideStatus.Dispute)
                     {
-                        return ApiResponseFactory.Error("Cannot delete a PartRide that is currently in dispute.", StatusCodes.Status400BadRequest);
+                        return ApiResponseFactory.Error("Cannot delete a PartRide that is currently in dispute.",
+                            StatusCodes.Status400BadRequest);
                     }
 
                     // Get current user info
@@ -1410,7 +1411,7 @@ public static class PartRideEndpoints
                     db.PartRideDisputes.Add(dispute);
                     // Mark the parent ride as being in dispute
                     partRide.Status = PartRideStatus.Dispute;
-                    
+
                     await db.SaveChangesAsync();
                     await transaction.CommitAsync();
 
@@ -1444,6 +1445,179 @@ public static class PartRideEndpoints
                     await transaction.RollbackAsync();
                     Console.Error.WriteLine($"Error creating dispute: {ex}");
                     return ApiResponseFactory.Error("An unexpected error occurred.",
+                        StatusCodes.Status500InternalServerError);
+                }
+            });
+
+        app.MapPost("/partrides/{id}/approve",
+            [Authorize(Roles = "customerAdmin, globalAdmin")]
+            async (
+                string id,
+                ApplicationDbContext db,
+                UserManager<ApplicationUser> userManager,
+                ClaimsPrincipal currentUser) =>
+            {
+                await using var tx = await db.Database.BeginTransactionAsync();
+                try
+                {
+                    /* -------- validate route param -------- */
+                    if (!Guid.TryParse(id, out var rideGuid))
+                        return ApiResponseFactory.Error(
+                            "Invalid PartRide ID format.",
+                            StatusCodes.Status400BadRequest);
+
+                    /* -------- load PartRide (+ company) --- */
+                    var partRide = await db.PartRides
+                        .Include(pr => pr.Company)
+                        .FirstOrDefaultAsync(pr => pr.Id == rideGuid);
+
+                    if (partRide is null)
+                        return ApiResponseFactory.Error(
+                            "Workday not found.",
+                            StatusCodes.Status404NotFound);
+
+                    /* -------- ensure correct current status */
+                    if (partRide.Status == PartRideStatus.Accepted)
+                        return ApiResponseFactory.Error(
+                            "Workday is already approved.",
+                            StatusCodes.Status409Conflict);
+
+                    if (partRide.Status == PartRideStatus.Dispute)
+                        return ApiResponseFactory.Error(
+                            "Workdays in status Dispute, can not be approved.",
+                            StatusCodes.Status400BadRequest);
+
+                    /* -------- authorisation check (company) */
+                    if (!currentUser.IsInRole("globalAdmin"))
+                    {
+                        var userId = userManager.GetUserId(currentUser);
+                        var contact = await db.ContactPersons
+                            .Include(cp => cp.ContactPersonClientCompanies)
+                            .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                        if (contact is null)
+                            return ApiResponseFactory.Error(
+                                "No contact-person profile found.",
+                                StatusCodes.Status403Forbidden);
+
+                        var allowedCompanies = contact.ContactPersonClientCompanies
+                            .Select(cpc => cpc.CompanyId)
+                            .Where(c => c.HasValue)
+                            .Select(c => c!.Value)
+                            .ToHashSet();
+
+                        if (!partRide.CompanyId.HasValue ||
+                            !allowedCompanies.Contains(partRide.CompanyId.Value))
+                            return ApiResponseFactory.Error(
+                                "You are not authorised to approve this Workday.",
+                                StatusCodes.Status403Forbidden);
+                    }
+
+                    /* -------- approve  -------------------- */
+                    partRide.Status = PartRideStatus.Accepted;
+                    // If you later add audit columns such as ApprovedAt / ApprovedByUserId,
+                    // update them here as well.
+
+                    await db.SaveChangesAsync();
+                    await tx.CommitAsync();
+
+                    return ApiResponseFactory.Success(
+                        "PartRide approved successfully.", StatusCodes.Status200OK);
+                }
+                catch (Exception ex)
+                {
+                    await tx.RollbackAsync();
+                    Console.Error.WriteLine($"Error approving PartRide: {ex}");
+                    return ApiResponseFactory.Error(
+                        "An unexpected error occurred while approving the PartRide.",
+                        StatusCodes.Status500InternalServerError);
+                }
+            });
+
+        app.MapPost("/partrides/{id}/reject",
+            [Authorize(Roles = "customerAdmin, globalAdmin")]
+            async (
+                string id,
+                ApplicationDbContext db,
+                UserManager<ApplicationUser> userManager,
+                ClaimsPrincipal currentUser) =>
+            {
+                await using var tx = await db.Database.BeginTransactionAsync();
+                try
+                {
+                    /* ---------- validate ID ------------------ */
+                    if (!Guid.TryParse(id, out var rideGuid))
+                        return ApiResponseFactory.Error(
+                            "Invalid PartRide ID format.",
+                            StatusCodes.Status400BadRequest);
+
+                    /* ---------- load PartRide ---------------- */
+                    var partRide = await db.PartRides
+                        .Include(pr => pr.Company)
+                        .FirstOrDefaultAsync(pr => pr.Id == rideGuid);
+
+                    if (partRide is null)
+                        return ApiResponseFactory.Error(
+                            "Workday not found.",
+                            StatusCodes.Status404NotFound);
+
+                    /* ---------- check current status --------- */
+                    if (partRide.Status == PartRideStatus.Rejected)
+                        return ApiResponseFactory.Error(
+                            "Workday is already rejected.",
+                            StatusCodes.Status409Conflict);
+
+                    if (partRide.Status == PartRideStatus.Dispute)
+                        return ApiResponseFactory.Error(
+                            "Workday in the Dispute status can't be rejected.",
+                            StatusCodes.Status400BadRequest);
+
+                    /* ---------- authorisation (company) ------ */
+                    if (!currentUser.IsInRole("globalAdmin"))
+                    {
+                        var userId = userManager.GetUserId(currentUser);
+                        var contact = await db.ContactPersons
+                            .Include(cp => cp.ContactPersonClientCompanies)
+                            .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                        if (contact is null)
+                            return ApiResponseFactory.Error(
+                                "No contact-person profile found.",
+                                StatusCodes.Status403Forbidden);
+
+                        var allowedCompanies = contact.ContactPersonClientCompanies
+                            .Select(cpc => cpc.CompanyId)
+                            .Where(id => id.HasValue)
+                            .Select(id => id!.Value)
+                            .ToHashSet();
+
+                        if (!partRide.CompanyId.HasValue ||
+                            !allowedCompanies.Contains(partRide.CompanyId.Value))
+                            return ApiResponseFactory.Error(
+                                "You are not authorised to reject this Workday.",
+                                StatusCodes.Status403Forbidden);
+                    }
+
+                    /* ---------- reject ----------------------- */
+                    partRide.Status = PartRideStatus.Rejected;
+
+                    await db.SaveChangesAsync();
+                    await tx.CommitAsync();
+
+                    return ApiResponseFactory.Success(
+                        "Workday rejected successfully.", StatusCodes.Status200OK);
+                }
+                catch (ArgumentException ex)
+                {
+                    await tx.RollbackAsync();
+                    return ApiResponseFactory.Error(ex.Message, StatusCodes.Status400BadRequest);
+                }
+                catch (Exception ex)
+                {
+                    await tx.RollbackAsync();
+                    Console.Error.WriteLine($"Error rejecting PartRide: {ex}");
+                    return ApiResponseFactory.Error(
+                        "An unexpected error occurred while rejecting the PartRide.",
                         StatusCodes.Status500InternalServerError);
                 }
             });
