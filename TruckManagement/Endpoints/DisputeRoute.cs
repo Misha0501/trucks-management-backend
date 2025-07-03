@@ -759,7 +759,7 @@ namespace TruckManagement.Endpoints
                                 DriverId: dispute.PartRide.DriverId,
                                 HoursCodeId: dispute.PartRide.HoursCodeId ?? Guid.Empty,
                                 HoursOptionId: dispute.PartRide.HoursOptionId,
-                                Kilometers: dispute.PartRide.Kilometers ?? 0,
+                                ExtraKilometers: dispute.PartRide.ExtraKilometers ?? 0,
                                 CorrectionTotalHours: dispute.PartRide.CorrectionTotalHours
                             );
                             var calcResult = await calculator.CalculateAsync(calcContext);

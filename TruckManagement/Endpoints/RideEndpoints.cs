@@ -449,7 +449,7 @@ public static class RideEndpoints
                             pr.Start,
                             pr.End,
                             pr.Rest,
-                            pr.Kilometers,
+                            pr.TotalKilometers,
                             pr.Costs,
                             pr.WeekNumber,
                             pr.DecimalHours,

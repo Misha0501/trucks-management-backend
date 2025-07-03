@@ -16,7 +16,7 @@ public record PartRideCalculationContext(
     Guid?    DriverId,
     Guid     HoursCodeId,
     Guid?    HoursOptionId,
-    double   Kilometers,
+    double   ExtraKilometers,
     double   CorrectionTotalHours);
 
 // ────────────────────────────────────────────────────────────────
@@ -153,7 +153,7 @@ public sealed class PartRideCalculator
             oneWayValue              : compensation.KilometersOneWayValue);
 
         double kilometerReimbursement = kmCalc.CalculateKilometersAllowance(
-            extraKilometers : c.Kilometers,
+            extraKilometers : c.ExtraKilometers,
             hourCode        : hoursCode.Name,
             hourOption      : hoursOption?.Name,
             totalHours      : netHours,

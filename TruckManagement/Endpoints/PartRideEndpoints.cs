@@ -130,7 +130,8 @@ public static class PartRideEndpoints
                         Date = DateTime.SpecifyKind(request.Date, DateTimeKind.Utc),
                         Start = startTime,
                         End = endTime,
-                        Kilometers = request.Kilometers,
+                        TotalKilometers = request.TotalKilometers,
+                        ExtraKilometers = request.ExtraKilometers,
                         CarId = GuidHelper.TryParseGuidOrThrow(request.CarId, "carId"),
                         DriverId = GuidHelper.TryParseGuidOrThrow(request.DriverId, "driverId"),
                         Costs = request.Costs,
@@ -163,7 +164,7 @@ public static class PartRideEndpoints
                         DriverId: partRide.DriverId,
                         HoursCodeId: partRide.HoursCodeId.Value,
                         HoursOptionId: partRide.HoursOptionId,
-                        Kilometers: partRide.Kilometers ?? 0,
+                        ExtraKilometers: partRide.ExtraKilometers ?? 0,
                         CorrectionTotalHours: partRide.CorrectionTotalHours);
 
                     var result = await calculator.CalculateAsync(calcContext);
@@ -524,7 +525,8 @@ public static class PartRideEndpoints
                         );
                     }
 
-                    existingPartRide.Kilometers = request.Kilometers;
+                    existingPartRide.TotalKilometers = request.TotalKilometers;
+                    existingPartRide.ExtraKilometers = request.ExtraKilometers;
                     existingPartRide.Costs = request.Costs;
                     existingPartRide.WeekNumber = request.WeekNumber;
                     existingPartRide.Turnover = request.Turnover;
@@ -570,7 +572,7 @@ public static class PartRideEndpoints
                         DriverId: existingPartRide.DriverId,
                         HoursCodeId: existingPartRide.HoursCodeId.Value,
                         HoursOptionId: existingPartRide.HoursOptionId,
-                        Kilometers: existingPartRide.Kilometers ?? 0,
+                        ExtraKilometers: existingPartRide.ExtraKilometers ?? 0,
                         CorrectionTotalHours: existingPartRide.CorrectionTotalHours);
                     var result = await calculator.CalculateAsync(calcContext);
                     existingPartRide.ApplyCalculated(result);
@@ -780,7 +782,9 @@ public static class PartRideEndpoints
                             pr.Start,
                             pr.End,
                             pr.Rest,
-                            pr.Kilometers,
+                            pr.RestCalculated,
+                            pr.TotalKilometers,
+                            pr.ExtraKilometers,
                             pr.Costs,
                             Client = pr.Client != null ? new { pr.Client.Id, pr.Client.Name } : null,
                             Company = pr.Company != null ? new { pr.Company.Id, pr.Company.Name } : null,
@@ -966,7 +970,9 @@ public static class PartRideEndpoints
                         partRide.Start,
                         partRide.End,
                         partRide.Rest,
-                        partRide.Kilometers,
+                        partRide.RestCalculated,
+                        partRide.ExtraKilometers,
+                        partRide.TotalKilometers,
                         partRide.Costs,
                         partRide.Status,
                         Client = partRide.Client != null
@@ -1721,7 +1727,9 @@ public static class PartRideEndpoints
             pr.Start,
             pr.End,
             pr.Rest,
-            pr.Kilometers,
+            pr.RestCalculated,
+            pr.TotalKilometers,
+            pr.ExtraKilometers,
             pr.Costs,
             pr.ClientId,
             pr.CompanyId,

@@ -19,7 +19,9 @@ namespace TruckManagement.Entities
         public TimeSpan Start { get; set; }
         public TimeSpan End { get; set; }
         public TimeSpan? Rest { get; set; }
-        public double? Kilometers { get; set; }
+        public TimeSpan? RestCalculated { get; set; }
+        public double? TotalKilometers { get; set; }
+        public double? ExtraKilometers { get; set; }
 
         public Guid? CarId { get; set; }
         public Car? Car { get; set; } = default!;
