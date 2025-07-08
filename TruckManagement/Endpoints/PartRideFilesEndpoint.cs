@@ -24,7 +24,8 @@ public static class PartRideFilesRoutes
                 ApplicationDbContext db,
                 UserManager<ApplicationUser> userManager,
                 ClaimsPrincipal currentUser,
-                IWebHostEnvironment env) =>
+                IWebHostEnvironment env,
+                IConfiguration config) =>
             {
                 // 1. Validate GUID
                 if (!Guid.TryParse(fileId, out Guid fileGuid))
@@ -93,7 +94,8 @@ public static class PartRideFilesRoutes
                 }
 
                 // 4. Build absolute path & verify existence
-                var absolutePath = Path.Combine(env.ContentRootPath, file.FilePath);
+                var storageBasePath = config.GetValue<string>("Storage:BasePath") ?? env.ContentRootPath;
+                var absolutePath = Path.Combine(storageBasePath, file.FilePath);
                 if (!File.Exists(absolutePath))
                     return ApiResponseFactory.Error("File missing on server.", StatusCodes.Status410Gone);
 

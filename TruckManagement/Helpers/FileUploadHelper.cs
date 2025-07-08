@@ -18,7 +18,7 @@ public static class FileUploadHelper
             ? companyId.Value.ToString()
             : "Uncategorized";
 
-        var relativeFolderPath = Path.Combine("Storage", "Companies", safeCompanyId, "WorkDayReceipts", partRideId.ToString());
+        var relativeFolderPath = Path.Combine("Companies", safeCompanyId, "WorkDayReceipts", partRideId.ToString());
         var absoluteFolderPath = Path.Combine(basePathCompanies, safeCompanyId, "WorkDayReceipts", partRideId.ToString());
         Directory.CreateDirectory(absoluteFolderPath);
 
