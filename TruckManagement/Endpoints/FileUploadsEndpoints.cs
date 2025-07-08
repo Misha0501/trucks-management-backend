@@ -4,9 +4,9 @@ using TruckManagement.Helpers;
 
 namespace TruckManagement.Endpoints
 {
-    public static class HelloFileUploadsEndpointsTest
+    public static class FileUploadsEndpoints
     {
-        public static void HelloMapFileUploadsEndpointsTest(this WebApplication app)
+        public static void MapFileUploadsEndpoints(this WebApplication app)
         {
             app.MapPost("/temporary-uploads", async (HttpRequest request, IWebHostEnvironment env, IConfiguration config) =>
             {
