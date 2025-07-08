@@ -47,8 +47,7 @@ jobs:
             
           # ② redeploy the stack
           cd /var/www/vhosts/${{ secrets.SERVER_DOMAIN }}/ && \
-          docker compose down && \
-          dotnet clean && \
+          docker compose down --remove-orphans  && \
           docker compose build && \
           docker compose up -d
           "
