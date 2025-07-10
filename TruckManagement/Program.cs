@@ -1,10 +1,8 @@
-using TruckManagement.Data;
-using TruckManagement.Entities;
-using TruckManagement.Extensions;
-using TruckManagement.Endpoints;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
+using System.Globalization;
+using Microsoft.AspNetCore.Localization;
 using TruckManagement.Api.Endpoints;
+using TruckManagement.Endpoints;
+using TruckManagement.Extensions;
 using TruckManagement.Options;
 using TruckManagement.Routes;
 using TruckManagement.Seeding;
@@ -23,7 +21,6 @@ builder.Services.AddPostgresDatabase(builder.Configuration);
 builder.Services.AddAppIdentity();
 builder.Services.AddJwtAuthentication(builder.Configuration);
 builder.Services.AddAuthorizationPolicies();
-
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 
 builder.Services.AddCors(options =>
@@ -39,7 +36,33 @@ builder.Services.AddScoped<DriverCompensationService>();
 builder.Services.Configure<StorageOptions>(
     builder.Configuration.GetSection("Storage"));
 
+builder.Services.AddLocalization(options => options.ResourcesPath = "Resources");
+builder.Services.AddScoped<IResourceLocalizer, ResourceLocalizer>();
+
+// Define supported cultures
+var supportedCultures = new[] 
+{ 
+    new CultureInfo("en"), 
+    new CultureInfo("nl"),
+    new CultureInfo("bg") 
+};
+
+builder.Services.Configure<RequestLocalizationOptions>(options =>
+{
+    options.DefaultRequestCulture = new RequestCulture("en");
+
+    options.SupportedCultures = supportedCultures;
+    options.SupportedUICultures = supportedCultures;
+
+    options.RequestCultureProviders = new List<IRequestCultureProvider>
+    {
+        new AcceptLanguageHeaderRequestCultureProvider()
+    };
+});
+
+
 var app = builder.Build();
+app.UseRequestLocalization();
 
 // Use cors
 app.UseCors("AllowAll");

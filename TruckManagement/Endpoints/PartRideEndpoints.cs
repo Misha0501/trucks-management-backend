@@ -9,7 +9,6 @@ using TruckManagement;
 using TruckManagement.Data;
 using TruckManagement.DTOs;
 using TruckManagement.Entities;
-using TruckManagement.Enums;
 using TruckManagement.Extensions;
 using TruckManagement.Helpers;
 using TruckManagement.Options;
@@ -773,7 +772,7 @@ public static class PartRideEndpoints
                     );
 
                     int totalCount = await query.CountAsync();
-                    int totalPages = (int)System.Math.Ceiling(totalCount / (double)pageSize);
+                    int totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
 
                     var partRides = await query
                         .OrderByDescending(pr => pr.Date)
@@ -861,10 +860,11 @@ public static class PartRideEndpoints
             [Authorize(Roles = "globalAdmin, customerAdmin, employer, customer, customerAccountant, driver")]
             async (
                 string id,
+                IResourceLocalizer resourceLocalizer,
                 ApplicationDbContext db,
                 UserManager<ApplicationUser> userManager,
                 ClaimsPrincipal currentUser
-            ) =>
+                ) =>
             {
                 try
                 {
@@ -896,7 +896,7 @@ public static class PartRideEndpoints
 
                     if (partRide == null)
                     {
-                        return ApiResponseFactory.Error("PartRide not found.", StatusCodes.Status404NotFound);
+                        return ApiResponseFactory.Error(resourceLocalizer.Localize("PartRideNotFound"), StatusCodes.Status404NotFound);
                     }
 
                     var userId = userManager.GetUserId(currentUser);
