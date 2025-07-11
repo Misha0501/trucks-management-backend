@@ -615,7 +615,7 @@ public static class PartRideEndpoints
                 }
                 catch (ArgumentException ex)
                 {
-                    return ApiResponseFactory.Error(ex.Message, StatusCodes.Status400BadRequest);
+                    return ApiResponseFactory.Error("Invalid GUID value: " + ex.Message, StatusCodes.Status400BadRequest);
                 }
                 catch (InvalidOperationException ex) when (ex.Message.StartsWith("Some files were not found"))
                 {
@@ -843,10 +843,7 @@ public static class PartRideEndpoints
                 }
                 catch (ArgumentException ex)
                 {
-                    return ApiResponseFactory.Error(
-                        ex.Message,
-                        StatusCodes.Status400BadRequest
-                    );
+                    return ApiResponseFactory.Error("Invalid GUID value: " + ex.Message, StatusCodes.Status400BadRequest);
                 }
                 catch (Exception ex)
                 {
@@ -1451,7 +1448,7 @@ public static class PartRideEndpoints
                 catch (ArgumentException ex)
                 {
                     await transaction.RollbackAsync();
-                    return ApiResponseFactory.Error(ex.Message, StatusCodes.Status400BadRequest);
+                    return ApiResponseFactory.Error("Invalid GUID value: " + ex.Message, StatusCodes.Status400BadRequest);
                 }
                 catch (Exception ex)
                 {
@@ -1623,7 +1620,7 @@ public static class PartRideEndpoints
                 catch (ArgumentException ex)
                 {
                     await tx.RollbackAsync();
-                    return ApiResponseFactory.Error(ex.Message, StatusCodes.Status400BadRequest);
+                    return ApiResponseFactory.Error("Invalid GUID value: " + ex.Message, StatusCodes.Status400BadRequest);
                 }
                 catch (Exception ex)
                 {

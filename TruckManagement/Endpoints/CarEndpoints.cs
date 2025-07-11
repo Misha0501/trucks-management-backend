@@ -247,10 +247,7 @@ namespace TruckManagement.Endpoints
                     }
                     catch (ArgumentException ex)
                     {
-                        return ApiResponseFactory.Error(
-                            ex.Message,
-                            StatusCodes.Status400BadRequest
-                        );
+                        return ApiResponseFactory.Error("Invalid GUID value: " + ex.Message, StatusCodes.Status400BadRequest);
                     }
                     catch (Exception ex)
                     {

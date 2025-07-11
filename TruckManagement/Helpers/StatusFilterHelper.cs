@@ -26,8 +26,7 @@ public static class StatusFilterHelper
                 }
                 else
                 {
-                    throw new ArgumentException(
-                        $"Invalid status value '{token}' for parameter 'statusIds'.");
+                    throw new ArgumentException(token);
                 }
             }
         }

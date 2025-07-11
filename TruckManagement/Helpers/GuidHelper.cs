@@ -20,7 +20,7 @@ public static class GuidHelper
         foreach (var raw in rawValues)
         {
             if (!Guid.TryParse(raw, out var guid))
-                throw new ArgumentException($"Invalid GUID value '{raw}' for parameter '{paramName}'.");
+                throw new ArgumentException(raw, paramName);
             result.Add(guid);
         }
 

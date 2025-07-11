@@ -206,7 +206,7 @@ namespace TruckManagement.Endpoints
                     }
                     catch (ArgumentException ex)
                     {
-                        return ApiResponseFactory.Error(ex.Message, StatusCodes.Status400BadRequest);
+                        return ApiResponseFactory.Error("Invalid GUID value: " + ex.Message, StatusCodes.Status400BadRequest);
                     }
                     catch (Exception ex)
                     {
@@ -438,7 +438,7 @@ namespace TruckManagement.Endpoints
                     }
                     catch (ArgumentException ex)
                     {
-                        return ApiResponseFactory.Error(ex.Message, StatusCodes.Status400BadRequest);
+                        return ApiResponseFactory.Error("Invalid GUID value: " + ex.Message, StatusCodes.Status400BadRequest);
                     }
                     catch (DbUpdateConcurrencyException)
                     {
@@ -532,7 +532,7 @@ namespace TruckManagement.Endpoints
                     catch (ArgumentException ex)
                     {
                         await tx.RollbackAsync(); 
-                        return ApiResponseFactory.Error(ex.Message, StatusCodes.Status400BadRequest);
+                        return ApiResponseFactory.Error("Invalid GUID value: " + ex.Message, StatusCodes.Status400BadRequest);
                     }
                     catch (DbUpdateConcurrencyException)
                     {
@@ -684,7 +684,7 @@ namespace TruckManagement.Endpoints
                     }
                     catch (ArgumentException ex)
                     {
-                        return ApiResponseFactory.Error(ex.Message, StatusCodes.Status400BadRequest);
+                        return ApiResponseFactory.Error("Invalid GUID value: " + ex.Message, StatusCodes.Status400BadRequest);
                     }
                     catch (Exception ex)
                     {
@@ -826,7 +826,7 @@ namespace TruckManagement.Endpoints
                     catch (ArgumentException ex)
                     {
                         await tx.RollbackAsync(); 
-                        return ApiResponseFactory.Error(ex.Message, StatusCodes.Status400BadRequest);
+                        return ApiResponseFactory.Error("Invalid GUID value: " + ex.Message, StatusCodes.Status400BadRequest);
                     }
                     catch (DbUpdateConcurrencyException)
                     {
@@ -929,7 +929,7 @@ namespace TruckManagement.Endpoints
                     catch (ArgumentException ex)
                     {
                         await tx.RollbackAsync(); 
-                        return ApiResponseFactory.Error(ex.Message, StatusCodes.Status400BadRequest);
+                        return ApiResponseFactory.Error("Invalid GUID value: " + ex.Message, StatusCodes.Status400BadRequest);
                     }
                     catch (DbUpdateConcurrencyException)
                     {
