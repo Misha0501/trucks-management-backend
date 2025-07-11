@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <root>
-    <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+                xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
         <xsd:element name="root" msdata:IsDataSet="true">
-            
+
         </xsd:element>
     </xsd:schema>
     <resheader name="resmimetype">
@@ -13,10 +14,14 @@
         <value>1.3</value>
     </resheader>
     <resheader name="reader">
-        <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+        <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=2.0.0.0, Culture=neutral,
+            PublicKeyToken=b77a5c561934e089
+        </value>
     </resheader>
     <resheader name="writer">
-        <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+        <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral,
+            PublicKeyToken=b77a5c561934e089
+        </value>
     </resheader>
     <data name="Test" xml:space="preserve">
         <value>test nl</value>
@@ -24,4 +29,65 @@
     <data name="PartRideNotFound" xml:space="preserve">
         <value>Werkdag niet gevonden</value>
     </data>
+    <data name="CompanyIdRequired" xml:space="preserve">
+        <value>companyId is verplicht en mag niet leeg zijn.</value>
+    </data>
+    <data name="InvalidCompanyIdFormat" xml:space="preserve">
+        <value>Ongeldig formaat voor companyId.</value>
+    </data>
+    <data name="InvalidDateFormat" xml:space="preserve">
+        <value>Ongeldig tijdformaat voor Start of End.</value>
+    </data>
+    <data name="UserNotAuthenticated" xml:space="preserve">
+        <value>Gebruiker is niet geauthenticeerd.</value>
+    </data>
+    <data name="DriverNotFound" xml:space="preserve">
+        <value>Chauffeur niet gevonden.</value>
+    </data>
+    <data name="FailedToCreatePartRide" xml:space="preserve">
+        <value>Kan werkdag en bestanden niet aanmaken.</value>
+    </data>
+    <data name="DriverNotRegistered" xml:space="preserve">
+    <value>U bent niet geregistreerd als chauffeur. Neem contact op met uw beheerder.</value>
+  </data>
+    <data name="DriversCreateOwnPartRides" xml:space="preserve">
+    <value>Chauffeurs kunnen alleen ritten voor zichzelf aanmaken.</value>
+  </data>
+    <data name="DriverCompanyAssociationMismatch" xml:space="preserve">
+    <value>U bent niet gekoppeld aan dit bedrijf.</value>
+  </data>
+    <data name="NoContactPersonProfile" xml:space="preserve">
+    <value>Geen contactpersoonprofiel gevonden. U bent niet geautoriseerd.</value>
+  </data>
+    <data name="NotAuthorizedCreatePartRideCompany" xml:space="preserve">
+    <value>U bent niet bevoegd om een rit voor dit bedrijf aan te maken.</value>
+  </data>
+
+    <data name="DriverNotFound" xml:space="preserve">
+    <value>De opgegeven chauffeur bestaat niet.</value>
+  </data>
+    <data name="DriverCompanyMismatch" xml:space="preserve">
+    <value>Het bedrijf van de chauffeur komt niet overeen met de opgegeven companyId.</value>
+  </data>
+
+    <data name="RideCompanyMismatch" xml:space="preserve">
+    <value>Het bedrijf van de rit komt niet overeen met de opgegeven companyId.</value>
+  </data>
+    <data name="CharterCompanyMismatch" xml:space="preserve">
+    <value>Het bedrijf van de charter komt niet overeen met de opgegeven companyId.</value>
+  </data>
+
+    <data name="ClientNotFound" xml:space="preserve">
+    <value>De opgegeven klant bestaat niet.</value>
+  </data>
+    <data name="ClientCompanyMismatch" xml:space="preserve">
+    <value>Het bedrijf van de klant komt niet overeen met de opgegeven companyId.</value>
+  </data>
+
+    <data name="CarNotFound" xml:space="preserve">
+    <value>De opgegeven auto bestaat niet.</value>
+  </data>
+    <data name="CarCompanyMismatch" xml:space="preserve">
+    <value>Het bedrijf van de auto komt niet overeen met de opgegeven companyId.</value>
+  </data>
 </root>

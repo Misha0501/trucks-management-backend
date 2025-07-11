@@ -24,4 +24,62 @@
     <data name="PartRideNotFound" xml:space="preserve">
         <value>Workday not found.</value>
     </data>
+    <data name="CompanyIdRequired" xml:space="preserve">
+        <value>companyId is required and cannot be empty</value>
+    </data>
+    <data name="InvalidCompanyIdFormat" xml:space="preserve">
+        <value>Invalid companyId format.</value>
+    </data>
+    <data name="InvalidDateFormat" xml:space="preserve">
+        <value>Invalid time format for Start or End.</value>
+    </data>
+    <data name="UserNotAuthenticated" xml:space="preserve">
+        <value>User not authenticated.</value>
+    </data>
+    <data name="FailedToCreatePartRide" xml:space="preserve">
+        <value>Failed to create workday and upload files.</value>
+    </data>
+    <data name="DriverNotRegistered" xml:space="preserve">
+    <value>You are not registered as a driver. Contact your administrator.</value>
+  </data>
+    <data name="DriversCreateOwnPartRides" xml:space="preserve">
+    <value>Drivers can only create PartRides for themselves.</value>
+  </data>
+    <data name="DriverCompanyAssociationMismatch" xml:space="preserve">
+    <value>You are not associated with this company.</value>
+  </data>
+    <data name="NoContactPersonProfile" xml:space="preserve">
+    <value>No contact person profile found. You are not authorized.</value>
+  </data>
+    <data name="NotAuthorizedCreatePartRideCompany" xml:space="preserve">
+    <value>You are not authorized to create a PartRide for this company.</value>
+  </data>
+
+    <data name="DriverNotFound" xml:space="preserve">
+    <value>The specified driver does not exist.</value>
+  </data>
+    <data name="DriverCompanyMismatch" xml:space="preserve">
+    <value>Driver's company does not match the provided companyId.</value>
+  </data>
+
+    <data name="RideCompanyMismatch" xml:space="preserve">
+    <value>Ride's company does not match the provided companyId.</value>
+  </data>
+    <data name="CharterCompanyMismatch" xml:space="preserve">
+    <value>Charter's company does not match the provided companyId.</value>
+  </data>
+
+    <data name="ClientNotFound" xml:space="preserve">
+    <value>The specified client does not exist.</value>
+  </data>
+    <data name="ClientCompanyMismatch" xml:space="preserve">
+    <value>Client's company does not match the provided companyId.</value>
+  </data>
+
+    <data name="CarNotFound" xml:space="preserve">
+    <value>The specified car does not exist.</value>
+  </data>
+    <data name="CarCompanyMismatch" xml:space="preserve">
+    <value>Car's company does not match the provided companyId.</value>
+  </data>
 </root>

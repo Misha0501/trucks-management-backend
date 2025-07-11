@@ -17,4 +17,10 @@
     <data name="PartRideNotFound" xml:space="preserve">
         <value>Работният ден не е намерен</value>
     </data>
+    <data name="ClientCompanyMismatch" xml:space="preserve">
+        <value />
+    </data>
+    <data name="CarNotFound" xml:space="preserve">
+        <value />
+    </data>
 </root>
