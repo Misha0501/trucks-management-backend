@@ -7,7 +7,7 @@ public static class GuidHelper
         if (string.IsNullOrWhiteSpace(input)) return null;
 
         if (!Guid.TryParse(input, out var parsed))
-            throw new ArgumentException($"Invalid GUID value '{input}' for parameter '{paramName}'.");
+            throw new ArgumentException(input, paramName);
 
         return parsed;
     }

@@ -100,7 +100,8 @@ public static class PartRideEndpoints
 
                     if (string.IsNullOrEmpty(userId))
                     {
-                        return ApiResponseFactory.Error(resourceLocalizer.Localize("UserNotAuthenticated"), StatusCodes.Status401Unauthorized);
+                        return ApiResponseFactory.Error(resourceLocalizer.Localize("UserNotAuthenticated"),
+                            StatusCodes.Status401Unauthorized);
                     }
 
                     bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
@@ -197,7 +198,10 @@ public static class PartRideEndpoints
                 }
                 catch (ArgumentException ex)
                 {
-                    return ApiResponseFactory.Error(ex.Message, StatusCodes.Status400BadRequest);
+                    return ApiResponseFactory.Error(
+                        resourceLocalizer.Localize("InvalidGuidValue", ex.Message),
+                        StatusCodes.Status400BadRequest
+                    );
                 }
                 catch (InvalidOperationException ex) when (ex.Message.StartsWith("Some files were not found"))
                 {
@@ -208,7 +212,8 @@ public static class PartRideEndpoints
                 {
                     await transaction.RollbackAsync();
                     Console.Error.WriteLine($"Error during PartRide creation: {ex.Message}");
-                    return ApiResponseFactory.Error(resourceLocalizer.Localize("FailedToCreatePartRide"), StatusCodes.Status500InternalServerError);
+                    return ApiResponseFactory.Error(resourceLocalizer.Localize("FailedToCreatePartRide"),
+                        StatusCodes.Status500InternalServerError);
                 }
             });
 
@@ -861,7 +866,7 @@ public static class PartRideEndpoints
                 ApplicationDbContext db,
                 UserManager<ApplicationUser> userManager,
                 ClaimsPrincipal currentUser
-                ) =>
+            ) =>
             {
                 try
                 {
@@ -893,7 +898,8 @@ public static class PartRideEndpoints
 
                     if (partRide == null)
                     {
-                        return ApiResponseFactory.Error(resourceLocalizer.Localize("PartRideNotFound"), StatusCodes.Status404NotFound);
+                        return ApiResponseFactory.Error(resourceLocalizer.Localize("PartRideNotFound"),
+                            StatusCodes.Status404NotFound);
                     }
 
                     var userId = userManager.GetUserId(currentUser);

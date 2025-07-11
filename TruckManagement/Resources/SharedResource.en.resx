@@ -82,4 +82,7 @@
     <data name="CarCompanyMismatch" xml:space="preserve">
     <value>Car's company does not match the provided companyId.</value>
   </data>
+    <data name="InvalidGuidValue" xml:space="preserve">
+        <value>Invalid GUID value ‘{0}’.</value>
+    </data>
 </root>

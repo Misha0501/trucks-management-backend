@@ -90,4 +90,7 @@
     <data name="CarCompanyMismatch" xml:space="preserve">
     <value>Het bedrijf van de auto komt niet overeen met de opgegeven companyId.</value>
   </data>
+    <data name="InvalidGuidValue" xml:space="preserve">
+        <value>Ongeldige GUID-waarde ‘{0}’.</value>
+    </data>
 </root>

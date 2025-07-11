@@ -5,13 +5,13 @@ public class SharedResource {}
 
 public interface IResourceLocalizer 
 {
-    string Localize(string key);
+    string Localize(string key, params object[] arguments);
 }
 
 public class ResourceLocalizer : IResourceLocalizer
 {
     private readonly IStringLocalizer _localizer;
-    
+
     public ResourceLocalizer(IStringLocalizerFactory factory)
     {
         var type = typeof(SharedResource);
@@ -19,8 +19,8 @@ public class ResourceLocalizer : IResourceLocalizer
         _localizer = factory.Create("SharedResource", assemblyName.Name!);
     }
 
-    public string Localize(string key)
+    public string Localize(string key, params object[] arguments)
     {
-        return _localizer[key];
+        return _localizer[key, arguments];
     }
 }
