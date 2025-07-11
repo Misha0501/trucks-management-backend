@@ -12,7 +12,9 @@ public static class FileUploadHelper
         IEnumerable<UploadFileRequest> uploads,
         string tmpRoot,
         string basePathCompanies, // e.g., "Storage/Companies"
-        ApplicationDbContext db)
+        ApplicationDbContext db,
+        IResourceLocalizer resourceLocalizer
+        )
     {
         var safeCompanyId = companyId.HasValue && companyId.Value != Guid.Empty
             ? companyId.Value.ToString()
@@ -26,8 +28,8 @@ public static class FileUploadHelper
         {
             var tmpFile = Directory.EnumerateFiles(tmpRoot, $"{upload.FileId}.*").FirstOrDefault();
             if (tmpFile is null)
-                throw new InvalidOperationException($"Some files were not found in temp storage for ID: {upload.FileId}");
-
+                throw new InvalidOperationException(resourceLocalizer.Localize("TempFileNotFound", upload.FileId));
+            
             var ext = Path.GetExtension(tmpFile);
             var relativePath = Path.Combine(relativeFolderPath, $"{upload.FileId}{ext}");
             var absolutePath = Path.Combine(absoluteFolderPath, $"{upload.FileId}{ext}");

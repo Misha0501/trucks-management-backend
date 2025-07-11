@@ -93,4 +93,37 @@
     <data name="InvalidGuidValue" xml:space="preserve">
         <value>Ongeldige GUID-waarde ‘{0}’.</value>
     </data>
+    <data name="InvalidPartRideIdFormat" xml:space="preserve">
+  <value>Ongeldig PartRide-ID-formaat.</value>
+</data>
+    <data name="PartRideInDisputeCannotEdit" xml:space="preserve">
+  <value>Deze werkdag staat in geschil en kan niet worden bewerkt tot het is opgelost.</value>
+</data>
+    <data name="DriversEditOwnPartRides" xml:space="preserve">
+  <value>Chauffeurs kunnen alleen hun eigen werkdagen bewerken.</value>
+</data>
+    <data name="NotAuthorizedForCompany" xml:space="preserve">
+  <value>U bent niet gemachtigd voor het opgegeven bedrijf.</value>
+</data>
+    <data name="RideNotFound" xml:space="preserve">
+  <value>De opgegeven rit bestaat niet.</value>
+</data>
+    <data name="CharterNotFound" xml:space="preserve">
+  <value>Het opgegeven charter bestaat niet.</value>
+</data>
+    <data name="HoursCodeIdRequired" xml:space="preserve">
+  <value>HoursCodeId is verplicht voor de berekening.</value>
+</data>
+    <data name="HoursCodeNotFound" xml:space="preserve">
+  <value>De opgegeven urencode bestaat niet.</value>
+</data>
+    <data name="HoursOptionNotFound" xml:space="preserve">
+  <value>De opgegeven urenoptie bestaat niet.</value>
+</data>
+    <data name="FailedToUpdatePartRide" xml:space="preserve">
+  <value>Er is een onverwachte fout opgetreden bij het bijwerken van de werkdag.</value>
+</data>
+<data name="TempFileNotFound" xml:space="preserve">
+  <value>Bestand niet gevonden in tijdelijke opslag voor ID: {0}.</value>
+</data>
 </root>

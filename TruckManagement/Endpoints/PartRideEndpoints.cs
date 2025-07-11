@@ -185,7 +185,7 @@ public static class PartRideEndpoints
                     var finalRoot = Path.Combine(env.ContentRootPath, cfg.Value.BasePathCompanies);
 
                     FileUploadHelper.MoveUploadsToPartRide(partRide.Id, partRide.CompanyId, newUploads, tmpRoot,
-                        finalRoot, db);
+                        finalRoot, db, resourceLocalizer);
 
                     await db.SaveChangesAsync(); // Save PartRideFile entries
 
@@ -226,7 +226,8 @@ public static class PartRideEndpoints
                 UserManager<ApplicationUser> userManager,
                 ClaimsPrincipal currentUser,
                 IWebHostEnvironment env,
-                IOptions<StorageOptions> cfg
+                IOptions<StorageOptions> cfg,
+                IResourceLocalizer resourceLocalizer
             ) =>
             {
                 using var transaction = await db.Database.BeginTransactionAsync();
@@ -236,7 +237,7 @@ public static class PartRideEndpoints
                     if (!Guid.TryParse(id, out Guid partRideGuid))
                     {
                         return ApiResponseFactory.Error(
-                            "Invalid PartRide ID format.",
+                            resourceLocalizer.Localize("InvalidPartRideIdFormat"),
                             StatusCodes.Status400BadRequest
                         );
                     }
@@ -248,7 +249,7 @@ public static class PartRideEndpoints
                     if (existingPartRide == null)
                     {
                         return ApiResponseFactory.Error(
-                            "PartRide not found.",
+                            resourceLocalizer.Localize("PartRideNotFound"),
                             StatusCodes.Status404NotFound
                         );
                     }
@@ -258,7 +259,7 @@ public static class PartRideEndpoints
                     if (string.IsNullOrEmpty(userId))
                     {
                         return ApiResponseFactory.Error(
-                            "User not authenticated.",
+                            resourceLocalizer.Localize("UserNotAuthenticated"),
                             StatusCodes.Status401Unauthorized
                         );
                     }
@@ -267,7 +268,7 @@ public static class PartRideEndpoints
                     if (existingPartRide.Status == PartRideStatus.Dispute)
                     {
                         return ApiResponseFactory.Error(
-                            "This PartRide is currently under dispute and cannot be edited until the dispute is resolved.",
+                            resourceLocalizer.Localize("PartRideInDisputeCannotEdit"),
                             StatusCodes.Status409Conflict
                         );
                     }
@@ -285,7 +286,7 @@ public static class PartRideEndpoints
                         if (driverEntity == null)
                         {
                             return ApiResponseFactory.Error(
-                                "You are not registered as a driver. Contact your administrator.",
+                                resourceLocalizer.Localize("NoContactPersonProfile"),
                                 StatusCodes.Status403Forbidden
                             );
                         }
@@ -295,7 +296,7 @@ public static class PartRideEndpoints
                             existingPartRide.DriverId.Value != driverEntity.Id)
                         {
                             return ApiResponseFactory.Error(
-                                "Drivers can only edit their own PartRides.",
+                                resourceLocalizer.Localize("DriversEditOwnPartRides"),
                                 StatusCodes.Status403Forbidden
                             );
                         }
@@ -328,7 +329,7 @@ public static class PartRideEndpoints
                         if (contactPerson == null)
                         {
                             return ApiResponseFactory.Error(
-                                "No contact person profile found. You are not authorized.",
+                                resourceLocalizer.Localize("NoContactPersonProfile"),
                                 StatusCodes.Status403Forbidden
                             );
                         }
@@ -342,7 +343,7 @@ public static class PartRideEndpoints
                         if (currentCompanyId != Guid.Empty && !associatedCompanyIds.Contains(currentCompanyId))
                         {
                             return ApiResponseFactory.Error(
-                                "You are not authorized for the specified company.",
+                                resourceLocalizer.Localize("NotAuthorizedForCompany"),
                                 StatusCodes.Status403Forbidden
                             );
                         }
@@ -361,7 +362,7 @@ public static class PartRideEndpoints
                     if (isDriver && newDriverId.HasValue && newDriverId.Value != existingPartRide.DriverId)
                     {
                         return ApiResponseFactory.Error(
-                            "Drivers cannot change the PartRide's DriverId to another user.",
+                            resourceLocalizer.Localize("DriversEditOwnPartRides"),
                             StatusCodes.Status403Forbidden
                         );
                     }
@@ -375,7 +376,7 @@ public static class PartRideEndpoints
                         if (rideEntity == null)
                         {
                             return ApiResponseFactory.Error(
-                                "The specified ride does not exist.",
+                                resourceLocalizer.Localize("RideNotFound"),
                                 StatusCodes.Status400BadRequest
                             );
                         }
@@ -383,7 +384,7 @@ public static class PartRideEndpoints
                         if (rideEntity.CompanyId != currentCompanyId)
                         {
                             return ApiResponseFactory.Error(
-                                "Ride's company does not match the provided companyId.",
+                                resourceLocalizer.Localize("RideCompanyMismatch"),
                                 StatusCodes.Status400BadRequest
                             );
                         }
@@ -397,7 +398,7 @@ public static class PartRideEndpoints
                         if (carEntity == null)
                         {
                             return ApiResponseFactory.Error(
-                                "The specified car does not exist.",
+                                resourceLocalizer.Localize("CarNotFound"),
                                 StatusCodes.Status400BadRequest
                             );
                         }
@@ -405,7 +406,7 @@ public static class PartRideEndpoints
                         if (carEntity.CompanyId != currentCompanyId)
                         {
                             return ApiResponseFactory.Error(
-                                "Car's company does not match the provided companyId.",
+                                resourceLocalizer.Localize("CarCompanyMismatch"),
                                 StatusCodes.Status400BadRequest
                             );
                         }
@@ -419,7 +420,7 @@ public static class PartRideEndpoints
                         if (driverEntity == null)
                         {
                             return ApiResponseFactory.Error(
-                                "The specified driver does not exist.",
+                                resourceLocalizer.Localize("DriverNotFound"),
                                 StatusCodes.Status400BadRequest
                             );
                         }
@@ -427,7 +428,7 @@ public static class PartRideEndpoints
                         if (driverEntity.CompanyId.HasValue && driverEntity.CompanyId.Value != currentCompanyId)
                         {
                             return ApiResponseFactory.Error(
-                                "Driver's company does not match the provided companyId.",
+                                resourceLocalizer.Localize("DriverCompanyMismatch"),
                                 StatusCodes.Status400BadRequest
                             );
                         }
@@ -441,7 +442,7 @@ public static class PartRideEndpoints
                         if (charterEntity == null)
                         {
                             return ApiResponseFactory.Error(
-                                "The specified charter does not exist.",
+                                resourceLocalizer.Localize("CharterNotFound"),
                                 StatusCodes.Status400BadRequest
                             );
                         }
@@ -449,7 +450,7 @@ public static class PartRideEndpoints
                         if (charterEntity.CompanyId != currentCompanyId)
                         {
                             return ApiResponseFactory.Error(
-                                "Charter's company does not match the provided companyId.",
+                                resourceLocalizer.Localize("CharterCompanyMismatch"),
                                 StatusCodes.Status400BadRequest
                             );
                         }
@@ -463,7 +464,7 @@ public static class PartRideEndpoints
                         if (clientEntity == null)
                         {
                             return ApiResponseFactory.Error(
-                                "The specified client does not exist.",
+                                resourceLocalizer.Localize("ClientNotFound"),
                                 StatusCodes.Status400BadRequest
                             );
                         }
@@ -471,7 +472,7 @@ public static class PartRideEndpoints
                         if (clientEntity.CompanyId != currentCompanyId)
                         {
                             return ApiResponseFactory.Error(
-                                "Client's company does not match the provided companyId.",
+                                resourceLocalizer.Localize("ClientCompanyMismatch"),
                                 StatusCodes.Status400BadRequest
                             );
                         }
@@ -484,7 +485,7 @@ public static class PartRideEndpoints
                         if (hoursCodeEntity == null)
                         {
                             return ApiResponseFactory.Error(
-                                "The specified hours code does not exist.",
+                                resourceLocalizer.Localize("HoursCodeNotFound"),
                                 StatusCodes.Status400BadRequest
                             );
                         }
@@ -497,7 +498,7 @@ public static class PartRideEndpoints
                         if (hoursOptionEntity == null)
                         {
                             return ApiResponseFactory.Error(
-                                "The specified hours option does not exist.",
+                                resourceLocalizer.Localize("HoursOptionNotFound"),
                                 StatusCodes.Status400BadRequest
                             );
                         }
@@ -523,7 +524,7 @@ public static class PartRideEndpoints
                     catch (FormatException ex)
                     {
                         return ApiResponseFactory.Error(
-                            $"Invalid time format for Start or End: {ex.Message}",
+                            resourceLocalizer.Localize("InvalidDateFormat"),
                             StatusCodes.Status400BadRequest
                         );
                     }
@@ -557,7 +558,7 @@ public static class PartRideEndpoints
                     if (!existingPartRide.HoursCodeId.HasValue)
                     {
                         return ApiResponseFactory.Error(
-                            "HoursCodeId is required for calculation.",
+                            resourceLocalizer.Localize("HoursCodeIdRequired"),
                             StatusCodes.Status400BadRequest
                         );
                     }
@@ -596,7 +597,7 @@ public static class PartRideEndpoints
                     var finalRoot = Path.Combine(env.ContentRootPath, cfg.Value.BasePathCompanies);
 
                     FileUploadHelper.MoveUploadsToPartRide(existingPartRide.Id, existingPartRide.CompanyId,
-                        newUploads, tmpRoot, finalRoot, db);
+                        newUploads, tmpRoot, finalRoot, db, resourceLocalizer);
 
                     if (request.FileIdsToDelete?.Any() == true)
                     {
@@ -615,7 +616,10 @@ public static class PartRideEndpoints
                 }
                 catch (ArgumentException ex)
                 {
-                    return ApiResponseFactory.Error("Invalid GUID value: " + ex.Message, StatusCodes.Status400BadRequest);
+                    return ApiResponseFactory.Error(
+                        resourceLocalizer.Localize("InvalidGuidValue", ex.Message),
+                        StatusCodes.Status400BadRequest
+                    );
                 }
                 catch (InvalidOperationException ex) when (ex.Message.StartsWith("Some files were not found"))
                 {
@@ -627,7 +631,7 @@ public static class PartRideEndpoints
                     await transaction.RollbackAsync();
                     Console.Error.WriteLine($"Error updating PartRide: {ex.Message}");
                     return ApiResponseFactory.Error(
-                        "An unexpected error occurred while updating the PartRide.",
+                        resourceLocalizer.Localize("FailedToUpdatePartRide"),
                         StatusCodes.Status500InternalServerError
                     );
                 }
