@@ -26,7 +26,8 @@ namespace TruckManagement.Routes
                     UserManager<ApplicationUser> userManager,
                     ClaimsPrincipal currentUser,
                     [FromQuery] int pageNumber = 1,
-                    [FromQuery] int pageSize = 10
+                    [FromQuery] int pageSize = 10,
+                    [FromQuery] string? search = null
                 ) =>
                 {
                     // 1. Retrieve the current user's ID
@@ -111,6 +112,14 @@ namespace TruckManagement.Routes
                             companyIds.Contains(c.CompanyId) || clientIds.Contains(c.Id));
                     }
                     // If globalAdmin, no additional filtering is needed
+
+                    // Optional name search
+                    if (!string.IsNullOrWhiteSpace(search))
+                    {
+                        // Case‑insensitive contains; use ILIKE for PostgreSQL
+                        clientsQuery = clientsQuery.Where(c =>
+                            EF.Functions.ILike(c.Name, $"%{search.Trim()}%"));
+                    }
 
                     // 6. Get total client count after filtering for pagination
                     var totalClients = await clientsQuery.CountAsync();
