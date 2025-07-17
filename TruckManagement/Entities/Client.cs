@@ -22,5 +22,6 @@ namespace TruckManagement.Entities
         public Company Company { get; set; } = default!;
         // Navigation Properties
         public ICollection<ContactPersonClientCompany> ContactPersonClientCompanies { get; set; } = new List<ContactPersonClientCompany>();
+        public ICollection<PartRide> PartRides { get; set; } = new List<PartRide>();
     }
 }

@@ -129,6 +129,9 @@ namespace TruckManagement.Routes
                     var pagedClients = await clientsQuery
                         .AsNoTracking()
                         .Include(c => c.Company)
+                        .Include(c => c.PartRides.OrderByDescending(pr => pr.Date).Take(1))
+                            .ThenInclude(pr => pr.Driver)
+                                .ThenInclude(d => d.User)
                         .OrderBy(c => c.Name)
                         .Skip((pageNumber - 1) * pageSize)
                         .Take(pageSize)
@@ -145,6 +148,35 @@ namespace TruckManagement.Routes
                             Email = c.Email,
                             Remark = c.Remark,
                             IsApproved = c.IsApproved,
+                            LastWorkday = c.PartRides
+                                .OrderByDescending(pr => pr.Date)
+                                .Select(pr => new PartRideDto
+                                {
+                                    Id = pr.Id,
+                                    Date = pr.Date,
+                                    Start = pr.Start,
+                                    End = pr.End,
+                                    Driver = pr.Driver == null
+                                        ? null
+                                        : new DriverDto
+                                        {
+                                            DriverId = pr.Driver.Id,
+                                            FirstName = pr.Driver.User.FirstName,
+                                            LastName = pr.Driver.User.LastName
+                                        }
+                                })
+                                .FirstOrDefault(),
+                            LastDriver = c.PartRides
+                                .OrderByDescending(pr => pr.Date)
+                                .Select(pr => pr.Driver == null
+                                    ? null
+                                    : new DriverDto
+                                    {
+                                        DriverId = pr.Driver.Id,
+                                        FirstName = pr.Driver.User.FirstName,
+                                        LastName = pr.Driver.User.LastName
+                                    })
+                                .FirstOrDefault(),
                             Company = new CompanyDto
                             {
                                 Id = c.Company.Id,

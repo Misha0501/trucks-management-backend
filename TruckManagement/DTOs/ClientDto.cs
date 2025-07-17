@@ -17,5 +17,8 @@ namespace TruckManagement.DTOs
 
         // Include Company details
         public CompanyDto Company { get; set; } = default!;
+
+        public PartRideDto? LastWorkday { get; set; }
+        public DriverDto? LastDriver { get; set; }
     }
 }
