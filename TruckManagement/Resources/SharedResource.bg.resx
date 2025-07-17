@@ -6,21 +6,109 @@
         <value>1.3</value>
     </resheader>
     <resheader name="reader">
-        <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+        <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=2.0.0.0, Culture=neutral,
+            PublicKeyToken=b77a5c561934e089
+        </value>
     </resheader>
     <resheader name="writer">
-        <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+        <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral,
+            PublicKeyToken=b77a5c561934e089
+        </value>
     </resheader>
     <data name="Test" xml:space="preserve">
-        <value>Test bg</value>
-    </data>
+  <value>тест бг</value>
+</data>
     <data name="PartRideNotFound" xml:space="preserve">
-        <value>Работният ден не е намерен</value>
-    </data>
+  <value>Работният ден не е намерен.</value>
+</data>
+    <data name="CompanyIdRequired" xml:space="preserve">
+  <value>Полето companyId е задължително и не може да бъде празно.</value>
+</data>
+    <data name="InvalidCompanyIdFormat" xml:space="preserve">
+  <value>Невалиден формат на companyId.</value>
+</data>
+    <data name="InvalidDateFormat" xml:space="preserve">
+  <value>Невалиден формат на време за начало или край.</value>
+</data>
+    <data name="UserNotAuthenticated" xml:space="preserve">
+  <value>Потребителят не е автентикиран.</value>
+</data>
+    <data name="FailedToCreatePartRide" xml:space="preserve">
+  <value>Неуспешно създаване на работен ден и качване на файлове.</value>
+</data>
+    <data name="DriverNotRegistered" xml:space="preserve">
+  <value>Не сте регистриран като шофьор. Свържете се с вашия администратор.</value>
+</data>
+    <data name="DriversCreateOwnPartRides" xml:space="preserve">
+  <value>Шофьорите могат да създават работни дни само за себе си.</value>
+</data>
+    <data name="DriverCompanyAssociationMismatch" xml:space="preserve">
+  <value>Не сте асоцииран с тази компания.</value>
+</data>
+    <data name="NoContactPersonProfile" xml:space="preserve">
+  <value>Не е намерен профил на контактно лице. Нямате разрешение за достъп.</value>
+</data>
+    <data name="NotAuthorizedCreatePartRideCompany" xml:space="preserve">
+  <value>Нямате разрешение да създавате работен ден за тази компания.</value>
+</data>
+    <data name="DriverNotFound" xml:space="preserve">
+  <value>Посоченият шофьор не съществува.</value>
+</data>
+    <data name="DriverCompanyMismatch" xml:space="preserve">
+  <value>Компанията на шофьора не съвпада с подадения companyId.</value>
+</data>
+    <data name="RideCompanyMismatch" xml:space="preserve">
+  <value>Компанията на пътуването не съвпада с подадения companyId.</value>
+</data>
+    <data name="CharterCompanyMismatch" xml:space="preserve">
+  <value>Компанията на чартъра не съвпада с подадения companyId.</value>
+</data>
+    <data name="ClientNotFound" xml:space="preserve">
+  <value>Посоченият клиент не съществува.</value>
+</data>
     <data name="ClientCompanyMismatch" xml:space="preserve">
-        <value />
-    </data>
+  <value>Компанията на клиента не съвпада с подадения companyId.</value>
+</data>
     <data name="CarNotFound" xml:space="preserve">
-        <value />
-    </data>
+  <value>Посоченият автомобил не съществува.</value>
+</data>
+    <data name="CarCompanyMismatch" xml:space="preserve">
+  <value>Компанията на автомобила не съвпада с подадения companyId.</value>
+</data>
+    <data name="InvalidGuidValue" xml:space="preserve">
+  <value>Невалидна стойност на GUID: ‘{0}’.</value>
+</data>
+    <data name="InvalidPartRideIdFormat" xml:space="preserve">
+  <value>Невалиден формат на PartRide ID.</value>
+</data>
+    <data name="PartRideInDisputeCannotEdit" xml:space="preserve">
+  <value>Този работен ден в момента е в спор и не може да бъде редактиран, докато не бъде решен.</value>
+</data>
+    <data name="DriversEditOwnPartRides" xml:space="preserve">
+  <value>Шофьорите могат да редактират само своите работни дни.</value>
+</data>
+    <data name="NotAuthorizedForCompany" xml:space="preserve">
+  <value>Нямате разрешение за посочената компания.</value>
+</data>
+    <data name="RideNotFound" xml:space="preserve">
+  <value>Посоченото пътуване не съществува.</value>
+</data>
+    <data name="CharterNotFound" xml:space="preserve">
+  <value>Посоченият чартър не съществува.</value>
+</data>
+    <data name="HoursCodeIdRequired" xml:space="preserve">
+  <value>Полето HoursCodeId е задължително за изчисления.</value>
+</data>
+    <data name="HoursCodeNotFound" xml:space="preserve">
+  <value>Посоченият код за часове не съществува.</value>
+</data>
+    <data name="HoursOptionNotFound" xml:space="preserve">
+  <value>Посочената опция за часове не съществува.</value>
+</data>
+    <data name="FailedToUpdatePartRide" xml:space="preserve">
+  <value>Възникна неочаквана грешка при обновяване на работния ден.</value>
+</data>
+    <data name="TempFileNotFound" xml:space="preserve">
+  <value>Файлът не беше намерен във временната директория за ID: {0}.</value>
+</data>
 </root>
