@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TruckManagement.Data;
+using TruckManagement.DTOs;
 using TruckManagement.Entities;
 using TruckManagement.Helpers;
 
@@ -93,10 +94,18 @@ public static class CompanyEndpoints
                     .OrderBy(c => c.Name)
                     .Skip((pageNumber - 1) * pageSize)
                     .Take(pageSize)
-                    .Select(c => new
+                    .Select(c => new CompanyDto
                     {
-                        c.Id,
-                        c.Name
+                        Id = c.Id,
+                        Name = c.Name,
+                        Address = c.Address,
+                        Postcode = c.Postcode,
+                        City = c.City,
+                        Country = c.Country,
+                        PhoneNumber = c.PhoneNumber,
+                        Email = c.Email,
+                        Remark = c.Remark,
+                        IsApproved = c.IsApproved
                     })
                     .ToListAsync();
 
@@ -223,6 +232,13 @@ public static class CompanyEndpoints
                 {
                     company.Id,
                     company.Name,
+                    company.Address,
+                    company.Postcode,
+                    company.City,
+                    company.Country,
+                    company.PhoneNumber,
+                    company.Email,
+                    company.Remark,
                     company.IsApproved,
                     company.IsDeleted,
                     Drivers = drivers,
@@ -240,7 +256,7 @@ public static class CompanyEndpoints
             [Authorize(Roles = "globalAdmin, customerAdmin")]
             async (
                 HttpContext httpContext,
-                [FromBody] Company newCompany,
+                [FromBody] CreateCompanyRequest request,
                 ApplicationDbContext db,
                 UserManager<ApplicationUser> userManager
             ) =>
@@ -282,8 +298,19 @@ public static class CompanyEndpoints
                     }
 
                     // 4️⃣ Create the new company
-                    newCompany.Id = Guid.NewGuid();
-                    newCompany.IsApproved = isGlobalAdmin; // Only global admins can auto-approve
+                    var newCompany = new Company
+                    {
+                        Id = Guid.NewGuid(),
+                        Name = request.Name,
+                        Address = request.Address,
+                        Postcode = request.Postcode,
+                        City = request.City,
+                        Country = request.Country,
+                        PhoneNumber = request.PhoneNumber,
+                        Email = request.Email,
+                        Remark = request.Remark,
+                        IsApproved = isGlobalAdmin // Only global admins can auto-approve
+                    };
 
                     db.Companies.Add(newCompany);
                     await db.SaveChangesAsync();
@@ -306,12 +333,19 @@ public static class CompanyEndpoints
                     // 6️⃣ Commit transaction & return filtered response
                     await transaction.CommitAsync();
 
-                    // Return a **DTO** (to avoid infinite recursion)
-                    var response = new
+                    // Return a **CompanyDto** (to avoid infinite recursion)
+                    var response = new CompanyDto
                     {
-                        newCompany.Id,
-                        newCompany.Name,
-                        newCompany.IsApproved
+                        Id = newCompany.Id,
+                        Name = newCompany.Name,
+                        Address = newCompany.Address,
+                        Postcode = newCompany.Postcode,
+                        City = newCompany.City,
+                        Country = newCompany.Country,
+                        PhoneNumber = newCompany.PhoneNumber,
+                        Email = newCompany.Email,
+                        Remark = newCompany.Remark,
+                        IsApproved = newCompany.IsApproved
                     };
 
                     return ApiResponseFactory.Success(response, StatusCodes.Status201Created);
@@ -337,7 +371,7 @@ public static class CompanyEndpoints
             async (
                 Guid id,
                 ClaimsPrincipal user,
-                [FromBody] Company updatedCompany,
+                [FromBody] UpdateCompanyRequest request,
                 ApplicationDbContext db,
                 UserManager<ApplicationUser> userManager
             ) =>
@@ -360,45 +394,56 @@ public static class CompanyEndpoints
                     return ApiResponseFactory.Error("Company not found.", StatusCodes.Status404NotFound);
                 }
 
-                // Allow global admins to update the company
-                if (isGlobalAdmin)
-                {
-                    existing.Name = updatedCompany.Name;
-                    await db.SaveChangesAsync();
-                    return ApiResponseFactory.Success(new
-                    {
-                        existing.Id,
-                        existing.Name
-                    });
-                }
-
                 // For non-global admins, check if they are an associated contact person
-                var contactPerson = await db.ContactPersons
-                    .Where(cp => cp.AspNetUserId == currentUserId)
-                    .Select(cp => new
-                    {
-                        cp.Id,
-                        CompanyIds = db.ContactPersonClientCompanies
-                            .Where(cpc => cpc.ContactPersonId == cp.Id && cpc.CompanyId.HasValue)
-                            .Select(cpc => cpc.CompanyId.Value)
-                            .ToList()
-                    })
-                    .FirstOrDefaultAsync();
-
-                if (contactPerson == null || !contactPerson.CompanyIds.Contains(id))
+                if (!isGlobalAdmin)
                 {
-                    return ApiResponseFactory.Error("Unauthorized to update this company.",
-                        StatusCodes.Status403Forbidden);
+                    var contactPerson = await db.ContactPersons
+                        .Where(cp => cp.AspNetUserId == currentUserId)
+                        .Select(cp => new
+                        {
+                            cp.Id,
+                            CompanyIds = db.ContactPersonClientCompanies
+                                .Where(cpc => cpc.ContactPersonId == cp.Id && cpc.CompanyId.HasValue)
+                                .Select(cpc => cpc.CompanyId.Value)
+                                .ToList()
+                        })
+                        .FirstOrDefaultAsync();
+
+                    if (contactPerson == null || !contactPerson.CompanyIds.Contains(id))
+                    {
+                        return ApiResponseFactory.Error("Unauthorized to update this company.",
+                            StatusCodes.Status403Forbidden);
+                    }
                 }
 
-                // Proceed with updating the company
-                existing.Name = updatedCompany.Name;
+                // Update all company fields
+                existing.Name = request.Name;
+                existing.Address = request.Address;
+                existing.Postcode = request.Postcode;
+                existing.City = request.City;
+                existing.Country = request.Country;
+                existing.PhoneNumber = request.PhoneNumber;
+                existing.Email = request.Email;
+                existing.Remark = request.Remark;
+
                 await db.SaveChangesAsync();
-                return ApiResponseFactory.Success(new
+
+                // Return updated company as DTO
+                var response = new CompanyDto
                 {
-                    existing.Id,
-                    existing.Name
-                });
+                    Id = existing.Id,
+                    Name = existing.Name,
+                    Address = existing.Address,
+                    Postcode = existing.Postcode,
+                    City = existing.City,
+                    Country = existing.Country,
+                    PhoneNumber = existing.PhoneNumber,
+                    Email = existing.Email,
+                    Remark = existing.Remark,
+                    IsApproved = existing.IsApproved
+                };
+
+                return ApiResponseFactory.Success(response);
             });
 
 
@@ -570,11 +615,18 @@ public static class CompanyEndpoints
                 {
                     var pendingCompanies = await db.Companies.IgnoreQueryFilters()
                         .Where(c => !c.IsApproved && !c.IsDeleted)
-                        .Select(c => new
+                        .Select(c => new CompanyDto
                         {
-                            c.Id,
-                            c.Name,
-                            c.IsApproved
+                            Id = c.Id,
+                            Name = c.Name,
+                            Address = c.Address,
+                            Postcode = c.Postcode,
+                            City = c.City,
+                            Country = c.Country,
+                            PhoneNumber = c.PhoneNumber,
+                            Email = c.Email,
+                            Remark = c.Remark,
+                            IsApproved = c.IsApproved
                         })
                         .ToListAsync();
 
