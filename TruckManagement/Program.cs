@@ -107,5 +107,6 @@ app.MapEmployeeContractsEndpoints();
 app.MapFileUploadsEndpoints();
 app.MapPartRideFilesEndpoints();
 app.MapDisputeEndpoints();
+app.MapWeekToSubmitEndpoints();
 
 app.Run();
