@@ -68,6 +68,9 @@ public static class WeeksToSubmitEndpoints
                     query = query.Where(w =>
                         w.PartRides.Any(pr => pr.CompanyId.HasValue && allowedCompanyIds.Contains(pr.CompanyId.Value)));
 
+                // Only include weeks that are in PendingAdmin status
+                query = query.Where(w => w.Status == WeekApprovalStatus.PendingAdmin);
+
                 if (!string.IsNullOrWhiteSpace(status))
                 {
                     status = status.ToLowerInvariant();
