@@ -12,5 +12,8 @@ namespace TruckManagement.DTOs
         public string? Email { get; set; }
         public string? Remark { get; set; }
         public bool IsApproved { get; set; }
+        
+        // Include associated drivers
+        public List<DriverDto> Drivers { get; set; } = new List<DriverDto>();
     }
 }

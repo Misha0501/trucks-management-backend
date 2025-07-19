@@ -88,9 +88,11 @@ public static class CompanyEndpoints
                 var totalCompanies = await companiesQuery.CountAsync();
                 var totalPages = (int)Math.Ceiling((double)totalCompanies / pageSize);
 
-                // 7. Apply pagination and select necessary fields
+                // 7. Apply pagination and select necessary fields with drivers
                 var pagedCompanies = await companiesQuery
                     .AsNoTracking()
+                    .Include(c => c.Drivers)
+                        .ThenInclude(d => d.User)
                     .OrderBy(c => c.Name)
                     .Skip((pageNumber - 1) * pageSize)
                     .Take(pageSize)
@@ -105,7 +107,13 @@ public static class CompanyEndpoints
                         PhoneNumber = c.PhoneNumber,
                         Email = c.Email,
                         Remark = c.Remark,
-                        IsApproved = c.IsApproved
+                        IsApproved = c.IsApproved,
+                        Drivers = c.Drivers.Select(d => new DriverDto
+                        {
+                            DriverId = d.Id,
+                            FirstName = d.User.FirstName,
+                            LastName = d.User.LastName
+                        }).ToList()
                     })
                     .ToListAsync();
 
@@ -345,7 +353,8 @@ public static class CompanyEndpoints
                         PhoneNumber = newCompany.PhoneNumber,
                         Email = newCompany.Email,
                         Remark = newCompany.Remark,
-                        IsApproved = newCompany.IsApproved
+                        IsApproved = newCompany.IsApproved,
+                        Drivers = new List<DriverDto>() // New company has no drivers yet
                     };
 
                     return ApiResponseFactory.Success(response, StatusCodes.Status201Created);
@@ -428,19 +437,31 @@ public static class CompanyEndpoints
 
                 await db.SaveChangesAsync();
 
+                // Reload company with drivers for response
+                var updatedCompany = await db.Companies
+                    .Include(c => c.Drivers)
+                        .ThenInclude(d => d.User)
+                    .FirstOrDefaultAsync(c => c.Id == id);
+
                 // Return updated company as DTO
                 var response = new CompanyDto
                 {
-                    Id = existing.Id,
-                    Name = existing.Name,
-                    Address = existing.Address,
-                    Postcode = existing.Postcode,
-                    City = existing.City,
-                    Country = existing.Country,
-                    PhoneNumber = existing.PhoneNumber,
-                    Email = existing.Email,
-                    Remark = existing.Remark,
-                    IsApproved = existing.IsApproved
+                    Id = updatedCompany.Id,
+                    Name = updatedCompany.Name,
+                    Address = updatedCompany.Address,
+                    Postcode = updatedCompany.Postcode,
+                    City = updatedCompany.City,
+                    Country = updatedCompany.Country,
+                    PhoneNumber = updatedCompany.PhoneNumber,
+                    Email = updatedCompany.Email,
+                    Remark = updatedCompany.Remark,
+                    IsApproved = updatedCompany.IsApproved,
+                    Drivers = updatedCompany.Drivers.Select(d => new DriverDto
+                    {
+                        DriverId = d.Id,
+                        FirstName = d.User.FirstName,
+                        LastName = d.User.LastName
+                    }).ToList()
                 };
 
                 return ApiResponseFactory.Success(response);
@@ -615,6 +636,8 @@ public static class CompanyEndpoints
                 {
                     var pendingCompanies = await db.Companies.IgnoreQueryFilters()
                         .Where(c => !c.IsApproved && !c.IsDeleted)
+                        .Include(c => c.Drivers)
+                            .ThenInclude(d => d.User)
                         .Select(c => new CompanyDto
                         {
                             Id = c.Id,
@@ -626,7 +649,13 @@ public static class CompanyEndpoints
                             PhoneNumber = c.PhoneNumber,
                             Email = c.Email,
                             Remark = c.Remark,
-                            IsApproved = c.IsApproved
+                            IsApproved = c.IsApproved,
+                            Drivers = c.Drivers.Select(d => new DriverDto
+                            {
+                                DriverId = d.Id,
+                                FirstName = d.User.FirstName,
+                                LastName = d.User.LastName
+                            }).ToList()
                         })
                         .ToListAsync();
 
