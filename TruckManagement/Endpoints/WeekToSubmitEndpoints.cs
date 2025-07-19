@@ -116,17 +116,21 @@ public static class WeeksToSubmitEndpoints
                                     ? "HasPending"
                                     : "Unknown",
                         PartRideCount = w.PartRides.Count,
-                        TotalHours = Math.Round(w.PartRides.Sum(pr => pr.DecimalHours ?? 0), 2),
+                        TotalHours = Math.Round(w.PartRides
+                            .Where(pr => pr.Status != PartRideStatus.Rejected)
+                            .Sum(pr => pr.DecimalHours ?? 0), 2),
                         PendingAdminCount = w.PartRides.Count(pr => pr.Status == PartRideStatus.PendingAdmin),
                         DisputeCount = w.PartRides.Count(pr => pr.Status == PartRideStatus.Dispute),
                         ForecastedEarning = Math.Round(
-                            w.PartRides.Sum(pr =>
-                                pr.NightAllowance +
-                                pr.KilometerReimbursement +
-                                pr.ConsignmentFee +
-                                pr.VariousCompensation +
-                                pr.TaxFreeCompensation
-                            ), 2)
+                            w.PartRides
+                                .Where(pr => pr.Status != PartRideStatus.Rejected)
+                                .Sum(pr =>
+                                    pr.NightAllowance +
+                                    pr.KilometerReimbursement +
+                                    pr.ConsignmentFee +
+                                    pr.VariousCompensation +
+                                    pr.TaxFreeCompensation
+                                ), 2)
                     })
                     .ToListAsync();
 
