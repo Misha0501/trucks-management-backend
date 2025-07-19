@@ -49,14 +49,16 @@ namespace TruckManagement.Entities
         public Charter? Charter { get; set; } = default!;
         public double CorrectionTotalHours { get; set; }
         public double? NumberOfHours { get; set; }
-        public double TaxFreeCompensation { get; set; }
         public double StandOver { get; set; }
+        // Compensations
         public double NightAllowance { get; set; }
         public double KilometerReimbursement { get; set; }
         public double ConsignmentFee { get; set; }
+        public double TaxFreeCompensation { get; set; }
+        public double VariousCompensation { get; set; }
+        // Compensations end
         public double SaturdayHours { get; set; }
         public double SundayHolidayHours { get; set; }
-        public double VariousCompensation { get; set; }
         // HoursOption reference
         public Guid? HoursOptionId { get; set; }
         public HoursOption? HoursOption { get; set; }
