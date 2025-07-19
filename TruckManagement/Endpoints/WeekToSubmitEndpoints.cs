@@ -106,13 +106,10 @@ public static class WeeksToSubmitEndpoints
                         },
                         SummaryStatus = w.PartRides.Any(pr => pr.Status == PartRideStatus.Dispute)
                             ? "HasDisputes"
-                            :
-                            w.PartRides.All(pr =>
+                            : w.PartRides.All(pr =>
                                 pr.Status == PartRideStatus.Accepted || pr.Status == PartRideStatus.Rejected)
-                                ?
-                                "AllApprovedOrRejected"
-                                :
-                                w.PartRides.Any(pr => pr.Status == PartRideStatus.PendingAdmin)
+                                ? "AllApprovedOrRejected"
+                                : w.PartRides.Any(pr => pr.Status == PartRideStatus.PendingAdmin)
                                     ? "HasPending"
                                     : "Unknown",
                         PartRideCount = w.PartRides.Count,
@@ -124,7 +121,7 @@ public static class WeeksToSubmitEndpoints
                                 pr.NightAllowance +
                                 pr.KilometerReimbursement +
                                 pr.ConsignmentFee +
-                                pr.VariousCompensation + 
+                                pr.VariousCompensation +
                                 pr.TaxFreeCompensation
                             ), 2)
                     })
@@ -139,7 +136,7 @@ public static class WeeksToSubmitEndpoints
                     data = weeks
                 });
             });
-        
+
         app.MapGet(
             "/weeks-to-submit/{id}",
             [Authorize(Roles = "globalAdmin, customerAdmin")]
@@ -239,6 +236,87 @@ public static class WeeksToSubmitEndpoints
                 };
 
                 return ApiResponseFactory.Success(result);
+            });
+
+        app.MapPut(
+            "/weeks-to-submit/{id}/allow-driver",
+            [Authorize(Roles = "globalAdmin, customerAdmin")]
+            async (
+                string id,
+                ApplicationDbContext db,
+                UserManager<ApplicationUser> userManager,
+                ClaimsPrincipal currentUser) =>
+            {
+                /* ---------- validate id ---------- */
+                if (!Guid.TryParse(id, out var weekId))
+                    return ApiResponseFactory.Error("Invalid weekApproval ID format.", StatusCodes.Status400BadRequest);
+
+                /* ---------- fetch object ---------- */
+                var week = await db.WeekApprovals
+                    .Include(w => w.PartRides)
+                    .FirstOrDefaultAsync(w => w.Id == weekId);
+
+                if (week is null)
+                    return ApiResponseFactory.Error("WeekApproval not found.", StatusCodes.Status404NotFound);
+
+                /* ---------- authorisation ---------- */
+                var userId = userManager.GetUserId(currentUser)!;
+                bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+
+                if (!isGlobalAdmin)
+                {
+                    // contact-person must own at least one company in the week
+                    var contact = await db.ContactPersons
+                        .Include(c => c.ContactPersonClientCompanies)
+                        .SingleOrDefaultAsync(c => c.AspNetUserId == userId && !c.IsDeleted);
+
+                    if (contact is null)
+                        return ApiResponseFactory.Error("Not authorised.", StatusCodes.Status403Forbidden);
+
+                    var allowedCompanyIds = contact.ContactPersonClientCompanies
+                        .Select(cc => cc.CompanyId)
+                        .Where(id => id.HasValue)
+                        .Select(id => id!.Value)
+                        .ToHashSet();
+
+                    bool owned = week.PartRides.Any(pr =>
+                        pr.CompanyId.HasValue && allowedCompanyIds.Contains(pr.CompanyId.Value));
+
+                    if (!owned)
+                        return ApiResponseFactory.Error("You are not authorised for this week.",
+                            StatusCodes.Status403Forbidden);
+                }
+
+                /* ---------- business checks ---------- */
+                if (week.Status != WeekApprovalStatus.PendingAdmin)
+                    return ApiResponseFactory.Error("Week is not in PendingAdmin status.",
+                        StatusCodes.Status409Conflict);
+
+                if (week.PartRides.Any(pr => pr.Status == PartRideStatus.Dispute))
+                    return ApiResponseFactory.Error("Week has rides in Dispute status.", StatusCodes.Status409Conflict);
+
+                bool allApprovedOrRejected = week.PartRides.All(pr =>
+                    pr.Status == PartRideStatus.Accepted || pr.Status == PartRideStatus.Rejected);
+
+                if (!allApprovedOrRejected)
+                    return ApiResponseFactory.Error(
+                        "All rides must be Accepted or Rejected before allowing driver signature.",
+                        StatusCodes.Status409Conflict);
+
+                /* ---------- state change ---------- */
+                week.Status = WeekApprovalStatus.PendingDriver;
+                week.AdminUserId = userId is null ? null : Guid.Parse(userId);
+                week.AdminAllowedAt = DateTime.UtcNow;
+
+                await db.SaveChangesAsync();
+
+                return ApiResponseFactory.Success(new
+                {
+                    week.Id,
+                    week.Year,
+                    week.WeekNr,
+                    NewStatus = week.Status
+                }, StatusCodes.Status200OK);
             });
 
         return app;
