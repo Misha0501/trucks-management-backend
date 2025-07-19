@@ -108,12 +108,12 @@ public static class WeeksToSubmitEndpoints
                             w.PartRides.FirstOrDefault()!.Driver!.User.LastName
                         },
                         SummaryStatus = w.PartRides.Any(pr => pr.Status == PartRideStatus.Dispute)
-                            ? "HasDisputes"
+                            ? "Has Disputes"
                             : w.PartRides.All(pr =>
                                 pr.Status == PartRideStatus.Accepted || pr.Status == PartRideStatus.Rejected)
-                                ? "AllApprovedOrRejected"
+                                ? "All Approved"
                                 : w.PartRides.Any(pr => pr.Status == PartRideStatus.PendingAdmin)
-                                    ? "HasPending"
+                                    ? "Has Pending"
                                     : "Unknown",
                         PartRideCount = w.PartRides.Count,
                         TotalHours = Math.Round(w.PartRides
