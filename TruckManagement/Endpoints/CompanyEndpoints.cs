@@ -309,7 +309,7 @@ public static class CompanyEndpoints
                         PhoneNumber = request.PhoneNumber,
                         Email = request.Email,
                         Remark = request.Remark,
-                        IsApproved = isGlobalAdmin // Only global admins can auto-approve
+                        IsApproved = isGlobalAdmin || isCustomerAdmin // Both get auto-approval
                     };
 
                     db.Companies.Add(newCompany);
