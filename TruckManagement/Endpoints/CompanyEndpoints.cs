@@ -21,7 +21,8 @@ public static class CompanyEndpoints
                 UserManager<ApplicationUser> userManager,
                 ClaimsPrincipal currentUser,
                 [FromQuery] int pageNumber = 1,
-                [FromQuery] int pageSize = 100
+                [FromQuery] int pageSize = 100,
+                [FromQuery] string? search = null
             ) =>
             {
                 // 1. Retrieve the current user's ID
@@ -83,6 +84,14 @@ public static class CompanyEndpoints
                     companiesQuery = companiesQuery.Where(c => contactPersonCompanyIds.Contains(c.Id));
                 }
                 // If globalAdmin, no additional filtering is needed
+
+                // Optional name search
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    // Case-insensitive contains; use ILIKE for PostgreSQL
+                    companiesQuery = companiesQuery.Where(c =>
+                        EF.Functions.ILike(c.Name, $"%{search.Trim()}%"));
+                }
 
                 // 6. Get total company count after filtering for pagination
                 var totalCompanies = await companiesQuery.CountAsync();
@@ -629,13 +638,24 @@ public static class CompanyEndpoints
 
         app.MapGet("/companies/pending",
             [Authorize(Roles = "globalAdmin")] async (
-                ApplicationDbContext db
+                ApplicationDbContext db,
+                [FromQuery] string? search = null
             ) =>
             {
                 try
                 {
-                    var pendingCompanies = await db.Companies.IgnoreQueryFilters()
-                        .Where(c => !c.IsApproved && !c.IsDeleted)
+                    var pendingQuery = db.Companies.IgnoreQueryFilters()
+                        .Where(c => !c.IsApproved && !c.IsDeleted);
+
+                    // Optional name search
+                    if (!string.IsNullOrWhiteSpace(search))
+                    {
+                        // Case-insensitive contains; use ILIKE for PostgreSQL
+                        pendingQuery = pendingQuery.Where(c =>
+                            EF.Functions.ILike(c.Name, $"%{search.Trim()}%"));
+                    }
+
+                    var pendingCompanies = await pendingQuery
                         .Include(c => c.Drivers)
                             .ThenInclude(d => d.User)
                         .Select(c => new CompanyDto
