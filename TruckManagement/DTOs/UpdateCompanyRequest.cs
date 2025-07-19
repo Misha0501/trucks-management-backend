@@ -2,6 +2,8 @@ namespace TruckManagement.DTOs
 {
     public class UpdateCompanyRequest
     {
+        // ✅ Accept id but ignore it (ID comes from URL parameter)
+        public Guid? Id { get; set; }
         public string Name { get; set; } = default!;
         public string? Address { get; set; }
         public string? Postcode { get; set; }

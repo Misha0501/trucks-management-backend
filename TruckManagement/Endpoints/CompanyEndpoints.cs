@@ -394,12 +394,26 @@ public static class CompanyEndpoints
                 UserManager<ApplicationUser> userManager
             ) =>
             {
-                // Retrieve the requesting user's ID
-                var currentUserId = userManager.GetUserId(user);
-                var roles = await userManager.GetRolesAsync(await userManager.FindByIdAsync(currentUserId));
+                try
+                {
+                // ✅ Validate request
+                if (request == null)
+                {
+                    return ApiResponseFactory.Error("Request body is required.", 
+                        StatusCodes.Status400BadRequest);
+                }
+                
+                if (string.IsNullOrWhiteSpace(request.Name))
+                {
+                    return ApiResponseFactory.Error("Company name is required.", 
+                        StatusCodes.Status400BadRequest);
+                }
 
-                // Check if the user is a global admin
-                bool isGlobalAdmin = roles.Contains("globalAdmin");
+                // Retrieve the requesting user's ID  
+                var currentUserId = userManager.GetUserId(user);
+
+                // Check if the user is a global admin (using ClaimsPrincipal directly like other endpoints)
+                bool isGlobalAdmin = user.IsInRole("globalAdmin");
 
                 // Retrieve the target company
                 var existing = await db.Companies
@@ -452,6 +466,12 @@ public static class CompanyEndpoints
                         .ThenInclude(d => d.User)
                     .FirstOrDefaultAsync(c => c.Id == id);
 
+                // ✅ Add null check for safety
+                if (updatedCompany == null)
+                {
+                    return ApiResponseFactory.Error("Company not found after update.", StatusCodes.Status404NotFound);
+                }
+
                 // Return updated company as DTO
                 var response = new CompanyDto
                 {
@@ -465,15 +485,27 @@ public static class CompanyEndpoints
                     Email = updatedCompany.Email,
                     Remark = updatedCompany.Remark,
                     IsApproved = updatedCompany.IsApproved,
-                    Drivers = updatedCompany.Drivers.Select(d => new DriverDto
-                    {
-                        DriverId = d.Id,
-                        FirstName = d.User.FirstName,
-                        LastName = d.User.LastName
-                    }).ToList()
+                    Drivers = updatedCompany.Drivers
+                        .Where(d => d.User != null) // ✅ Filter out drivers with null users
+                        .Select(d => new DriverDto
+                        {
+                            DriverId = d.Id,
+                            FirstName = d.User.FirstName,
+                            LastName = d.User.LastName
+                        }).ToList()
                 };
 
                 return ApiResponseFactory.Success(response);
+                }
+                catch (Exception ex)
+                {
+                    // Log the exception details for debugging
+                    Console.WriteLine($"Error updating company {id}: {ex.Message}");
+                    Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                    
+                    return ApiResponseFactory.Error("An error occurred while updating the company.", 
+                        StatusCodes.Status500InternalServerError);
+                }
             });
 
 
