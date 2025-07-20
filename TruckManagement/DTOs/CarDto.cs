@@ -5,7 +5,7 @@ namespace TruckManagement.DTOs
         public Guid Id { get; set; }
         public string LicensePlate { get; set; } = default!;
         public int? VehicleYear { get; set; }
-        public DateTime? RegistrationDate { get; set; }
+        public DateOnly? RegistrationDate { get; set; }
         public string? Remark { get; set; }
         public Guid CompanyId { get; set; }
         public CompanyDto? Company { get; set; }
