@@ -20,6 +20,7 @@ namespace TruckManagement.Data
         public DbSet<Unit> Units { get; set; }
         public DbSet<CarDriver> CarDrivers { get; set; }
         public DbSet<Car> Cars { get; set; }
+        public DbSet<CarFile> CarFiles { get; set; } = default!;
         public DbSet<Ride> Rides { get; set; }
         public DbSet<Charter> Charters { get; set; }
         public DbSet<PartRide> PartRides { get; set; }
