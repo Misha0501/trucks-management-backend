@@ -502,7 +502,9 @@ namespace TruckManagement.Endpoints
                     string id,
                     ApplicationDbContext db,
                     UserManager<ApplicationUser> userManager,
-                    ClaimsPrincipal currentUser
+                    ClaimsPrincipal currentUser,
+                    IWebHostEnvironment env,
+                    IOptions<StorageOptions> cfg
                 ) =>
                 {
                     try
@@ -558,10 +560,49 @@ namespace TruckManagement.Endpoints
                             }
                         }
 
-                        db.Cars.Remove(car);
-                        await db.SaveChangesAsync();
+                        // Use transaction to ensure atomicity
+                        using var transaction = await db.Database.BeginTransactionAsync();
 
-                        return ApiResponseFactory.Success("Car deleted successfully.", StatusCodes.Status200OK);
+                        try
+                        {
+                            // 1. Get all associated files
+                            var carFiles = await db.CarFiles
+                                .Where(f => f.CarId == car.Id)
+                                .ToListAsync();
+
+                            // 2. Delete physical files from storage
+                            if (carFiles.Any())
+                            {
+                                var basePath = Path.Combine(env.ContentRootPath, cfg.Value.BasePath ?? "storage");
+                                
+                                foreach (var carFile in carFiles)
+                                {
+                                    var absolutePath = Path.Combine(basePath, carFile.FilePath);
+                                    if (File.Exists(absolutePath))
+                                    {
+                                        File.Delete(absolutePath);
+                                    }
+                                }
+
+                                // 3. Delete CarFile database records
+                                db.CarFiles.RemoveRange(carFiles);
+                            }
+
+                            // 4. Delete the car
+                            db.Cars.Remove(car);
+
+                            // 5. Commit all changes
+                            await db.SaveChangesAsync();
+                            await transaction.CommitAsync();
+
+                            return ApiResponseFactory.Success("Car deleted successfully.", StatusCodes.Status200OK);
+                        }
+                        catch (Exception deleteEx)
+                        {
+                            await transaction.RollbackAsync();
+                            Console.Error.WriteLine($"Error during car deletion transaction: {deleteEx.Message}");
+                            throw;
+                        }
                     }
                     catch (Exception ex)
                     {
