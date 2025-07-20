@@ -201,23 +201,27 @@ public static class WeeksToSubmitEndpoints
 
                 /* ---------- build response ---------- */
                 var partRideRows = week.PartRides
-                    .OrderBy(pr => pr.Date)
+                    .OrderByDescending(pr => pr.Date)
                     .ThenBy(pr => pr.Start)
                     .Select(pr => new
                     {
                         pr.Id,
                         pr.Date,
-                        Hours = Math.Round(pr.DecimalHours ?? 0, 2),
+                        Hours = pr.Status == PartRideStatus.Rejected
+                            ? 0
+                            : Math.Round(pr.DecimalHours ?? 0, 2),
                         HoursCode = pr.HoursCode != null
                             ? new { pr.HoursCode.Id, pr.HoursCode.Name }
                             : null,
-                        ForecastedEarnings = Math.Round(
-                            pr.NightAllowance +
-                            pr.KilometerReimbursement +
-                            pr.ConsignmentFee +
-                            pr.VariousCompensation +
-                            pr.TaxFreeCompensation,
-                            2)
+                        ForecastedEarnings = pr.Status == PartRideStatus.Rejected
+                            ? 0
+                            : Math.Round(
+                                pr.NightAllowance +
+                                pr.KilometerReimbursement +
+                                pr.ConsignmentFee +
+                                pr.VariousCompensation +
+                                pr.TaxFreeCompensation,
+                                2)
                     })
                     .ToList();
 
