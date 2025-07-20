@@ -183,7 +183,8 @@ namespace TruckManagement.Endpoints
                     UserManager<ApplicationUser> userManager,
                     ClaimsPrincipal currentUser,
                     [FromQuery] int pageNumber = 1,
-                    [FromQuery] int pageSize = 10
+                    [FromQuery] int pageSize = 10,
+                    [FromQuery] string? search = null
                 ) =>
                 {
                     try
@@ -253,12 +254,21 @@ namespace TruckManagement.Endpoints
                             associatedCompanyIds = companiesIds;
                         }
 
-                        var totalCars = await db.Cars
-                            .Where(c => associatedCompanyIds.Contains(c.CompanyId))
-                            .CountAsync();
+                        // Build base query with company filtering
+                        var carsQuery = db.Cars
+                            .Where(c => associatedCompanyIds.Contains(c.CompanyId));
 
-                        var cars = await db.Cars
-                            .Where(c => associatedCompanyIds.Contains(c.CompanyId))
+                        // Optional license plate search
+                        if (!string.IsNullOrWhiteSpace(search))
+                        {
+                            // Case-insensitive contains; use ILIKE for PostgreSQL
+                            carsQuery = carsQuery.Where(c =>
+                                EF.Functions.ILike(c.LicensePlate, $"%{search.Trim()}%"));
+                        }
+
+                        var totalCars = await carsQuery.CountAsync();
+
+                        var cars = await carsQuery
                             .Include(c => c.Files)
                             .OrderBy(c => c.LicensePlate)
                             .Skip((pageNumber - 1) * pageSize)
