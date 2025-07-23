@@ -18,5 +18,6 @@ public static class PartRideExtensions
         pr.RestCalculated         = r.RestCalculated;
         pr.PeriodNumber           = r.PeriodNumber;
         pr.WeekNrInPeriod         = r.WeekNrInPeriod;
+        pr.VacationHours          = r.VacationHoursEarned;
     }
 }

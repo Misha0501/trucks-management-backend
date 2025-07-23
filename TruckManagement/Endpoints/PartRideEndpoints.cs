@@ -791,6 +791,7 @@ public static class PartRideEndpoints
                             pr.Start,
                             pr.End,
                             pr.Rest,
+                            pr.VacationHours,
                             pr.RestCalculated,
                             pr.TotalKilometers,
                             pr.ExtraKilometers,
@@ -978,6 +979,7 @@ public static class PartRideEndpoints
                         partRide.Start,
                         partRide.End,
                         partRide.Rest,
+                        partRide.VacationHours,
                         partRide.RestCalculated,
                         partRide.ExtraKilometers,
                         partRide.TotalKilometers,
@@ -1759,6 +1761,7 @@ public static class PartRideEndpoints
             pr.PeriodNumber,
             pr.WeekNrInPeriod,
             pr.Status,
+            pr.VacationHours,
             Files = pr.Files.Select(f => new
             {
                 f.Id,

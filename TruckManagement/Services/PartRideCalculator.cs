@@ -24,17 +24,19 @@ public record PartRideCalculationContext(
 // 2. Result → property names match PartRide exactly
 // ────────────────────────────────────────────────────────────────
 public record PartRideCalculationResult(
-    double   DecimalHours,
-    double   NumberOfHours,
-    double   TaxFreeCompensation,
-    double   NightAllowance,
-    double   KilometerReimbursement,
-    double   ConsignmentFee,
-    double   SaturdayHours,
-    double   SundayHolidayHours,
+    double DecimalHours,
+    double NumberOfHours,
+    double TaxFreeCompensation,
+    double NightAllowance,
+    double KilometerReimbursement,
+    double ConsignmentFee,
+    double SaturdayHours,
+    double SundayHolidayHours,
     TimeSpan RestCalculated,
-    int      PeriodNumber,
-    int      WeekNrInPeriod);
+    int PeriodNumber,
+    int WeekNrInPeriod,
+    double VacationHoursEarned
+    );
 
 public sealed class PartRideCalculator
 {
@@ -72,6 +74,7 @@ public sealed class PartRideCalculator
         var work      = new WorkHoursCalculator(caoRow);
         var kmCalc    = new KilometersAllowance(caoRow);
         var nightCalc = new NightAllowanceCalculator(caoRow);
+        var vacationAccrualService = new VacationAccrualService(db: _db);
 
         // 3. Calculations (same as before, variable names unchanged)
         double startTimeDecimal = c.Start.TotalHours;
@@ -187,7 +190,12 @@ public sealed class PartRideCalculator
             totalHours  : totalHours);
 
         var (year, periodNr, weekNrInPeriod) = DateHelper.GetPeriod(c.Date);
-
+        
+        // Calculate vacation hours
+        double vacationHoursEarned = await vacationAccrualService.GetEarnedHoursAsync(driverId: c.DriverId ?? Guid.Empty, date: c.Date);
+        
+        if (string.Equals(hoursCode.Name, "Holiday", StringComparison.OrdinalIgnoreCase)) { vacationHoursEarned -= netHours; }
+        
         // 4. Return with your *exact* property names
         return new PartRideCalculationResult(
             DecimalHours          : netHours,
@@ -198,8 +206,10 @@ public sealed class PartRideCalculator
             ConsignmentFee        : consignmentFee,
             SaturdayHours         : saturdayHours,
             SundayHolidayHours    : sundayHolidayHours,
-            RestCalculated                  : TimeSpan.FromHours(totalBreakCalculated),
+            RestCalculated        : TimeSpan.FromHours(totalBreakCalculated),
             PeriodNumber          : periodNr,
-            WeekNrInPeriod        : weekNrInPeriod);
+            WeekNrInPeriod        : weekNrInPeriod,
+            VacationHoursEarned   : vacationHoursEarned
+            );
     }
 }
