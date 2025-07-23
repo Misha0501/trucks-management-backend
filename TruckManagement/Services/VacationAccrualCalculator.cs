@@ -1,10 +1,6 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using TruckManagement.Data;
 using TruckManagement.Entities;
-using TruckManagement.Helpers;
 
 namespace TruckManagement.Services
 {
@@ -24,67 +20,55 @@ namespace TruckManagement.Services
         public async Task<double> GetEarnedHoursAsync(Guid driverId, DateTime date)
         {
             /* ------------------------------------------------------------
-             * 1. Resolve the *active* contract: the contract whose
-             *    [DateOfEmployment … LastWorkingDay] range covers ride.Date.
+             * 1. Resolve the active contract that covers the given date.
+             *    If none -> no entitlement.
              * -----------------------------------------------------------*/
             var contract = await _db.EmployeeContracts
                 .AsNoTracking()
                 .Where(c => c.DriverId == driverId)
                 .Where(c =>
                     (c.DateOfEmployment ?? DateTime.MinValue) <= date &&
-                    (c.LastWorkingDay   ?? DateTime.MaxValue) >= date)
-                .OrderByDescending(c => c.DateOfEmployment)   // newest first, in case overlap
+                    (c.LastWorkingDay     ?? DateTime.MaxValue) >= date)
+                .OrderByDescending(c => c.DateOfEmployment) // newest first
                 .FirstOrDefaultAsync();
 
-            if (contract is null) return 0;                  // no contract → no entitlement
-
-            /* ------------------------------------------------------------
-             * 2. Determine driver’s *age on 31-Dec* of the ride’s year
-             *    (NL vacation tables are set per calendar year).
-             * -----------------------------------------------------------*/
-            if (contract.DateOfBirth is null) return 0;
-
-            var yearEnd          = new DateTime(date.Year, 12, 31);
-            int ageAtYearEnd     = GetAge(contract.DateOfBirth.Value, yearEnd);
-
-            /* ------------------------------------------------------------
-             * 3. Fetch the VacationRight that matches the age range and is
-             *    effective at ride.Date.
-             * -----------------------------------------------------------*/
-            var vacationRight = await _db.VacationRights
-                .AsNoTracking()
-                .Where(vr =>                             // age window
-                    (vr.AgeFrom ?? 0)  <= ageAtYearEnd &&
-                    (vr.AgeTo   ?? 200) >= ageAtYearEnd)
-                .Where(vr =>                             // validity window
-                    vr.StartDate <= date &&
-                    (vr.EndDate == null || vr.EndDate >= date))
-                .OrderByDescending(vr => vr.StartDate)   // newest rule wins
-                .FirstOrDefaultAsync();
-
-            if (vacationRight is null) return 0;
-
-            /* ------------------------------------------------------------
-             * 4. Compute daily accrual
-             * -----------------------------------------------------------*/
-            // employment window inside calendar year
-            var yearStart        = new DateTime(date.Year, 1, 1);
-            var yearEndInclusive = new DateTime(date.Year, 12, 31);
-
-            var employmentStart  = (contract.DateOfEmployment ?? yearStart)
-                                   .ClampToRange(yearStart, yearEndInclusive);
-            var employmentEnd    = (contract.LastWorkingDay   ?? yearEndInclusive)
-                                   .ClampToRange(yearStart, yearEndInclusive);
-
-            if (date < employmentStart || date > employmentEnd)
+            if (contract is null || contract.DateOfBirth is null)
                 return 0;
 
-            int entitledDaysInYear = CountWorkdays(employmentStart, employmentEnd);
-            if (entitledDaysInYear == 0) return 0;
+            /* ------------------------------------------------------------
+             * 2. Determine driver’s age at 31‑Dec of the year in question
+             *    and look‑up the corresponding VacationRight row.
+             * -----------------------------------------------------------*/
+            var yearEnd = new DateTime(date.Year, 12, 31);
+            int ageAtYearEnd = GetAge(contract.DateOfBirth.Value, yearEnd);
 
-            double hoursPerEntitledDay = vacationRight.Right * 8.0 / entitledDaysInYear;
+            var vacationRight = await _db.VacationRights
+                .AsNoTracking()
+                .Where(vr =>
+                    (vr.AgeFrom ?? 0)        <= ageAtYearEnd &&
+                    (vr.AgeTo   ?? int.MaxValue) >= ageAtYearEnd &&
+                    vr.StartDate              <= date &&
+                    (vr.EndDate == null || vr.EndDate >= date))
+                .OrderByDescending(vr => vr.StartDate)
+                .FirstOrDefaultAsync();
 
-            return Math.Round(hoursPerEntitledDay, 2);
+            if (vacationRight is null)
+                return 0;
+
+            /* ------------------------------------------------------------
+             * 3.  Flat accrual per *worked* weekday.
+             *     ‑ Calculate the total number of weekdays in the calendar
+             *       year and divide the yearly entitlement (days × 8h) by
+             *       that number. Every worked weekday earns exactly that
+             *       amount, regardless of when employment starts.
+             * -----------------------------------------------------------*/
+            var yearStart = new DateTime(date.Year, 1, 1);
+            int workdaysInYear = CountWeekdays(yearStart, yearEnd);
+            if (workdaysInYear == 0) return 0; // should never happen
+
+            double hoursPerWorkday = (vacationRight.Right * 8.0) / workdaysInYear;
+            
+            return Math.Round(hoursPerWorkday, 2);
         }
 
         private static int GetAge(DateTime birthDate, DateTime onDate)
@@ -93,12 +77,14 @@ namespace TruckManagement.Services
             if (birthDate.Date > onDate.AddYears(-age)) age--;
             return age;
         }
-        
-        private static int CountWorkdays(DateTime from, DateTime toInclusive)
-        {
-            int days = (toInclusive - from).Days + 1;
 
-            return Enumerable.Range(0, days)
+        /// <summary>
+        /// Counts Monday‑to‑Friday days (inclusive) between <paramref name="from"/> and <paramref name="toInclusive"/>.
+        /// </summary>
+        private static int CountWeekdays(DateTime from, DateTime toInclusive)
+        {
+            int totalDays = (toInclusive - from).Days + 1;
+            return Enumerable.Range(0, totalDays)
                 .Select(i => from.AddDays(i))
                 .Count(d => d.DayOfWeek >= DayOfWeek.Monday && d.DayOfWeek <= DayOfWeek.Friday);
         }
