@@ -193,8 +193,8 @@ public sealed class PartRideCalculator
         
         // Calculate vacation hours
         double vacationHoursEarned = await vacationAccrualService.GetEarnedHoursAsync(driverId: c.DriverId ?? Guid.Empty, date: c.Date);
-        
-        if (string.Equals(hoursCode.Name, "Holiday", StringComparison.OrdinalIgnoreCase)) { vacationHoursEarned -= netHours; }
+
+        if (string.Equals(hoursCode.Name, "Holiday", StringComparison.OrdinalIgnoreCase)) { vacationHoursEarned = -netHours; }
         
         // 4. Return with your *exact* property names
         return new PartRideCalculationResult(
