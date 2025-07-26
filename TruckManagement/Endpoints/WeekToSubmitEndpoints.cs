@@ -76,11 +76,18 @@ public static class WeeksToSubmitEndpoints
                     status = status.ToLowerInvariant();
                     query = status switch
                     {
-                        "hasdisputes" => query.Where(w => w.PartRides.Any(pr => pr.Status == PartRideStatus.Dispute)),
-                        "allapprovedorrejected" => query.Where(w => w.PartRides.All(pr =>
-                            pr.Status == PartRideStatus.Accepted || pr.Status == PartRideStatus.Rejected)),
-                        "haspending" => query.Where(
-                            w => w.PartRides.Any(pr => pr.Status == PartRideStatus.PendingAdmin)),
+                        "hasdisputes" => query.Where(w =>
+                            w.PartRides.Any(pr => pr.Status == PartRideStatus.Dispute)),
+
+                        "allapproved" => query.Where(w =>
+                            w.PartRides.All(pr => pr.Status == PartRideStatus.Accepted)),
+
+                        "hasrejected" => query.Where(w =>
+                            w.PartRides.Any(pr => pr.Status == PartRideStatus.Rejected)),
+
+                        "haspending" => query.Where(w =>
+                            w.PartRides.Any(pr => pr.Status == PartRideStatus.PendingAdmin)),
+
                         _ => query
                     };
                 }
@@ -107,20 +114,23 @@ public static class WeeksToSubmitEndpoints
                             w.PartRides.FirstOrDefault()!.Driver!.User.FirstName,
                             w.PartRides.FirstOrDefault()!.Driver!.User.LastName
                         },
-                        SummaryStatus = w.PartRides.Any(pr => pr.Status == PartRideStatus.Dispute)
-                            ? "Has Disputes"
-                            : w.PartRides.All(pr =>
-                                pr.Status == PartRideStatus.Accepted || pr.Status == PartRideStatus.Rejected)
-                                ? "All Approved"
-                                : w.PartRides.Any(pr => pr.Status == PartRideStatus.PendingAdmin)
-                                    ? "Has Pending"
-                                    : "Unknown",
+                        SummaryStatus =
+                            w.PartRides.Any(pr => pr.Status == PartRideStatus.Dispute)
+                                ? "Has Disputes"
+                                : w.PartRides.Any(pr => pr.Status == PartRideStatus.Rejected)
+                                    ? "Has Rejected"
+                                    : w.PartRides.All(pr => pr.Status == PartRideStatus.Accepted)
+                                        ? "All Approved"
+                                        : w.PartRides.Any(pr => pr.Status == PartRideStatus.PendingAdmin)
+                                            ? "Has Pending"
+                                            : "Unknown",
                         PartRideCount = w.PartRides.Count,
                         TotalHours = Math.Round(w.PartRides
                             .Where(pr => pr.Status != PartRideStatus.Rejected)
                             .Sum(pr => pr.DecimalHours ?? 0), 2),
                         PendingAdminCount = w.PartRides.Count(pr => pr.Status == PartRideStatus.PendingAdmin),
                         DisputeCount = w.PartRides.Count(pr => pr.Status == PartRideStatus.Dispute),
+                        RejectedCount = w.PartRides.Count(pr => pr.Status == PartRideStatus.Rejected),
                         ForecastedEarning = Math.Round(
                             w.PartRides
                                 .Where(pr => pr.Status != PartRideStatus.Rejected)
@@ -230,13 +240,13 @@ public static class WeeksToSubmitEndpoints
                 var vacationHoursUsed = week.PartRides
                     .Where(pr => pr.VacationHours < 0) // negative ⇒ used
                     .Sum(pr => -pr.VacationHours);
-                
+
                 var vacationHoursLeft = await db.PartRides
                     .Where(pr =>
                         pr.DriverId == week.DriverId &&
-                        pr.Date.Year == week.Year)        
-                    .SumAsync(pr => pr.VacationHours ?? 0); 
-                
+                        pr.Date.Year == week.Year)
+                    .SumAsync(pr => pr.VacationHours ?? 0);
+
                 var result = new
                 {
                     week.Id,
@@ -317,12 +327,11 @@ public static class WeeksToSubmitEndpoints
                 if (week.PartRides.Any(pr => pr.Status == PartRideStatus.Dispute))
                     return ApiResponseFactory.Error("Week has rides in Dispute status.", StatusCodes.Status409Conflict);
 
-                bool allApprovedOrRejected = week.PartRides.All(pr =>
-                    pr.Status == PartRideStatus.Accepted || pr.Status == PartRideStatus.Rejected);
+                bool allApproved = week.PartRides.All(pr => pr.Status == PartRideStatus.Accepted);
 
-                if (!allApprovedOrRejected)
+                if (!allApproved)
                     return ApiResponseFactory.Error(
-                        "All rides must be Accepted or Rejected before allowing driver signature.",
+                        "All rides must be Accepted before allowing driver signature.",
                         StatusCodes.Status409Conflict);
 
                 /* ---------- state change ---------- */
