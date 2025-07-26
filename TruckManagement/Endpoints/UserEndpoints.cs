@@ -1136,12 +1136,38 @@ public static class UserEndpoints
                         driverEntity.CompanyId = null;
                     }
 
-                    // 11. (Future-Proofing) Update other Driver properties here as needed
-                    // Example:
-                    // if (!string.IsNullOrWhiteSpace(req.LicenseNumber))
-                    // {
-                    //     driverEntity.LicenseNumber = req.LicenseNumber;
-                    // }
+                    // 11. Validate and update CarId (if provided)
+                    if (!string.IsNullOrWhiteSpace(req.CarId))
+                    {
+                        if (!Guid.TryParse(req.CarId, out Guid newCarId))
+                            return ApiResponseFactory.Error("Invalid Car ID format.",
+                                StatusCodes.Status400BadRequest);
+
+                        var car = await db.Cars.FirstOrDefaultAsync(c => c.Id == newCarId);
+                        if (car == null)
+                            return ApiResponseFactory.Error("Car not found.", StatusCodes.Status400BadRequest);
+
+                        // If the current user is a CustomerAdmin, ensure the car belongs to their company
+                        if (isCustomerAdmin && !customerAdminCompanyIds.Contains(car.CompanyId))
+                            return ApiResponseFactory.Error("You can only assign cars from your associated companies.",
+                                StatusCodes.Status403Forbidden);
+
+                        // Check if the car is already assigned to another driver
+                        var existingDriverForCar = await db.Drivers
+                            .FirstOrDefaultAsync(d => d.CarId == newCarId && d.Id != driverEntity.Id && !d.IsDeleted);
+                        
+                        if (existingDriverForCar != null)
+                            return ApiResponseFactory.Error("Car is already assigned to another driver.",
+                                StatusCodes.Status400BadRequest);
+
+                        // Update the Driver's CarId
+                        driverEntity.CarId = newCarId;
+                    }
+                    else
+                    {
+                        // If CarId is not provided, set it to null (unassign car)
+                        driverEntity.CarId = null;
+                    }
 
                     // 12. Save changes to the database
                     await db.SaveChangesAsync();
@@ -1152,6 +1178,7 @@ public static class UserEndpoints
                     // 14. Retrieve updated driver information for the response
                     var updatedDriver = await db.Drivers
                         .Include(d => d.Company)
+                        .Include(d => d.Car)
                         .AsNoTracking()
                         .FirstOrDefaultAsync(d => d.AspNetUserId == targetUser.Id);
 
@@ -1161,7 +1188,11 @@ public static class UserEndpoints
                         {
                             DriverId = updatedDriver.Id,
                             CompanyId = updatedDriver.CompanyId,
-                            CompanyName = updatedDriver.Company?.Name
+                            CompanyName = updatedDriver.Company?.Name,
+                            CarId = updatedDriver.CarId,
+                            CarLicensePlate = updatedDriver.Car?.LicensePlate,
+                            CarVehicleYear = updatedDriver.Car?.VehicleYear,
+                            CarRegistrationDate = updatedDriver.Car?.RegistrationDate
                         };
 
                     // 15. Return success response
@@ -1630,12 +1661,12 @@ public static class UserEndpoints
                     user.IsDeleted = true;
                     await db.SaveChangesAsync();
 
-                    // Remove associations from CarDrivers
-                    var carDriverAssociations = await db.CarDrivers
-                        .Where(cd => cd.DriverId == driver.Id)
-                        .ToListAsync();
-                    db.CarDrivers.RemoveRange(carDriverAssociations);
-                    await db.SaveChangesAsync();
+                    // Unassign car from driver (1-1 relationship)
+                    if (driver.CarId.HasValue)
+                    {
+                        driver.CarId = null;
+                        await db.SaveChangesAsync();
+                    }
 
                     // Soft delete the driver by setting IsDeleted to true
                     driver.IsDeleted = true;

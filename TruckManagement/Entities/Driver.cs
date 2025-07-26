@@ -8,6 +8,10 @@ namespace TruckManagement.Entities
 
         public Guid? CompanyId { get; set; }
         public Company? Company { get; set; } = default!;
+        
+        public Guid? CarId { get; set; }
+        public Car? Car { get; set; } = default!;
+        
         public bool IsDeleted { get; set; } // Soft-delete marker
         public string AspNetUserId { get; set; } = default!;
         [ForeignKey(nameof(AspNetUserId))]

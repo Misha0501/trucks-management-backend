@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TruckManagement.Data;
+using TruckManagement.DTOs;
 using TruckManagement.Entities;
 using TruckManagement.Helpers;
 
@@ -20,7 +21,8 @@ public static class CompanyEndpoints
                 UserManager<ApplicationUser> userManager,
                 ClaimsPrincipal currentUser,
                 [FromQuery] int pageNumber = 1,
-                [FromQuery] int pageSize = 100
+                [FromQuery] int pageSize = 100,
+                [FromQuery] string? search = null
             ) =>
             {
                 // 1. Retrieve the current user's ID
@@ -83,20 +85,44 @@ public static class CompanyEndpoints
                 }
                 // If globalAdmin, no additional filtering is needed
 
+                // Optional name search
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    // Case-insensitive contains; use ILIKE for PostgreSQL
+                    companiesQuery = companiesQuery.Where(c =>
+                        EF.Functions.ILike(c.Name, $"%{search.Trim()}%"));
+                }
+
                 // 6. Get total company count after filtering for pagination
                 var totalCompanies = await companiesQuery.CountAsync();
                 var totalPages = (int)Math.Ceiling((double)totalCompanies / pageSize);
 
-                // 7. Apply pagination and select necessary fields
+                // 7. Apply pagination and select necessary fields with drivers
                 var pagedCompanies = await companiesQuery
                     .AsNoTracking()
+                    .Include(c => c.Drivers)
+                        .ThenInclude(d => d.User)
                     .OrderBy(c => c.Name)
                     .Skip((pageNumber - 1) * pageSize)
                     .Take(pageSize)
-                    .Select(c => new
+                    .Select(c => new CompanyDto
                     {
-                        c.Id,
-                        c.Name
+                        Id = c.Id,
+                        Name = c.Name,
+                        Address = c.Address,
+                        Postcode = c.Postcode,
+                        City = c.City,
+                        Country = c.Country,
+                        PhoneNumber = c.PhoneNumber,
+                        Email = c.Email,
+                        Remark = c.Remark,
+                        IsApproved = c.IsApproved,
+                        Drivers = c.Drivers.Select(d => new DriverDto
+                        {
+                            DriverId = d.Id,
+                            FirstName = d.User.FirstName,
+                            LastName = d.User.LastName
+                        }).ToList()
                     })
                     .ToListAsync();
 
@@ -223,6 +249,13 @@ public static class CompanyEndpoints
                 {
                     company.Id,
                     company.Name,
+                    company.Address,
+                    company.Postcode,
+                    company.City,
+                    company.Country,
+                    company.PhoneNumber,
+                    company.Email,
+                    company.Remark,
                     company.IsApproved,
                     company.IsDeleted,
                     Drivers = drivers,
@@ -240,7 +273,7 @@ public static class CompanyEndpoints
             [Authorize(Roles = "globalAdmin, customerAdmin")]
             async (
                 HttpContext httpContext,
-                [FromBody] Company newCompany,
+                [FromBody] CreateCompanyRequest request,
                 ApplicationDbContext db,
                 UserManager<ApplicationUser> userManager
             ) =>
@@ -282,8 +315,19 @@ public static class CompanyEndpoints
                     }
 
                     // 4️⃣ Create the new company
-                    newCompany.Id = Guid.NewGuid();
-                    newCompany.IsApproved = isGlobalAdmin; // Only global admins can auto-approve
+                    var newCompany = new Company
+                    {
+                        Id = Guid.NewGuid(),
+                        Name = request.Name,
+                        Address = request.Address,
+                        Postcode = request.Postcode,
+                        City = request.City,
+                        Country = request.Country,
+                        PhoneNumber = request.PhoneNumber,
+                        Email = request.Email,
+                        Remark = request.Remark,
+                        IsApproved = isGlobalAdmin || isCustomerAdmin // Both get auto-approval
+                    };
 
                     db.Companies.Add(newCompany);
                     await db.SaveChangesAsync();
@@ -306,12 +350,20 @@ public static class CompanyEndpoints
                     // 6️⃣ Commit transaction & return filtered response
                     await transaction.CommitAsync();
 
-                    // Return a **DTO** (to avoid infinite recursion)
-                    var response = new
+                    // Return a **CompanyDto** (to avoid infinite recursion)
+                    var response = new CompanyDto
                     {
-                        newCompany.Id,
-                        newCompany.Name,
-                        newCompany.IsApproved
+                        Id = newCompany.Id,
+                        Name = newCompany.Name,
+                        Address = newCompany.Address,
+                        Postcode = newCompany.Postcode,
+                        City = newCompany.City,
+                        Country = newCompany.Country,
+                        PhoneNumber = newCompany.PhoneNumber,
+                        Email = newCompany.Email,
+                        Remark = newCompany.Remark,
+                        IsApproved = newCompany.IsApproved,
+                        Drivers = new List<DriverDto>() // New company has no drivers yet
                     };
 
                     return ApiResponseFactory.Success(response, StatusCodes.Status201Created);
@@ -337,17 +389,31 @@ public static class CompanyEndpoints
             async (
                 Guid id,
                 ClaimsPrincipal user,
-                [FromBody] Company updatedCompany,
+                [FromBody] UpdateCompanyRequest request,
                 ApplicationDbContext db,
                 UserManager<ApplicationUser> userManager
             ) =>
             {
-                // Retrieve the requesting user's ID
-                var currentUserId = userManager.GetUserId(user);
-                var roles = await userManager.GetRolesAsync(await userManager.FindByIdAsync(currentUserId));
+                try
+                {
+                // ✅ Validate request
+                if (request == null)
+                {
+                    return ApiResponseFactory.Error("Request body is required.", 
+                        StatusCodes.Status400BadRequest);
+                }
+                
+                if (string.IsNullOrWhiteSpace(request.Name))
+                {
+                    return ApiResponseFactory.Error("Company name is required.", 
+                        StatusCodes.Status400BadRequest);
+                }
 
-                // Check if the user is a global admin
-                bool isGlobalAdmin = roles.Contains("globalAdmin");
+                // Retrieve the requesting user's ID  
+                var currentUserId = userManager.GetUserId(user);
+
+                // Check if the user is a global admin (using ClaimsPrincipal directly like other endpoints)
+                bool isGlobalAdmin = user.IsInRole("globalAdmin");
 
                 // Retrieve the target company
                 var existing = await db.Companies
@@ -360,45 +426,86 @@ public static class CompanyEndpoints
                     return ApiResponseFactory.Error("Company not found.", StatusCodes.Status404NotFound);
                 }
 
-                // Allow global admins to update the company
-                if (isGlobalAdmin)
-                {
-                    existing.Name = updatedCompany.Name;
-                    await db.SaveChangesAsync();
-                    return ApiResponseFactory.Success(new
-                    {
-                        existing.Id,
-                        existing.Name
-                    });
-                }
-
                 // For non-global admins, check if they are an associated contact person
-                var contactPerson = await db.ContactPersons
-                    .Where(cp => cp.AspNetUserId == currentUserId)
-                    .Select(cp => new
-                    {
-                        cp.Id,
-                        CompanyIds = db.ContactPersonClientCompanies
-                            .Where(cpc => cpc.ContactPersonId == cp.Id && cpc.CompanyId.HasValue)
-                            .Select(cpc => cpc.CompanyId.Value)
-                            .ToList()
-                    })
-                    .FirstOrDefaultAsync();
-
-                if (contactPerson == null || !contactPerson.CompanyIds.Contains(id))
+                if (!isGlobalAdmin)
                 {
-                    return ApiResponseFactory.Error("Unauthorized to update this company.",
-                        StatusCodes.Status403Forbidden);
+                    var contactPerson = await db.ContactPersons
+                        .Where(cp => cp.AspNetUserId == currentUserId)
+                        .Select(cp => new
+                        {
+                            cp.Id,
+                            CompanyIds = db.ContactPersonClientCompanies
+                                .Where(cpc => cpc.ContactPersonId == cp.Id && cpc.CompanyId.HasValue)
+                                .Select(cpc => cpc.CompanyId.Value)
+                                .ToList()
+                        })
+                        .FirstOrDefaultAsync();
+
+                    if (contactPerson == null || !contactPerson.CompanyIds.Contains(id))
+                    {
+                        return ApiResponseFactory.Error("Unauthorized to update this company.",
+                            StatusCodes.Status403Forbidden);
+                    }
                 }
 
-                // Proceed with updating the company
-                existing.Name = updatedCompany.Name;
+                // Update all company fields
+                existing.Name = request.Name;
+                existing.Address = request.Address;
+                existing.Postcode = request.Postcode;
+                existing.City = request.City;
+                existing.Country = request.Country;
+                existing.PhoneNumber = request.PhoneNumber;
+                existing.Email = request.Email;
+                existing.Remark = request.Remark;
+
                 await db.SaveChangesAsync();
-                return ApiResponseFactory.Success(new
+
+                // Reload company with drivers for response
+                var updatedCompany = await db.Companies
+                    .Include(c => c.Drivers)
+                        .ThenInclude(d => d.User)
+                    .FirstOrDefaultAsync(c => c.Id == id);
+
+                // ✅ Add null check for safety
+                if (updatedCompany == null)
                 {
-                    existing.Id,
-                    existing.Name
-                });
+                    return ApiResponseFactory.Error("Company not found after update.", StatusCodes.Status404NotFound);
+                }
+
+                // Return updated company as DTO
+                var response = new CompanyDto
+                {
+                    Id = updatedCompany.Id,
+                    Name = updatedCompany.Name,
+                    Address = updatedCompany.Address,
+                    Postcode = updatedCompany.Postcode,
+                    City = updatedCompany.City,
+                    Country = updatedCompany.Country,
+                    PhoneNumber = updatedCompany.PhoneNumber,
+                    Email = updatedCompany.Email,
+                    Remark = updatedCompany.Remark,
+                    IsApproved = updatedCompany.IsApproved,
+                    Drivers = updatedCompany.Drivers
+                        .Where(d => d.User != null) // ✅ Filter out drivers with null users
+                        .Select(d => new DriverDto
+                        {
+                            DriverId = d.Id,
+                            FirstName = d.User.FirstName,
+                            LastName = d.User.LastName
+                        }).ToList()
+                };
+
+                return ApiResponseFactory.Success(response);
+                }
+                catch (Exception ex)
+                {
+                    // Log the exception details for debugging
+                    Console.WriteLine($"Error updating company {id}: {ex.Message}");
+                    Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                    
+                    return ApiResponseFactory.Error("An error occurred while updating the company.", 
+                        StatusCodes.Status500InternalServerError);
+                }
             });
 
 
@@ -563,18 +670,44 @@ public static class CompanyEndpoints
 
         app.MapGet("/companies/pending",
             [Authorize(Roles = "globalAdmin")] async (
-                ApplicationDbContext db
+                ApplicationDbContext db,
+                [FromQuery] string? search = null
             ) =>
             {
                 try
                 {
-                    var pendingCompanies = await db.Companies.IgnoreQueryFilters()
-                        .Where(c => !c.IsApproved && !c.IsDeleted)
-                        .Select(c => new
+                    var pendingQuery = db.Companies.IgnoreQueryFilters()
+                        .Where(c => !c.IsApproved && !c.IsDeleted);
+
+                    // Optional name search
+                    if (!string.IsNullOrWhiteSpace(search))
+                    {
+                        // Case-insensitive contains; use ILIKE for PostgreSQL
+                        pendingQuery = pendingQuery.Where(c =>
+                            EF.Functions.ILike(c.Name, $"%{search.Trim()}%"));
+                    }
+
+                    var pendingCompanies = await pendingQuery
+                        .Include(c => c.Drivers)
+                            .ThenInclude(d => d.User)
+                        .Select(c => new CompanyDto
                         {
-                            c.Id,
-                            c.Name,
-                            c.IsApproved
+                            Id = c.Id,
+                            Name = c.Name,
+                            Address = c.Address,
+                            Postcode = c.Postcode,
+                            City = c.City,
+                            Country = c.Country,
+                            PhoneNumber = c.PhoneNumber,
+                            Email = c.Email,
+                            Remark = c.Remark,
+                            IsApproved = c.IsApproved,
+                            Drivers = c.Drivers.Select(d => new DriverDto
+                            {
+                                DriverId = d.Id,
+                                FirstName = d.User.FirstName,
+                                LastName = d.User.LastName
+                            }).ToList()
                         })
                         .ToListAsync();
 

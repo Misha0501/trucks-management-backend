@@ -616,34 +616,13 @@ namespace TruckManagement.Seeding
                 await dbContext.SaveChangesAsync();
             }
 
-            // 18) Seed CarDrivers
-            if (seededCar1Entity != null && seededDriverEntity != null && !dbContext.CarDrivers.IgnoreQueryFilters()
-                    .Any(cd =>
-                        cd.CarId == seededCar1Entity.Id && cd.DriverId == seededDriverEntity.Id))
+            // 18) Assign Car to Driver (1-1 relationship)
+            // Assign the first car to the seeded driver
+            if (seededCar1Entity != null && seededDriverEntity != null && seededDriverEntity.CarId == null)
             {
-                var carDriver = new CarDriver
-                {
-                    Id = Guid.NewGuid(),
-                    CarId = seededCar1Entity.Id,
-                    DriverId = seededDriverEntity.Id
-                };
-                dbContext.CarDrivers.Add(carDriver);
+                seededDriverEntity.CarId = seededCar1Entity.Id;
+                await dbContext.SaveChangesAsync();
             }
-
-            if (seededCar2Entity != null && seededDriverEntity != null && !dbContext.CarDrivers.IgnoreQueryFilters()
-                    .Any(cd =>
-                        cd.CarId == seededCar2Entity.Id && cd.DriverId == seededDriverEntity.Id))
-            {
-                var carDriver = new CarDriver
-                {
-                    Id = Guid.NewGuid(),
-                    CarId = seededCar2Entity.Id,
-                    DriverId = seededDriverEntity.Id
-                };
-                dbContext.CarDrivers.Add(carDriver);
-            }
-
-            await dbContext.SaveChangesAsync();
 
             // 19) Seed Rides with fixed GUIDs
             if (!dbContext.Rides.IgnoreQueryFilters().Any())

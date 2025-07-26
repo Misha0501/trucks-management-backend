@@ -398,7 +398,7 @@ namespace TruckManagement.Routes
                             Email = request.Email,
                             Remark = request.Remark,
                             CompanyId = request.CompanyId,
-                            IsApproved = isGlobalAdmin
+                            IsApproved = isGlobalAdmin || isCustomerAdmin
                         };
 
                         db.Clients.Add(newClient);

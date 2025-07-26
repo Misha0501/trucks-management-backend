@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TruckManagement.Data;
@@ -11,9 +12,11 @@ using TruckManagement.Data;
 namespace TruckManagement.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250719154022_UpdateCompanyCRUDEndpoints")]
+    partial class UpdateCompanyCRUDEndpoints
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -324,14 +327,8 @@ namespace TruckManagement.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<DateOnly?>("RegistrationDate")
-                        .HasColumnType("date");
-
                     b.Property<string>("Remark")
                         .HasColumnType("text");
-
-                    b.Property<int?>("VehicleYear")
-                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -340,39 +337,25 @@ namespace TruckManagement.Migrations
                     b.ToTable("Cars");
                 });
 
-            modelBuilder.Entity("TruckManagement.Entities.CarFile", b =>
+            modelBuilder.Entity("TruckManagement.Entities.CarDriver", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("CarId")
+                    b.Property<Guid>("CarId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("ContentType")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("FileName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("FilePath")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("OriginalFileName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("UploadedAt")
-                        .HasColumnType("timestamp with time zone");
+                    b.Property<Guid>("DriverId")
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
                     b.HasIndex("CarId");
 
-                    b.ToTable("CarFiles");
+                    b.HasIndex("DriverId");
+
+                    b.ToTable("CarDrivers");
                 });
 
             modelBuilder.Entity("TruckManagement.Entities.Charter", b =>
@@ -552,9 +535,6 @@ namespace TruckManagement.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<Guid?>("CarId")
-                        .HasColumnType("uuid");
-
                     b.Property<Guid?>("CompanyId")
                         .HasColumnType("uuid");
 
@@ -564,9 +544,6 @@ namespace TruckManagement.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AspNetUserId")
-                        .IsUnique();
-
-                    b.HasIndex("CarId")
                         .IsUnique();
 
                     b.HasIndex("CompanyId");
@@ -1399,13 +1376,23 @@ namespace TruckManagement.Migrations
                     b.Navigation("Company");
                 });
 
-            modelBuilder.Entity("TruckManagement.Entities.CarFile", b =>
+            modelBuilder.Entity("TruckManagement.Entities.CarDriver", b =>
                 {
                     b.HasOne("TruckManagement.Entities.Car", "Car")
-                        .WithMany("Files")
-                        .HasForeignKey("CarId");
+                        .WithMany()
+                        .HasForeignKey("CarId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TruckManagement.Entities.Driver", "Driver")
+                        .WithMany()
+                        .HasForeignKey("DriverId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("Car");
+
+                    b.Navigation("Driver");
                 });
 
             modelBuilder.Entity("TruckManagement.Entities.Charter", b =>
@@ -1482,17 +1469,10 @@ namespace TruckManagement.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("TruckManagement.Entities.Car", "Car")
-                        .WithOne("Driver")
-                        .HasForeignKey("TruckManagement.Entities.Driver", "CarId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("TruckManagement.Entities.Company", "Company")
                         .WithMany("Drivers")
                         .HasForeignKey("CompanyId")
                         .OnDelete(DeleteBehavior.Cascade);
-
-                    b.Navigation("Car");
 
                     b.Navigation("Company");
 
@@ -1732,13 +1712,6 @@ namespace TruckManagement.Migrations
                     b.Navigation("ContactPerson");
 
                     b.Navigation("Driver");
-                });
-
-            modelBuilder.Entity("TruckManagement.Entities.Car", b =>
-                {
-                    b.Navigation("Driver");
-
-                    b.Navigation("Files");
                 });
 
             modelBuilder.Entity("TruckManagement.Entities.Client", b =>
