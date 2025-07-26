@@ -587,7 +587,8 @@ namespace TruckManagement.Endpoints
                         }
 
                         DateTime weekStart = ISOWeek.ToDateTime(year.Value, weekNumber.Value, DayOfWeek.Monday);
-                        DateTime weekEnd = weekStart.AddDays(6);
+                        weekStart = DateTime.SpecifyKind(weekStart, DateTimeKind.Utc);
+                        DateTime weekEnd = DateTime.SpecifyKind(weekStart.AddDays(6), DateTimeKind.Utc);  // inclusive end of ISO‑week
 
                         var rides = weekApproval.PartRides
                             .Select(pr => new
@@ -608,7 +609,23 @@ namespace TruckManagement.Endpoints
                             pr.TaxFreeCompensation + pr.NightAllowance + pr.KilometerReimbursement + pr.ConsignmentFee +
                             pr.VariousCompensation);
 
-                        // TODO: Update vacation hours 
+                        // -------------------------------------------------------------------
+                        //  Additional vacation aggregations
+                        // -------------------------------------------------------------------
+                        // Vacation hours taken in the *calendar month* of this week (negative values)
+                        double vacationHoursTaken = Math.Abs(
+                                (await db.PartRides
+                                    .Where(pr => pr.DriverId == driver.Id
+                                                 && pr.Date >= weekStart && pr.Date <= weekEnd   // within the selected ISO‑week
+                                                 && pr.VacationHours < 0)                        // only “taken” (negative) hours
+                                    .SumAsync(pr => pr.VacationHours))
+                                .GetValueOrDefault());                                           // → double (0 if null)
+
+                        // Total vacation balance (earned – used) for the *current year*
+                        double vacationHoursLeft = (await db.PartRides
+                            .Where(pr => pr.DriverId == driver.Id && pr.Date.Year == year.Value)
+                            .SumAsync(pr => pr.VacationHours)).GetValueOrDefault();
+
                         return ApiResponseFactory.Success(new
                         {
                             weekApprovalId = weekApproval.Id,
@@ -617,8 +634,8 @@ namespace TruckManagement.Endpoints
                             startDate = weekStart,
                             endDate = weekEnd,
                             status = weekApproval.Status,
-                            vacationHoursLeft = 0,
-                            vacationHoursTaken = 0,
+                            vacationHoursLeft,
+                            vacationHoursTaken,
                             totalCompensation = Math.Round(totalCompensation, 2),
                             totalHoursWorked = Math.Round(weekApproval.PartRides.Sum(pr => pr.DecimalHours ?? 0), 2),
                             rides
