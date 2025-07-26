@@ -270,6 +270,8 @@ namespace TruckManagement.Endpoints
 
                         var cars = await carsQuery
                             .Include(c => c.Files)
+                            .Include(c => c.Driver)
+                                .ThenInclude(d => d.User)
                             .OrderBy(c => c.LicensePlate)
                             .Skip((pageNumber - 1) * pageSize)
                             .Take(pageSize)
@@ -281,6 +283,10 @@ namespace TruckManagement.Endpoints
                                 RegistrationDate = c.RegistrationDate,
                                 Remark = c.Remark,
                                 CompanyId = c.CompanyId,
+                                DriverId = c.Driver != null ? c.Driver.Id : null,
+                                DriverFirstName = c.Driver != null && c.Driver.User != null ? c.Driver.User.FirstName : null,
+                                DriverLastName = c.Driver != null && c.Driver.User != null ? c.Driver.User.LastName : null,
+                                DriverEmail = c.Driver != null && c.Driver.User != null ? c.Driver.User.Email : null,
                                 Files = c.Files.Select(f => new CarFileDto
                                 {
                                     Id = f.Id,
@@ -663,6 +669,8 @@ namespace TruckManagement.Endpoints
                         var car = await carQuery
                             .Include(c => c.Company)
                             .Include(c => c.Files)
+                            .Include(c => c.Driver)
+                                .ThenInclude(d => d.User)
                             .FirstOrDefaultAsync(c => c.Id == carGuid);
 
                         if (car == null)
@@ -678,6 +686,10 @@ namespace TruckManagement.Endpoints
                             RegistrationDate = car.RegistrationDate,
                             Remark = car.Remark,
                             CompanyId = car.CompanyId,
+                            DriverId = car.Driver?.Id,
+                            DriverFirstName = car.Driver?.User?.FirstName,
+                            DriverLastName = car.Driver?.User?.LastName,
+                            DriverEmail = car.Driver?.User?.Email,
                             Company = new CompanyDto
                             {
                                 Id = car.Company.Id,

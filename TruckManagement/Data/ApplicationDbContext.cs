@@ -18,7 +18,6 @@ namespace TruckManagement.Data
         public DbSet<Rate> Rates { get; set; }
         public DbSet<Surcharge> Surcharges { get; set; }
         public DbSet<Unit> Units { get; set; }
-        public DbSet<CarDriver> CarDrivers { get; set; }
         public DbSet<Car> Cars { get; set; }
         public DbSet<CarFile> CarFiles { get; set; } = default!;
         public DbSet<Ride> Rides { get; set; }
@@ -73,6 +72,13 @@ namespace TruckManagement.Data
                 .WithMany(cmp => cmp.Drivers)
                 .HasForeignKey(d => d.CompanyId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Driver ↔ Car (One-to-One, optional)
+            builder.Entity<Driver>()
+                .HasOne(d => d.Car)
+                .WithOne(c => c.Driver)
+                .HasForeignKey<Driver>(d => d.CarId)
+                .OnDelete(DeleteBehavior.SetNull); // When car is deleted, set driver's CarId to null
 
             // ContactPerson ↔ ContactPersonClientCompany (One-to-Many)
             builder.Entity<ContactPersonClientCompany>()

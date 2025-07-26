@@ -46,6 +46,7 @@ namespace TruckManagement.Endpoints
                             var drivers = await db.Drivers
                                 .AsNoTracking()
                                 .Include(d => d.Company)
+                                .Include(d => d.Car)
                                 .Include(d => d.User)
                                 .OrderBy(d => d.User.Email)
                                 .Skip((pageNumber - 1) * pageSize)
@@ -55,6 +56,10 @@ namespace TruckManagement.Endpoints
                                     d.Id,
                                     d.CompanyId,
                                     CompanyName = d.Company != null ? d.Company.Name : null,
+                                    d.CarId,
+                                    CarLicensePlate = d.Car != null ? d.Car.LicensePlate : null,
+                                    CarVehicleYear = d.Car != null ? d.Car.VehicleYear : null,
+                                    CarRegistrationDate = d.Car != null ? d.Car.RegistrationDate : null,
                                     User = new
                                     {
                                         d.User.Id,
@@ -98,6 +103,7 @@ namespace TruckManagement.Endpoints
                         var associatedDrivers = await db.Drivers
                             .AsNoTracking()
                             .Include(d => d.Company)
+                            .Include(d => d.Car)
                             .Include(d => d.User)
                             .Where(d => associatedCompanyIds.Contains(d.CompanyId ?? Guid.Empty))
                             .OrderBy(d => d.User.Email)
@@ -108,6 +114,10 @@ namespace TruckManagement.Endpoints
                                 d.Id,
                                 d.CompanyId,
                                 CompanyName = d.Company != null ? d.Company.Name : null,
+                                d.CarId,
+                                CarLicensePlate = d.Car != null ? d.Car.LicensePlate : null,
+                                CarVehicleYear = d.Car != null ? d.Car.VehicleYear : null,
+                                CarRegistrationDate = d.Car != null ? d.Car.RegistrationDate : null,
                                 User = new
                                 {
                                     d.User.Id,

@@ -10,6 +10,12 @@ namespace TruckManagement.DTOs
         public Guid CompanyId { get; set; }
         public CompanyDto? Company { get; set; }
         public List<CarFileDto> Files { get; set; } = new List<CarFileDto>();
+        
+        // Driver assignment information
+        public Guid? DriverId { get; set; }
+        public string? DriverFirstName { get; set; }
+        public string? DriverLastName { get; set; }
+        public string? DriverEmail { get; set; }
     }
 
     public class CarFileDto
