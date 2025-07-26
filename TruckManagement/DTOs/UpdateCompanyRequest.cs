@@ -1,8 +1,9 @@
 namespace TruckManagement.DTOs
 {
-    public class CompanyDto
+    public class UpdateCompanyRequest
     {
-        public Guid Id { get; set; }
+        // ✅ Accept id but ignore it (ID comes from URL parameter)
+        public Guid? Id { get; set; }
         public string Name { get; set; } = default!;
         public string? Address { get; set; }
         public string? Postcode { get; set; }
@@ -11,9 +12,5 @@ namespace TruckManagement.DTOs
         public string? PhoneNumber { get; set; }
         public string? Email { get; set; }
         public string? Remark { get; set; }
-        public bool IsApproved { get; set; }
-        
-        // Include associated drivers
-        public List<DriverDto> Drivers { get; set; } = new List<DriverDto>();
     }
-}
+} 

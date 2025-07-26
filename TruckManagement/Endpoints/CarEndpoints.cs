@@ -3,11 +3,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using TruckManagement.Data;
 using TruckManagement.DTOs;
 using TruckManagement.Entities;
 using TruckManagement.Helpers;
 using TruckManagement.Models; // Where ApiResponseFactory is defined
+using TruckManagement.Options;
 
 namespace TruckManagement.Endpoints
 {
@@ -21,7 +23,10 @@ namespace TruckManagement.Endpoints
                     [FromBody] CreateCarRequest request,
                     ApplicationDbContext db,
                     UserManager<ApplicationUser> userManager,
-                    ClaimsPrincipal currentUser
+                    ClaimsPrincipal currentUser,
+                    IWebHostEnvironment env,
+                    IOptions<StorageOptions> cfg,
+                    IResourceLocalizer resourceLocalizer
                 ) =>
                 {
                     try
@@ -102,10 +107,14 @@ namespace TruckManagement.Endpoints
                             }
                         }
 
+                        using var transaction = await db.Database.BeginTransactionAsync();
+
                         var car = new Car
                         {
                             Id = Guid.NewGuid(),
                             LicensePlate = request.LicensePlate,
+                            VehicleYear = request.VehicleYear,
+                            RegistrationDate = request.RegistrationDate,
                             Remark = request.Remark,
                             CompanyId = companyGuid
                         };
@@ -113,12 +122,42 @@ namespace TruckManagement.Endpoints
                         db.Cars.Add(car);
                         await db.SaveChangesAsync();
 
-                        var responseData = new
+                        // Handle file uploads
+                        var newUploads = request.NewUploads ?? new List<UploadFileRequest>();
+                        if (newUploads.Any())
                         {
-                            car.Id,
-                            car.LicensePlate,
-                            car.Remark,
-                            car.CompanyId
+                            var tmpRoot = Path.Combine(env.ContentRootPath, cfg.Value.TmpPath);
+                            var finalRoot = Path.Combine(env.ContentRootPath, cfg.Value.BasePathCompanies);
+
+                            CarFileHelper.MoveUploadsToCar(car.Id, car.CompanyId, newUploads, tmpRoot,
+                                finalRoot, db, resourceLocalizer);
+
+                            await db.SaveChangesAsync(); // Save CarFile entries
+                        }
+
+                        await transaction.CommitAsync();
+
+                        // Load car with files for response
+                        var createdCar = await db.Cars
+                            .Include(c => c.Files)
+                            .FirstOrDefaultAsync(c => c.Id == car.Id);
+
+                        var responseData = new CarDto
+                        {
+                            Id = createdCar!.Id,
+                            LicensePlate = createdCar.LicensePlate,
+                            VehicleYear = createdCar.VehicleYear,
+                            RegistrationDate = createdCar.RegistrationDate,
+                            Remark = createdCar.Remark,
+                            CompanyId = createdCar.CompanyId,
+                            Files = createdCar.Files.Select(f => new CarFileDto
+                            {
+                                Id = f.Id,
+                                FileName = f.FileName,
+                                OriginalFileName = f.OriginalFileName,
+                                ContentType = f.ContentType,
+                                UploadedAt = f.UploadedAt
+                            }).ToList()
                         };
 
                         return ApiResponseFactory.Success(
@@ -144,7 +183,8 @@ namespace TruckManagement.Endpoints
                     UserManager<ApplicationUser> userManager,
                     ClaimsPrincipal currentUser,
                     [FromQuery] int pageNumber = 1,
-                    [FromQuery] int pageSize = 10
+                    [FromQuery] int pageSize = 10,
+                    [FromQuery] string? search = null
                 ) =>
                 {
                     try
@@ -214,21 +254,47 @@ namespace TruckManagement.Endpoints
                             associatedCompanyIds = companiesIds;
                         }
 
-                        var totalCars = await db.Cars
-                            .Where(c => associatedCompanyIds.Contains(c.CompanyId))
-                            .CountAsync();
+                        // Build base query with company filtering
+                        var carsQuery = db.Cars
+                            .Where(c => associatedCompanyIds.Contains(c.CompanyId));
 
-                        var cars = await db.Cars
-                            .Where(c => associatedCompanyIds.Contains(c.CompanyId))
+                        // Optional license plate search
+                        if (!string.IsNullOrWhiteSpace(search))
+                        {
+                            // Case-insensitive contains; use ILIKE for PostgreSQL
+                            carsQuery = carsQuery.Where(c =>
+                                EF.Functions.ILike(c.LicensePlate, $"%{search.Trim()}%"));
+                        }
+
+                        var totalCars = await carsQuery.CountAsync();
+
+                        var cars = await carsQuery
+                            .Include(c => c.Files)
+                            .Include(c => c.Driver)
+                                .ThenInclude(d => d.User)
                             .OrderBy(c => c.LicensePlate)
                             .Skip((pageNumber - 1) * pageSize)
                             .Take(pageSize)
-                            .Select(c => new
+                            .Select(c => new CarDto
                             {
-                                c.Id,
-                                c.LicensePlate,
-                                c.Remark,
-                                c.CompanyId
+                                Id = c.Id,
+                                LicensePlate = c.LicensePlate,
+                                VehicleYear = c.VehicleYear,
+                                RegistrationDate = c.RegistrationDate,
+                                Remark = c.Remark,
+                                CompanyId = c.CompanyId,
+                                DriverId = c.Driver != null ? c.Driver.Id : null,
+                                DriverFirstName = c.Driver != null && c.Driver.User != null ? c.Driver.User.FirstName : null,
+                                DriverLastName = c.Driver != null && c.Driver.User != null ? c.Driver.User.LastName : null,
+                                DriverEmail = c.Driver != null && c.Driver.User != null ? c.Driver.User.Email : null,
+                                Files = c.Files.Select(f => new CarFileDto
+                                {
+                                    Id = f.Id,
+                                    FileName = f.FileName,
+                                    OriginalFileName = f.OriginalFileName,
+                                    ContentType = f.ContentType,
+                                    UploadedAt = f.UploadedAt
+                                }).ToList()
                             })
                             .ToListAsync();
 
@@ -267,7 +333,10 @@ namespace TruckManagement.Endpoints
                     [FromBody] UpdateCarRequest request,
                     ApplicationDbContext db,
                     UserManager<ApplicationUser> userManager,
-                    ClaimsPrincipal currentUser
+                    ClaimsPrincipal currentUser,
+                    IWebHostEnvironment env,
+                    IOptions<StorageOptions> cfg,
+                    IResourceLocalizer resourceLocalizer
                 ) =>
                 {
                     try
@@ -355,9 +424,22 @@ namespace TruckManagement.Endpoints
                             }
                         }
 
+                        using var transaction = await db.Database.BeginTransactionAsync();
+
+                        // Update car fields
                         if (!string.IsNullOrWhiteSpace(request.LicensePlate))
                         {
                             car.LicensePlate = request.LicensePlate;
+                        }
+
+                        if (request.VehicleYear.HasValue)
+                        {
+                            car.VehicleYear = request.VehicleYear;
+                        }
+
+                        if (request.RegistrationDate.HasValue)
+                        {
+                            car.RegistrationDate = request.RegistrationDate;
                         }
 
                         if (!string.IsNullOrWhiteSpace(request.Remark))
@@ -365,14 +447,49 @@ namespace TruckManagement.Endpoints
                             car.Remark = request.Remark;
                         }
 
-                        await db.SaveChangesAsync();
+                        // Handle file operations
+                        var newUploads = request.NewUploads ?? new List<UploadFileRequest>();
+                        var fileIdsToDelete = request.FileIdsToDelete ?? new List<Guid>();
 
-                        var responseData = new
+                        if (newUploads.Any())
                         {
-                            car.Id,
-                            car.LicensePlate,
-                            car.Remark,
-                            car.CompanyId
+                            var tmpRoot = Path.Combine(env.ContentRootPath, cfg.Value.TmpPath);
+                            var finalRoot = Path.Combine(env.ContentRootPath, cfg.Value.BasePathCompanies);
+
+                            CarFileHelper.MoveUploadsToCar(car.Id, car.CompanyId, newUploads, tmpRoot,
+                                finalRoot, db, resourceLocalizer);
+                        }
+
+                        if (fileIdsToDelete.Any())
+                        {
+                            var finalRoot = Path.Combine(env.ContentRootPath, cfg.Value.BasePathCompanies);
+                            CarFileDeleteHelper.DeleteCarFiles(car.Id, fileIdsToDelete, finalRoot, db);
+                        }
+
+                        await db.SaveChangesAsync();
+                        await transaction.CommitAsync();
+
+                        // Load updated car with files for response
+                        var updatedCar = await db.Cars
+                            .Include(c => c.Files)
+                            .FirstOrDefaultAsync(c => c.Id == car.Id);
+
+                        var responseData = new CarDto
+                        {
+                            Id = updatedCar!.Id,
+                            LicensePlate = updatedCar.LicensePlate,
+                            VehicleYear = updatedCar.VehicleYear,
+                            RegistrationDate = updatedCar.RegistrationDate,
+                            Remark = updatedCar.Remark,
+                            CompanyId = updatedCar.CompanyId,
+                            Files = updatedCar.Files.Select(f => new CarFileDto
+                            {
+                                Id = f.Id,
+                                FileName = f.FileName,
+                                OriginalFileName = f.OriginalFileName,
+                                ContentType = f.ContentType,
+                                UploadedAt = f.UploadedAt
+                            }).ToList()
                         };
 
                         return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
@@ -391,7 +508,9 @@ namespace TruckManagement.Endpoints
                     string id,
                     ApplicationDbContext db,
                     UserManager<ApplicationUser> userManager,
-                    ClaimsPrincipal currentUser
+                    ClaimsPrincipal currentUser,
+                    IWebHostEnvironment env,
+                    IOptions<StorageOptions> cfg
                 ) =>
                 {
                     try
@@ -447,10 +566,49 @@ namespace TruckManagement.Endpoints
                             }
                         }
 
-                        db.Cars.Remove(car);
-                        await db.SaveChangesAsync();
+                        // Use transaction to ensure atomicity
+                        using var transaction = await db.Database.BeginTransactionAsync();
 
-                        return ApiResponseFactory.Success("Car deleted successfully.", StatusCodes.Status200OK);
+                        try
+                        {
+                            // 1. Get all associated files
+                            var carFiles = await db.CarFiles
+                                .Where(f => f.CarId == car.Id)
+                                .ToListAsync();
+
+                            // 2. Delete physical files from storage
+                            if (carFiles.Any())
+                            {
+                                var basePath = Path.Combine(env.ContentRootPath, cfg.Value.BasePath ?? "storage");
+                                
+                                foreach (var carFile in carFiles)
+                                {
+                                    var absolutePath = Path.Combine(basePath, carFile.FilePath);
+                                    if (File.Exists(absolutePath))
+                                    {
+                                        File.Delete(absolutePath);
+                                    }
+                                }
+
+                                // 3. Delete CarFile database records
+                                db.CarFiles.RemoveRange(carFiles);
+                            }
+
+                            // 4. Delete the car
+                            db.Cars.Remove(car);
+
+                            // 5. Commit all changes
+                            await db.SaveChangesAsync();
+                            await transaction.CommitAsync();
+
+                            return ApiResponseFactory.Success("Car deleted successfully.", StatusCodes.Status200OK);
+                        }
+                        catch (Exception deleteEx)
+                        {
+                            await transaction.RollbackAsync();
+                            Console.Error.WriteLine($"Error during car deletion transaction: {deleteEx.Message}");
+                            throw;
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -510,6 +668,9 @@ namespace TruckManagement.Endpoints
 
                         var car = await carQuery
                             .Include(c => c.Company)
+                            .Include(c => c.Files)
+                            .Include(c => c.Driver)
+                                .ThenInclude(d => d.User)
                             .FirstOrDefaultAsync(c => c.Id == carGuid);
 
                         if (car == null)
@@ -517,16 +678,39 @@ namespace TruckManagement.Endpoints
                             return ApiResponseFactory.Error("Car not found.", StatusCodes.Status404NotFound);
                         }
 
-                        var responseData = new
+                        var responseData = new CarDto
                         {
-                            car.Id,
-                            car.LicensePlate,
-                            car.Remark,
-                            Company = new
+                            Id = car.Id,
+                            LicensePlate = car.LicensePlate,
+                            VehicleYear = car.VehicleYear,
+                            RegistrationDate = car.RegistrationDate,
+                            Remark = car.Remark,
+                            CompanyId = car.CompanyId,
+                            DriverId = car.Driver?.Id,
+                            DriverFirstName = car.Driver?.User?.FirstName,
+                            DriverLastName = car.Driver?.User?.LastName,
+                            DriverEmail = car.Driver?.User?.Email,
+                            Company = new CompanyDto
                             {
-                                id = car.CompanyId,
-                                name = car.Company.Name
-                            }
+                                Id = car.Company.Id,
+                                Name = car.Company.Name,
+                                Address = car.Company.Address,
+                                Postcode = car.Company.Postcode,
+                                City = car.Company.City,
+                                Country = car.Company.Country,
+                                PhoneNumber = car.Company.PhoneNumber,
+                                Email = car.Company.Email,
+                                Remark = car.Company.Remark,
+                                IsApproved = car.Company.IsApproved
+                            },
+                            Files = car.Files.Select(f => new CarFileDto
+                            {
+                                Id = f.Id,
+                                FileName = f.FileName,
+                                OriginalFileName = f.OriginalFileName,
+                                ContentType = f.ContentType,
+                                UploadedAt = f.UploadedAt
+                            }).ToList()
                         };
 
                         return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
