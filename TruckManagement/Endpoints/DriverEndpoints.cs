@@ -238,6 +238,171 @@ namespace TruckManagement.Endpoints
                     }
                 });
 
+            app.MapGet("/drivers/{driverId}/with-contract",
+                [Authorize(Roles = "globalAdmin, customerAdmin, driver")]
+                async (
+                    Guid driverId,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    try
+                    {
+                        // Get current user info for authorization
+                        var currentUserId = userManager.GetUserId(currentUser);
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                        bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+                        bool isDriver = currentUser.IsInRole("driver");
+
+                        // Query driver with all related data
+                        var driverQuery = db.Drivers
+                            .AsNoTracking()
+                            .Include(d => d.User)
+                            .Include(d => d.Company)
+                            .Include(d => d.Car)
+                            .Where(d => d.Id == driverId && !d.IsDeleted);
+
+                        // Authorization check for non-global admins
+                        if (!isGlobalAdmin)
+                        {
+                            if (isDriver)
+                            {
+                                // Drivers can only see their own data
+                                driverQuery = driverQuery.Where(d => d.AspNetUserId == currentUserId);
+                            }
+                            else if (isCustomerAdmin)
+                            {
+                                // Customer admins can only see drivers from their associated companies
+                                var contactPerson = await db.ContactPersons
+                                    .Include(cp => cp.ContactPersonClientCompanies)
+                                    .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
+
+                                if (contactPerson == null)
+                                {
+                                    return ApiResponseFactory.Error("Contact person profile not found.", StatusCodes.Status403Forbidden);
+                                }
+
+                                var customerAdminCompanyIds = contactPerson.ContactPersonClientCompanies
+                                    .Where(cpc => cpc.CompanyId.HasValue)
+                                    .Select(cpc => cpc.CompanyId.Value)
+                                    .ToList();
+
+                                driverQuery = driverQuery.Where(d => d.CompanyId.HasValue && customerAdminCompanyIds.Contains(d.CompanyId.Value));
+                            }
+                        }
+
+                        var driver = await driverQuery.FirstOrDefaultAsync();
+                        
+                        if (driver == null)
+                        {
+                            return ApiResponseFactory.Error("Driver not found or access denied.", StatusCodes.Status404NotFound);
+                        }
+
+                        // Get the employee contract
+                        var contract = await db.EmployeeContracts
+                            .AsNoTracking()
+                            .FirstOrDefaultAsync(c => c.DriverId == driver.Id);
+
+                        // Build the comprehensive response
+                        var response = new DriverWithContractDto
+                        {
+                            // User Information
+                            UserId = driver.User.Id,
+                            Email = driver.User.Email ?? "",
+                            FirstName = driver.User.FirstName ?? "",
+                            LastName = driver.User.LastName ?? "",
+                            Address = driver.User.Address,
+                            PhoneNumber = driver.User.PhoneNumber,
+                            Postcode = driver.User.Postcode,
+                            City = driver.User.City,
+                            Country = driver.User.Country,
+                            Remark = driver.User.Remark,
+                            IsApproved = driver.User.IsApproved,
+
+                            // Driver Information
+                            DriverId = driver.Id,
+                            CompanyId = driver.CompanyId,
+                            CompanyName = driver.Company?.Name,
+                            CarId = driver.CarId,
+                            CarLicensePlate = driver.Car?.LicensePlate,
+                            CarVehicleYear = driver.Car?.VehicleYear,
+                            CarRegistrationDate = driver.Car?.RegistrationDate,
+
+                            // Contract Information (if exists)
+                            ContractId = contract?.Id,
+                            ContractStatus = contract?.Status.ToString() ?? "No Contract",
+                            ReleaseVersion = contract?.ReleaseVersion,
+
+                            // Personal Details
+                            DateOfBirth = contract?.DateOfBirth,
+                            BSN = contract?.Bsn,
+
+                            // Employment Details
+                            DateOfEmployment = contract?.DateOfEmployment,
+                            LastWorkingDay = contract?.LastWorkingDay,
+                            Function = contract?.Function,
+                            ProbationPeriod = contract?.ProbationPeriod,
+                            WorkweekDuration = contract?.WorkweekDuration,
+                            WorkweekDurationPercentage = contract?.WorkweekDurationPercentage,
+                            WeeklySchedule = contract?.WeeklySchedule,
+                            WorkingHours = contract?.WorkingHours,
+                            NoticePeriod = contract?.NoticePeriod,
+
+                            // Work Allowances & Settings
+                            NightHoursAllowed = contract?.NightHoursAllowed,
+                            KilometersAllowanceAllowed = contract?.KilometersAllowanceAllowed,
+                            CommuteKilometers = contract?.CommuteKilometers,
+
+                            // Compensation Details
+                            PayScale = contract?.PayScale,
+                            PayScaleStep = contract?.PayScaleStep,
+                            CompensationPerMonthExclBtw = contract?.CompensationPerMonthExclBtw,
+                            CompensationPerMonthInclBtw = contract?.CompensationPerMonthInclBtw,
+                            HourlyWage100Percent = contract?.HourlyWage100Percent,
+                            DeviatingWage = contract?.DeviatingWage,
+
+                            // Travel & Expenses
+                            TravelExpenses = contract?.TravelExpenses,
+                            MaxTravelExpenses = contract?.MaxTravelExpenses,
+
+                            // Vacation & Benefits
+                            VacationAge = contract?.VacationAge,
+                            VacationDays = contract?.VacationDays,
+                            Atv = contract?.Atv,
+                            VacationAllowance = contract?.VacationAllowance,
+
+                            // Company Details (from contract)
+                            EmployerName = contract?.EmployerName,
+                            CompanyAddress = contract?.CompanyAddress,
+                            CompanyPostcode = contract?.CompanyPostcode,
+                            CompanyCity = contract?.CompanyCity,
+                            CompanyPhoneNumber = contract?.CompanyPhoneNumber,
+                            CompanyBtw = contract?.CompanyBtw,
+                            CompanyKvk = contract?.CompanyKvk,
+
+                            // Contract Signing Info
+                            AccessCode = contract?.AccessCode,
+                            SignedAt = contract?.SignedAt,
+                            SignedFileName = contract?.SignedFileName,
+
+                            // Timestamps - using a reasonable default since we don't track creation time
+                            CreatedAt = contract?.DateOfEmployment ?? DateTime.UtcNow
+                        };
+
+                        return ApiResponseFactory.Success(response, StatusCodes.Status200OK);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Error] {ex.Message}");
+                        Console.WriteLine($"[StackTrace] {ex.StackTrace}");
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while retrieving driver information.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+                });
+
             app.MapGet("/drivers",
                 [Authorize(Roles = "globalAdmin, customerAdmin, customerAccountant, employer, customer")]
                 async (
