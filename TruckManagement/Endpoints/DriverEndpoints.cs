@@ -5,7 +5,9 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TruckManagement.Data;
+using TruckManagement.DTOs;
 using TruckManagement.Entities;
+using TruckManagement.Enums;
 using TruckManagement.Helpers;
 using TruckManagement.Services;
 
@@ -15,6 +17,227 @@ namespace TruckManagement.Endpoints
     {
         public static void MapDriversEndpoints(this WebApplication app)
         {
+            app.MapPost("/drivers/create-with-contract",
+                [Authorize(Roles = "globalAdmin, customerAdmin")]
+                async (
+                    [FromBody] CreateDriverWithContractRequest request,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    RoleManager<ApplicationRole> roleManager,
+                    ClaimsPrincipal currentUser,
+                    DriverCompensationService compensationService
+                ) =>
+                {
+                                    // 0. Validate request object is not null (model binding check)
+                if (request == null)
+                {
+                    return ApiResponseFactory.Error("Invalid request data format.", StatusCodes.Status400BadRequest);
+                }
+
+                using var transaction = await db.Database.BeginTransactionAsync();
+                try
+                {
+                    // 1. Validate required fields
+                        if (string.IsNullOrWhiteSpace(request.Email) ||
+                            string.IsNullOrWhiteSpace(request.Password) ||
+                            string.IsNullOrWhiteSpace(request.FirstName) ||
+                            string.IsNullOrWhiteSpace(request.LastName) ||
+                            string.IsNullOrWhiteSpace(request.CompanyId) ||
+                            string.IsNullOrWhiteSpace(request.Function))
+                        {
+                            return ApiResponseFactory.Error(
+                                "Required fields missing: Email, Password, FirstName, LastName, CompanyId, Function are required.",
+                                StatusCodes.Status400BadRequest);
+                        }
+
+                        // 2. Validate Company ID format and existence
+                        if (!Guid.TryParse(request.CompanyId, out Guid companyGuid))
+                        {
+                            return ApiResponseFactory.Error("Invalid Company ID format.", StatusCodes.Status400BadRequest);
+                        }
+
+                        var company = await db.Companies.FirstOrDefaultAsync(c => c.Id == companyGuid);
+                        if (company == null)
+                        {
+                            return ApiResponseFactory.Error("Company not found.", StatusCodes.Status400BadRequest);
+                        }
+
+                        // 3. Authorization check
+                        var currentUserId = userManager.GetUserId(currentUser);
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                        bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+
+                        if (isCustomerAdmin)
+                        {
+                            // Verify customerAdmin can assign to this company
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error("Contact person profile not found.", StatusCodes.Status403Forbidden);
+                            }
+
+                            var customerAdminCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Where(cpc => cpc.CompanyId.HasValue)
+                                .Select(cpc => cpc.CompanyId.Value)
+                                .ToList();
+
+                            if (!customerAdminCompanyIds.Contains(companyGuid))
+                            {
+                                return ApiResponseFactory.Error("You can only create drivers for your associated companies.", StatusCodes.Status403Forbidden);
+                            }
+                        }
+
+                        // 4. Check if email already exists
+                        var existingUser = await userManager.FindByEmailAsync(request.Email);
+                        if (existingUser != null)
+                        {
+                            return ApiResponseFactory.Error("A user with this email already exists.", StatusCodes.Status400BadRequest);
+                        }
+
+                        // 5. Create ApplicationUser
+                        var user = new ApplicationUser
+                        {
+                            UserName = request.Email,
+                            Email = request.Email,
+                            FirstName = request.FirstName,
+                            LastName = request.LastName,
+                            Address = request.Address,
+                            PhoneNumber = request.PhoneNumber,
+                            Postcode = request.Postcode,
+                            City = request.City,
+                            Country = request.Country,
+                            Remark = request.Remark,
+                            IsApproved = true
+                        };
+
+                        var createUserResult = await userManager.CreateAsync(user, request.Password);
+                        if (!createUserResult.Succeeded)
+                        {
+                            var errors = createUserResult.Errors.Select(e => e.Description).ToList();
+                            return ApiResponseFactory.Error(errors, StatusCodes.Status400BadRequest);
+                        }
+
+                        // 6. Assign driver role
+                        var assignRoleResult = await userManager.AddToRoleAsync(user, "driver");
+                        if (!assignRoleResult.Succeeded)
+                        {
+                            await userManager.DeleteAsync(user);
+                            var roleErrors = assignRoleResult.Errors.Select(e => e.Description).ToList();
+                            return ApiResponseFactory.Error(roleErrors, StatusCodes.Status400BadRequest);
+                        }
+
+                        // 7. Create Driver entity
+                        var driver = new Driver
+                        {
+                            Id = Guid.NewGuid(),
+                            AspNetUserId = user.Id,
+                            CompanyId = companyGuid
+                        };
+                        db.Drivers.Add(driver);
+
+                        // 8. Create EmployeeContract with auto-filled company data
+                        var contract = new EmployeeContract
+                        {
+                            Id = Guid.NewGuid(),
+                            DriverId = driver.Id,
+                            CompanyId = companyGuid,
+                            ReleaseVersion = 1.0m,
+                            Status = EmployeeContractStatus.Pending,
+                            
+                            // Required contract fields
+                            DateOfEmployment = request.DateOfEmployment,
+                            WorkweekDuration = request.WorkweekDuration,
+                            Function = request.Function,
+                            
+                            // Optional contract fields
+                            DateOfBirth = request.DateOfBirth,
+                            ProbationPeriod = request.ProbationPeriod,
+                            WeeklySchedule = request.WeeklySchedule,
+                            WorkingHours = request.WorkingHours,
+                            NoticePeriod = request.NoticePeriod,
+                            PayScale = request.PayScale,
+                            PayScaleStep = request.PayScaleStep,
+                            Bsn = request.BSN,
+                            LastWorkingDay = request.LastWorkingDay,
+                            VacationDays = request.VacationDays,
+                            VacationAge = request.VacationAge,
+                            WorkweekDurationPercentage = request.WorkweekDurationPercentage,
+                            
+                            // Allowances & Settings
+                            NightHoursAllowed = request.NightHoursAllowed,
+                            KilometersAllowanceAllowed = request.KilometersAllowanceAllowed,
+                            CommuteKilometers = request.CommuteKilometers,
+                            
+                            // Compensation Details
+                            CompensationPerMonthExclBtw = request.CompensationPerMonthExclBtw,
+                            CompensationPerMonthInclBtw = request.CompensationPerMonthInclBtw,
+                            HourlyWage100Percent = request.HourlyWage100Percent,
+                            DeviatingWage = request.DeviatingWage,
+                            
+                            // Travel & Expenses
+                            TravelExpenses = request.TravelExpenses,
+                            MaxTravelExpenses = request.MaxTravelExpenses,
+                            
+                            // Vacation Benefits
+                            Atv = request.Atv,
+                            VacationAllowance = request.VacationAllowance,
+                            
+                            // Auto-filled company data (can be overridden by request)
+                            CompanyName = company.Name,
+                            CompanyAddress = company.Address,
+                            CompanyPostcode = company.Postcode,
+                            CompanyCity = company.City,
+                            CompanyPhoneNumber = company.PhoneNumber,
+                            EmployerName = !string.IsNullOrWhiteSpace(request.EmployerName) ? request.EmployerName : company.Name,
+                            CompanyBtw = request.CompanyBtw,
+                            CompanyKvk = request.CompanyKvk,
+                            
+                            // Employee data from user
+                            EmployeeFirstName = user.FirstName,
+                            EmployeeLastName = user.LastName,
+                            EmployeeAddress = user.Address,
+                            EmployeePostcode = user.Postcode,
+                            EmployeeCity = user.City
+                        };
+                        db.EmployeeContracts.Add(contract);
+
+                        // 9. Create default DriverCompensationSettings
+                        await compensationService.CreateDefaultDriverCompensationSettingsAsync(driver);
+
+                        // 10. Save all changes
+                        await db.SaveChangesAsync();
+                        await transaction.CommitAsync();
+
+                        // 11. Return success response
+                        return ApiResponseFactory.Success(new
+                        {
+                            UserId = user.Id,
+                            DriverId = driver.Id,
+                            ContractId = contract.Id,
+                            Email = user.Email,
+                            FullName = $"{user.FirstName} {user.LastName}",
+                            CompanyName = company.Name,
+                            ContractStatus = contract.Status.ToString(),
+                            DateOfEmployment = contract.DateOfEmployment,
+                            Function = contract.Function,
+                            WorkweekDuration = contract.WorkweekDuration
+                        }, StatusCodes.Status201Created);
+                    }
+                    catch (Exception ex)
+                    {
+                        await transaction.RollbackAsync();
+                        Console.WriteLine($"[Error] {ex.Message}");
+                        Console.WriteLine($"[StackTrace] {ex.StackTrace}");
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while creating the driver.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+                });
+
             app.MapGet("/drivers",
                 [Authorize(Roles = "globalAdmin, customerAdmin, customerAccountant, employer, customer")]
                 async (
