@@ -227,7 +227,16 @@ public static class WeeksToSubmitEndpoints
 
                 var totalHours = Math.Round(partRideRows.Sum(r => r.Hours), 2);
                 var totalForecast = Math.Round(partRideRows.Sum(r => r.ForecastedEarnings), 2);
-
+                var vacationHoursUsed = week.PartRides
+                    .Where(pr => pr.VacationHours < 0) // negative ⇒ used
+                    .Sum(pr => -pr.VacationHours);
+                
+                var vacationHoursLeft = await db.PartRides
+                    .Where(pr =>
+                        pr.DriverId == week.DriverId &&
+                        pr.Date.Year == week.Year)        
+                    .SumAsync(pr => pr.VacationHours ?? 0); 
+                
                 var result = new
                 {
                     week.Id,
@@ -243,7 +252,9 @@ public static class WeeksToSubmitEndpoints
                     },
                     TotalHours = totalHours,
                     TotalForecasted = totalForecast,
-                    PartRides = partRideRows
+                    PartRides = partRideRows,
+                    VacationHoursUsed = vacationHoursUsed,
+                    VacationHoursLeft = vacationHoursLeft
                 };
 
                 return ApiResponseFactory.Success(result);
