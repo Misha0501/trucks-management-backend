@@ -1427,6 +1427,17 @@ public static class PartRideEndpoints
                     db.PartRideDisputes.Add(dispute);
                     // Mark the parent ride as being in dispute
                     partRide.Status = PartRideStatus.Dispute;
+                    // Re‑open the parent week so it can be reviewed again
+                    if (partRide.WeekApprovalId.HasValue)
+                    {
+                        var weekApproval = await db.WeekApprovals
+                            .FirstOrDefaultAsync(w => w.Id == partRide.WeekApprovalId.Value);
+
+                        if (weekApproval != null)
+                        {
+                            weekApproval.Status = WeekApprovalStatus.PendingAdmin;
+                        }
+                    }
 
                     await db.SaveChangesAsync();
                     await transaction.CommitAsync();
@@ -1531,6 +1542,17 @@ public static class PartRideEndpoints
 
                     /* -------- approve  -------------------- */
                     partRide.Status = PartRideStatus.Accepted;
+                    // When a PartRide is approved, its parent week needs to be re‑opened
+                    if (partRide.WeekApprovalId.HasValue)
+                    {
+                        var weekApproval = await db.WeekApprovals
+                            .FirstOrDefaultAsync(w => w.Id == partRide.WeekApprovalId.Value);
+
+                        if (weekApproval != null)
+                        {
+                            weekApproval.Status = WeekApprovalStatus.PendingAdmin;
+                        }
+                    }
                     // If you later add audit columns such as ApprovedAt / ApprovedByUserId,
                     // update them here as well.
 
@@ -1615,7 +1637,18 @@ public static class PartRideEndpoints
                     }
 
                     /* ---------- reject ----------------------- */
-                    partRide.Status = PartRideStatus.Rejected;
+                   partRide.Status = PartRideStatus.Rejected;
+                    // When a PartRide is rejected, its parent week needs to be re‑opened
+                    if (partRide.WeekApprovalId.HasValue)
+                    {
+                        var weekApproval = await db.WeekApprovals
+                            .FirstOrDefaultAsync(w => w.Id == partRide.WeekApprovalId.Value);
+
+                        if (weekApproval != null)
+                        {
+                            weekApproval.Status = WeekApprovalStatus.PendingAdmin;
+                        }
+                    }
 
                     await db.SaveChangesAsync();
                     await tx.CommitAsync();
