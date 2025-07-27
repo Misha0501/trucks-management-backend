@@ -63,5 +63,8 @@ namespace TruckManagement.DTOs
         public string? EmployerName { get; set; }
         public string? CompanyBtw { get; set; }
         public string? CompanyKvk { get; set; }
+        
+        // File Uploads
+        public List<UploadFileRequest>? NewUploads { get; set; }
     }
 } 

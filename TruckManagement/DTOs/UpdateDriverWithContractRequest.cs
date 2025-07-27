@@ -65,5 +65,9 @@ namespace TruckManagement.DTOs
         
         // Car Assignment
         public string? CarId { get; set; }
+        
+        // File Management
+        public List<UploadFileRequest>? NewUploads { get; set; }
+        public List<Guid>? FileIdsToDelete { get; set; }
     }
 } 

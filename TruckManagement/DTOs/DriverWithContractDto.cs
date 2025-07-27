@@ -81,7 +81,19 @@ namespace TruckManagement.DTOs
         public DateTime? SignedAt { get; set; }
         public string? SignedFileName { get; set; }
         
+        // Driver Files
+        public List<DriverFileDto> Files { get; set; } = new List<DriverFileDto>();
+        
         // Timestamps
         public DateTime CreatedAt { get; set; }
+    }
+    
+    public class DriverFileDto
+    {
+        public Guid Id { get; set; }
+        public string FileName { get; set; } = default!;
+        public string OriginalFileName { get; set; } = default!;
+        public string ContentType { get; set; } = default!;
+        public DateTime UploadedAt { get; set; }
     }
 } 

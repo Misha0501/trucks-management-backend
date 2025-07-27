@@ -4,11 +4,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using TruckManagement.Data;
 using TruckManagement.DTOs;
 using TruckManagement.Entities;
 using TruckManagement.Enums;
 using TruckManagement.Helpers;
+using TruckManagement.Options;
 using TruckManagement.Services;
 
 namespace TruckManagement.Endpoints
@@ -25,7 +27,10 @@ namespace TruckManagement.Endpoints
                     UserManager<ApplicationUser> userManager,
                     RoleManager<ApplicationRole> roleManager,
                     ClaimsPrincipal currentUser,
-                    DriverCompensationService compensationService
+                    DriverCompensationService compensationService,
+                    IWebHostEnvironment env,
+                    IOptions<StorageOptions> cfg,
+                    IResourceLocalizer resourceLocalizer
                 ) =>
                 {
                                     // 0. Validate request object is not null (model binding check)
@@ -209,6 +214,20 @@ namespace TruckManagement.Endpoints
 
                         // 10. Save all changes
                         await db.SaveChangesAsync();
+
+                        // 11. Handle file uploads
+                        var newUploads = request.NewUploads ?? new List<UploadFileRequest>();
+                        if (newUploads.Any())
+                        {
+                            var tmpRoot = Path.Combine(env.ContentRootPath, cfg.Value.TmpPath);
+                            var finalRoot = Path.Combine(env.ContentRootPath, cfg.Value.BasePathCompanies);
+
+                            DriverFileHelper.MoveUploadsToDriver(driver.Id, driver.CompanyId, newUploads, tmpRoot,
+                                finalRoot, db, resourceLocalizer);
+
+                            await db.SaveChangesAsync(); // Save DriverFile entries
+                        }
+
                         await transaction.CommitAsync();
 
                         // 11. Return success response
@@ -261,6 +280,7 @@ namespace TruckManagement.Endpoints
                             .Include(d => d.User)
                             .Include(d => d.Company)
                             .Include(d => d.Car)
+                            .Include(d => d.Files)
                             .Where(d => d.Id == driverId && !d.IsDeleted);
 
                         // Authorization check for non-global admins
@@ -386,6 +406,16 @@ namespace TruckManagement.Endpoints
                             SignedAt = contract?.SignedAt,
                             SignedFileName = contract?.SignedFileName,
 
+                            // Driver Files
+                            Files = driver.Files.Select(f => new DriverFileDto
+                            {
+                                Id = f.Id,
+                                FileName = f.FileName,
+                                OriginalFileName = f.OriginalFileName,
+                                ContentType = f.ContentType,
+                                UploadedAt = f.UploadedAt
+                            }).ToList(),
+
                             // Timestamps - using a reasonable default since we don't track creation time
                             CreatedAt = contract?.DateOfEmployment ?? DateTime.UtcNow
                         };
@@ -410,7 +440,10 @@ namespace TruckManagement.Endpoints
                     [FromBody] UpdateDriverWithContractRequest request,
                     ApplicationDbContext db,
                     UserManager<ApplicationUser> userManager,
-                    ClaimsPrincipal currentUser
+                    ClaimsPrincipal currentUser,
+                    IWebHostEnvironment env,
+                    IOptions<StorageOptions> cfg,
+                    IResourceLocalizer resourceLocalizer
                 ) =>
                 {
                     // 0. Validate request object is not null
@@ -431,6 +464,7 @@ namespace TruckManagement.Endpoints
                             .Include(d => d.User)
                             .Include(d => d.Company)
                             .Include(d => d.Car)
+                            .Include(d => d.Files)
                             .FirstOrDefaultAsync(d => d.Id == driverId && !d.IsDeleted);
 
                         if (driver == null)
@@ -625,16 +659,36 @@ namespace TruckManagement.Endpoints
                         if (request.CompanyBtw != null) contract.CompanyBtw = request.CompanyBtw;
                         if (request.CompanyKvk != null) contract.CompanyKvk = request.CompanyKvk;
 
-                        // 9. Save all changes
+                        // 9. Handle file operations
+                        var newUploads = request.NewUploads ?? new List<UploadFileRequest>();
+                        var fileIdsToDelete = request.FileIdsToDelete ?? new List<Guid>();
+
+                        if (newUploads.Any())
+                        {
+                            var tmpRoot = Path.Combine(env.ContentRootPath, cfg.Value.TmpPath);
+                            var finalRoot = Path.Combine(env.ContentRootPath, cfg.Value.BasePathCompanies);
+
+                            DriverFileHelper.MoveUploadsToDriver(driver.Id, driver.CompanyId, newUploads, tmpRoot,
+                                finalRoot, db, resourceLocalizer);
+                        }
+
+                        if (fileIdsToDelete.Any())
+                        {
+                            var finalRoot = Path.Combine(env.ContentRootPath, cfg.Value.BasePathCompanies);
+                            DriverFileDeleteHelper.DeleteDriverFiles(driver.Id, fileIdsToDelete, finalRoot, db);
+                        }
+
+                        // 10. Save all changes
                         await db.SaveChangesAsync();
                         await transaction.CommitAsync();
 
-                        // 10. Reload driver with fresh data for response
+                        // 11. Reload driver with fresh data for response
                         var updatedDriver = await db.Drivers
                             .AsNoTracking()
                             .Include(d => d.User)
                             .Include(d => d.Company)
                             .Include(d => d.Car)
+                            .Include(d => d.Files)
                             .FirstOrDefaultAsync(d => d.Id == driverId);
 
                         var updatedContract = await db.EmployeeContracts
@@ -723,6 +777,16 @@ namespace TruckManagement.Endpoints
                             SignedAt = updatedContract?.SignedAt,
                             SignedFileName = updatedContract?.SignedFileName,
 
+                            // Driver Files
+                            Files = updatedDriver.Files.Select(f => new DriverFileDto
+                            {
+                                Id = f.Id,
+                                FileName = f.FileName,
+                                OriginalFileName = f.OriginalFileName,
+                                ContentType = f.ContentType,
+                                UploadedAt = f.UploadedAt
+                            }).ToList(),
+
                             // Timestamps
                             CreatedAt = updatedContract?.DateOfEmployment ?? DateTime.UtcNow
                         };
@@ -747,7 +811,9 @@ namespace TruckManagement.Endpoints
                     Guid driverId,
                     ApplicationDbContext db,
                     UserManager<ApplicationUser> userManager,
-                    ClaimsPrincipal currentUser
+                    ClaimsPrincipal currentUser,
+                    IWebHostEnvironment env,
+                    IOptions<StorageOptions> cfg
                 ) =>
                 {
                     using var transaction = await db.Database.BeginTransactionAsync();
@@ -762,6 +828,7 @@ namespace TruckManagement.Endpoints
                             .Include(d => d.User)
                             .Include(d => d.Company)
                             .Include(d => d.Car)
+                            .Include(d => d.Files)
                             .FirstOrDefaultAsync(d => d.Id == driverId && !d.IsDeleted);
 
                         if (driver == null)
@@ -812,13 +879,21 @@ namespace TruckManagement.Endpoints
                             driver.CarId = null;
                         }
 
-                        // 6. Soft delete the ApplicationUser
+                        // 6. Delete driver files (physical files and database records)
+                        if (driver.Files.Any())
+                        {
+                            var finalRoot = Path.Combine(env.ContentRootPath, cfg.Value.BasePathCompanies);
+                            var fileIdsToDelete = driver.Files.Select(f => f.Id).ToList();
+                            DriverFileDeleteHelper.DeleteDriverFiles(driver.Id, fileIdsToDelete, finalRoot, db);
+                        }
+
+                        // 7. Soft delete the ApplicationUser
                         driver.User.IsDeleted = true;
 
-                        // 7. Soft delete the Driver
+                        // 8. Soft delete the Driver
                         driver.IsDeleted = true;
 
-                        // 8. Save all changes
+                        // 9. Save all changes
                         await db.SaveChangesAsync();
                         await transaction.CommitAsync();
 
