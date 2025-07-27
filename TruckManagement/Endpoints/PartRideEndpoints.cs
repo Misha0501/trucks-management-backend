@@ -643,7 +643,6 @@ public static class PartRideEndpoints
             async (
                 [FromQuery] string? companyId,
                 [FromQuery] string? carId,
-                [FromQuery] int? weekNumber,
                 [FromQuery] decimal? turnoverMin,
                 [FromQuery] decimal? turnoverMax,
                 [FromQuery] double? decimalHoursMin,
@@ -663,12 +662,16 @@ public static class PartRideEndpoints
                     var driverIdsRaw = httpContext.Request.Query["driverIds"];
                     var clientIdsRaw = httpContext.Request.Query["clientIds"];
                     var carIdsRaw = httpContext.Request.Query["carIds"];
+                    var weekNumbersRaw = httpContext.Request.Query["weekNumbers"];
+                    var weekDaysRaw = httpContext.Request.Query["weekDays"];
                     var driverGuids = GuidHelper.ParseGuids(driverIdsRaw, "driverIds");
                     var clientGuids = GuidHelper.ParseGuids(clientIdsRaw, "clientIds");
                     var carIds = GuidHelper.ParseGuids(carIdsRaw, "carIds");
                     var statusEnums = StatusFilterHelper.ParseStatusIds(
                         httpContext.Request.Query["statusIds"]);
-
+                    var weekNumbers = QueryParsingHelper.ParseIntQueryValues(weekNumbersRaw);
+                    var weekDays = QueryParsingHelper.ParseIntQueryValues(weekDaysRaw);
+                    
                     if (pageNumber < 1) pageNumber = 1;
                     if (pageSize < 1) pageSize = 10;
 
@@ -764,7 +767,8 @@ public static class PartRideEndpoints
                         query,
                         companyId,
                         carId,
-                        weekNumber,
+                        weekNumbers,
+                        weekDays,
                         turnoverMin,
                         turnoverMax,
                         decimalHoursMin,
@@ -1427,6 +1431,17 @@ public static class PartRideEndpoints
                     db.PartRideDisputes.Add(dispute);
                     // Mark the parent ride as being in dispute
                     partRide.Status = PartRideStatus.Dispute;
+                    // Re‑open the parent week so it can be reviewed again
+                    if (partRide.WeekApprovalId.HasValue)
+                    {
+                        var weekApproval = await db.WeekApprovals
+                            .FirstOrDefaultAsync(w => w.Id == partRide.WeekApprovalId.Value);
+
+                        if (weekApproval != null)
+                        {
+                            weekApproval.Status = WeekApprovalStatus.PendingAdmin;
+                        }
+                    }
 
                     await db.SaveChangesAsync();
                     await transaction.CommitAsync();
@@ -1531,6 +1546,17 @@ public static class PartRideEndpoints
 
                     /* -------- approve  -------------------- */
                     partRide.Status = PartRideStatus.Accepted;
+                    // When a PartRide is approved, its parent week needs to be re‑opened
+                    if (partRide.WeekApprovalId.HasValue)
+                    {
+                        var weekApproval = await db.WeekApprovals
+                            .FirstOrDefaultAsync(w => w.Id == partRide.WeekApprovalId.Value);
+
+                        if (weekApproval != null)
+                        {
+                            weekApproval.Status = WeekApprovalStatus.PendingAdmin;
+                        }
+                    }
                     // If you later add audit columns such as ApprovedAt / ApprovedByUserId,
                     // update them here as well.
 
@@ -1615,7 +1641,18 @@ public static class PartRideEndpoints
                     }
 
                     /* ---------- reject ----------------------- */
-                    partRide.Status = PartRideStatus.Rejected;
+                   partRide.Status = PartRideStatus.Rejected;
+                    // When a PartRide is rejected, its parent week needs to be re‑opened
+                    if (partRide.WeekApprovalId.HasValue)
+                    {
+                        var weekApproval = await db.WeekApprovals
+                            .FirstOrDefaultAsync(w => w.Id == partRide.WeekApprovalId.Value);
+
+                        if (weekApproval != null)
+                        {
+                            weekApproval.Status = WeekApprovalStatus.PendingAdmin;
+                        }
+                    }
 
                     await db.SaveChangesAsync();
                     await tx.CommitAsync();
@@ -1643,7 +1680,8 @@ public static class PartRideEndpoints
         IQueryable<PartRide> query,
         string? companyId,
         string? carId,
-        int? weekNumber,
+        List<int>? weekNumbers,
+        List<int>? weekDays,
         decimal? turnoverMin,
         decimal? turnoverMax,
         double? decimalHoursMin,
@@ -1666,11 +1704,16 @@ public static class PartRideEndpoints
             query = query.Where(pr => pr.CarId == carGuid);
         }
 
-        if (weekNumber.HasValue && weekNumber.Value > 0)
+        if (weekNumbers != null && weekNumbers.Any())
         {
-            query = query.Where(pr => pr.WeekNumber == weekNumber.Value);
+            query = query.Where(pr => pr.WeekNumber.HasValue && weekNumbers.Contains(pr.WeekNumber.Value));
         }
-
+        
+        if (weekDays != null && weekDays.Any())
+        {
+            query = query.Where(pr => weekDays.Contains((int)pr.Date.DayOfWeek == 0 ? 7 : (int)pr.Date.DayOfWeek));
+        }
+        
         if (turnoverMin.HasValue)
         {
             query = query.Where(pr => pr.Turnover >= turnoverMin.Value);
