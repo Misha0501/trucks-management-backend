@@ -786,9 +786,122 @@ namespace TruckManagement.Seeding
             }
             await dbContext.SaveChangesAsync();
             
+            // 22) Seed PartRides with vacation hours for testing (2025 data)
+            await SeedVacationTestData(dbContext, seededDriverEntity);
+            
             await CaoSeeder.SeedAsync(dbContext);
             
             await VacationRightSeeder.SeedAsync(dbContext);
+        }
+
+        private static async Task SeedVacationTestData(ApplicationDbContext dbContext, Driver? seededDriver)
+        {
+            if (seededDriver == null) return;
+
+            var existingVacationTestData = dbContext.PartRides
+                .IgnoreQueryFilters()
+                .Any(pr => pr.Remark != null && pr.Remark.Contains("VACATION_TEST_DATA"));
+            
+            if (existingVacationTestData) return; // Already seeded
+
+            var currentYear = DateTime.UtcNow.Year;
+            var testDataRides = new List<PartRide>();
+
+            // Get an existing car and client for the test data
+            var seededCar = dbContext.Cars.IgnoreQueryFilters().FirstOrDefault();
+            var seededClient = dbContext.Clients.IgnoreQueryFilters().FirstOrDefault();
+            var defaultCompanyId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+
+            if (seededCar == null || seededClient == null) return;
+
+            // 1. Work days with positive vacation hours (earned)
+            for (int i = 1; i <= 20; i++)
+            {
+                testDataRides.Add(new PartRide
+                {
+                    Id = Guid.NewGuid(),
+                    Date = DateTime.SpecifyKind(new DateTime(currentYear, 1, i), DateTimeKind.Utc), // January 2025
+                    Start = new TimeSpan(8, 0, 0),
+                    End = new TimeSpan(16, 0, 0),
+                    Rest = new TimeSpan(0, 30, 0),
+                    TotalKilometers = 100,
+                    CarId = seededCar.Id,
+                    DriverId = seededDriver.Id,
+                    ClientId = seededClient.Id,
+                    CompanyId = defaultCompanyId,
+                    DecimalHours = 8.0,
+                    VacationHours = 0.32, // Earned vacation hours per work day (~8 hours of 25 days = 200 hours per year / 260 work days ≈ 0.77 per day)
+                    Remark = "VACATION_TEST_DATA - Work day with earned vacation",
+                    Status = PartRideStatus.Accepted
+                });
+            }
+
+            // 2. More work days to accumulate vacation hours
+            for (int i = 1; i <= 15; i++)
+            {
+                testDataRides.Add(new PartRide
+                {
+                    Id = Guid.NewGuid(),
+                    Date = DateTime.SpecifyKind(new DateTime(currentYear, 2, i), DateTimeKind.Utc), // February 2025
+                    Start = new TimeSpan(9, 0, 0),
+                    End = new TimeSpan(17, 0, 0),
+                    Rest = new TimeSpan(0, 45, 0),
+                    TotalKilometers = 120,
+                    CarId = seededCar.Id,
+                    DriverId = seededDriver.Id,
+                    ClientId = seededClient.Id,
+                    CompanyId = defaultCompanyId,
+                    DecimalHours = 7.25,
+                    VacationHours = 0.29, // Different amount for variety
+                    Remark = "VACATION_TEST_DATA - Work day with earned vacation",
+                    Status = PartRideStatus.Accepted
+                });
+            }
+
+            // 3. Holiday/Vacation days with negative vacation hours (used)
+            testDataRides.Add(new PartRide
+            {
+                Id = Guid.NewGuid(),
+                Date = DateTime.SpecifyKind(new DateTime(currentYear, 2, 20), DateTimeKind.Utc), // February 20, 2025
+                Start = new TimeSpan(0, 0, 0),
+                End = new TimeSpan(0, 0, 0),
+                Rest = new TimeSpan(0, 0, 0),
+                TotalKilometers = 0,
+                CarId = seededCar.Id,
+                DriverId = seededDriver.Id,
+                ClientId = seededClient.Id,
+                CompanyId = defaultCompanyId,
+                DecimalHours = 8.0,
+                VacationHours = -8.0, // Used 8 hours of vacation
+                Remark = "VACATION_TEST_DATA - Vacation day (used vacation hours)",
+                Status = PartRideStatus.Accepted
+            });
+
+            // 4. Another vacation day
+            testDataRides.Add(new PartRide
+            {
+                Id = Guid.NewGuid(),
+                Date = DateTime.SpecifyKind(new DateTime(currentYear, 2, 21), DateTimeKind.Utc), // February 21, 2025
+                Start = new TimeSpan(0, 0, 0),
+                End = new TimeSpan(0, 0, 0),
+                Rest = new TimeSpan(0, 0, 0),
+                TotalKilometers = 0,
+                CarId = seededCar.Id,
+                DriverId = seededDriver.Id,
+                ClientId = seededClient.Id,
+                CompanyId = defaultCompanyId,
+                DecimalHours = 8.0,
+                VacationHours = -8.0, // Used another 8 hours of vacation
+                Remark = "VACATION_TEST_DATA - Vacation day (used vacation hours)",
+                Status = PartRideStatus.Accepted
+            });
+
+            // Add all test data
+            dbContext.PartRides.AddRange(testDataRides);
+            await dbContext.SaveChangesAsync();
+
+            Console.WriteLine($"✅ Added {testDataRides.Count} PartRides with vacation test data for driver {seededDriver.Id}");
+            Console.WriteLine($"📊 Expected vacation balance: {testDataRides.Sum(pr => pr.VacationHours):F2} hours");
         }
     }
 }

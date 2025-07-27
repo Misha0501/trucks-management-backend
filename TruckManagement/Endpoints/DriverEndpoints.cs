@@ -324,6 +324,14 @@ namespace TruckManagement.Endpoints
                             .AsNoTracking()
                             .FirstOrDefaultAsync(c => c.DriverId == driver.Id);
 
+                        // Calculate vacation hours left for current year
+                        var currentYear = DateTime.UtcNow.Year;
+                        var vacationHoursLeft = await db.PartRides
+                            .Where(pr =>
+                                pr.DriverId == driver.Id &&
+                                pr.Date.Year == currentYear)
+                            .SumAsync(pr => pr.VacationHours ?? 0);
+
                         // Build the comprehensive response
                         var response = new DriverWithContractDto
                         {
@@ -391,6 +399,7 @@ namespace TruckManagement.Endpoints
                             VacationDays = contract?.VacationDays,
                             Atv = contract?.Atv,
                             VacationAllowance = contract?.VacationAllowance,
+                            VacationHoursLeft = vacationHoursLeft,
 
                             // Company Details (from contract)
                             EmployerName = contract?.EmployerName,

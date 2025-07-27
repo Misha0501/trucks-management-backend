@@ -66,6 +66,7 @@ namespace TruckManagement.DTOs
         public int? VacationDays { get; set; }
         public decimal? Atv { get; set; }
         public decimal? VacationAllowance { get; set; }
+        public double VacationHoursLeft { get; set; }
         
         // Company Details (from contract)
         public string? EmployerName { get; set; }
