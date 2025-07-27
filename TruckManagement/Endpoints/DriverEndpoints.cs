@@ -741,6 +741,108 @@ namespace TruckManagement.Endpoints
                     }
                 });
 
+            app.MapDelete("/drivers/{driverId}/with-contract",
+                [Authorize(Roles = "globalAdmin, customerAdmin")]
+                async (
+                    Guid driverId,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    using var transaction = await db.Database.BeginTransactionAsync();
+                    try
+                    {
+                        // 1. Get current user info for authorization
+                        var currentUserId = userManager.GetUserId(currentUser);
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+
+                        // 2. Find the driver with all related data
+                        var driver = await db.Drivers
+                            .Include(d => d.User)
+                            .Include(d => d.Company)
+                            .Include(d => d.Car)
+                            .FirstOrDefaultAsync(d => d.Id == driverId && !d.IsDeleted);
+
+                        if (driver == null)
+                        {
+                            return ApiResponseFactory.Error("Driver not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        // 3. Authorization check for customerAdmin
+                        if (!isGlobalAdmin)
+                        {
+                            // Customer admins can only delete drivers from their associated companies
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error("Contact person profile not found.", StatusCodes.Status403Forbidden);
+                            }
+
+                            var customerAdminCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Where(cpc => cpc.CompanyId.HasValue)
+                                .Select(cpc => cpc.CompanyId.Value)
+                                .ToList();
+
+                            if (!driver.CompanyId.HasValue || !customerAdminCompanyIds.Contains(driver.CompanyId.Value))
+                            {
+                                return ApiResponseFactory.Error("You do not have permission to delete this driver.", StatusCodes.Status403Forbidden);
+                            }
+                        }
+
+                        // 4. Handle EmployeeContract (preserve for historical/legal purposes)
+                        var contract = await db.EmployeeContracts.FirstOrDefaultAsync(c => c.DriverId == driver.Id);
+                        if (contract != null)
+                        {
+                            // Set LastWorkingDay to today if not already set (employment termination record)
+                            if (!contract.LastWorkingDay.HasValue)
+                            {
+                                contract.LastWorkingDay = DateTime.UtcNow.Date;
+                            }
+                            // Note: We keep the contract for historical/audit purposes
+                            // It will become inaccessible through normal driver queries due to soft delete
+                        }
+
+                        // 5. Unassign car from driver (1-1 relationship)
+                        if (driver.CarId.HasValue)
+                        {
+                            driver.CarId = null;
+                        }
+
+                        // 6. Soft delete the ApplicationUser
+                        driver.User.IsDeleted = true;
+
+                        // 7. Soft delete the Driver
+                        driver.IsDeleted = true;
+
+                        // 8. Save all changes
+                        await db.SaveChangesAsync();
+                        await transaction.CommitAsync();
+
+                        return ApiResponseFactory.Success(
+                            new { 
+                                DriverId = driverId,
+                                Message = "Driver and associated contract terminated successfully.",
+                                TerminationDate = DateTime.UtcNow.Date
+                            }, 
+                            StatusCodes.Status200OK
+                        );
+                    }
+                    catch (Exception ex)
+                    {
+                        await transaction.RollbackAsync();
+                        Console.WriteLine($"[Error] {ex.Message}");
+                        Console.WriteLine($"[StackTrace] {ex.StackTrace}");
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while deleting the driver.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+                });
+
             app.MapGet("/drivers",
                 [Authorize(Roles = "globalAdmin, customerAdmin, customerAccountant, employer, customer")]
                 async (
