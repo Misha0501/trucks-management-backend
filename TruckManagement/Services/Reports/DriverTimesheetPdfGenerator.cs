@@ -88,21 +88,21 @@ public class DriverTimesheetPdfGenerator
             {
                 column.Item().Text(report.CompanyName)
                     .FontSize(16).Bold().FontColor(Colors.White);
-                    
-                column.Item().PaddingTop(5).Text($"Medewerker: {report.PersonnelId}")
-                    .FontSize(12).FontColor(Colors.White);
             });
             
             row.RelativeItem().AlignRight().Column(column =>
             {
-                column.Item().Text($"Personeel ID:")
+                column.Item().Text($"Personeel naam:")
                     .FontSize(9).FontColor(Colors.White);
-                column.Item().Text($"{report.PersonnelId}")
+                column.Item().Text($"{report.DriverName}")
                     .FontSize(11).Bold().FontColor(Colors.White);
                     
                 column.Item().PaddingTop(8).Text($"Gegenereerd:")
                     .FontSize(8).FontColor(Colors.White);
-                column.Item().Text($"{DateTime.Now:dd/MM/yyyy HH:mm}")
+                    
+                // Convert to GMT+2 (Central European Time)
+                var centralEuropeanTime = TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "Central European Standard Time");
+                column.Item().Text($"{centralEuropeanTime:dd/MM/yyyy HH:mm}")
                     .FontSize(8).FontColor(Colors.White);
             });
         });

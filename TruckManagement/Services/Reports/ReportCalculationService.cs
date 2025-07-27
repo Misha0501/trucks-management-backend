@@ -32,6 +32,7 @@ public class ReportCalculationService
         {
             CompanyName = rawData.Company?.Name ?? "Unknown Company",
             PersonnelId = rawData.Driver.Id.ToString(),
+            DriverName = $"{rawData.Driver.User?.FirstName} {rawData.Driver.User?.LastName}".Trim(),
             Year = timeframe.Year,
             PeriodNumber = timeframe.PeriodNumber ?? (timeframe.WeekNumber.HasValue ? ((timeframe.WeekNumber.Value - 1) / 4) + 1 : 1),
             PeriodRange = timeframe.GetPeriodRange(),

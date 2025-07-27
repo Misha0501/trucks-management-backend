@@ -5,6 +5,7 @@ public class DriverTimesheetReport
     // Header Section
     public string CompanyName { get; set; } = default!;
     public string PersonnelId { get; set; } = default!;
+    public string DriverName { get; set; } = default!;
     public int Year { get; set; }
     public int PeriodNumber { get; set; }
     public string PeriodRange { get; set; } = default!; // "week 1 t/m 4"
