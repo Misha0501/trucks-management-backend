@@ -10,6 +10,12 @@ public class DriverTimesheetPdfGenerator
 {
     private readonly CultureInfo _dutchCulture;
     
+    // Define consistent colors for the report
+    private static readonly string HeaderColor = "#2563eb"; // Blue
+    private static readonly string AccentColor = "#f3f4f6"; // Light gray
+    private static readonly string BorderColor = "#d1d5db"; // Medium gray
+    private static readonly string TextColor = "#374151"; // Dark gray
+    
     public DriverTimesheetPdfGenerator()
     {
         _dutchCulture = new CultureInfo("nl-NL");
@@ -25,38 +31,38 @@ public class DriverTimesheetPdfGenerator
             container.Page(page =>
             {
                 page.Size(PageSizes.A4.Landscape());
-                page.Margin(0.5f, Unit.Centimetre);
-                page.DefaultTextStyle(x => x.FontSize(8).FontFamily(Fonts.Arial));
+                page.Margin(1f, Unit.Centimetre);
+                page.DefaultTextStyle(x => x.FontSize(9).FontFamily(Fonts.Arial).FontColor(TextColor));
                 
                 page.Content().Column(column =>
                 {
-                    // Header section
+                    // Header section with better styling
                     column.Item().Element(c => ComposeHeader(c, report));
                     
                     // Employee info and hours summary section (side by side)
-                    column.Item().PaddingTop(10).Row(row =>
+                    column.Item().PaddingTop(15).Row(row =>
                     {
                         row.RelativeItem(1).Element(c => ComposeEmployeeInfo(c, report.EmployeeInfo));
-                        row.ConstantItem(20); // Space between sections
+                        row.ConstantItem(30); // More space between sections
                         row.RelativeItem(1).Element(c => ComposeHoursSummary(c, report.HoursSummary));
                     });
                     
                     // Vacation and TvT section (side by side)
-                    column.Item().PaddingTop(10).Row(row =>
+                    column.Item().PaddingTop(15).Row(row =>
                     {
                         row.RelativeItem(1).Element(c => ComposeVacationSection(c, report.Vacation));
-                        row.ConstantItem(20); // Space between sections
+                        row.ConstantItem(30); // More space between sections
                         row.RelativeItem(1).Element(c => ComposeTvTSection(c, report.TimeForTime));
                     });
                     
                     // Daily breakdown table (main content)
-                    column.Item().PaddingTop(15).Element(c => ComposeDailyBreakdown(c, report));
+                    column.Item().PaddingTop(20).Element(c => ComposeDailyBreakdown(c, report));
                     
-                    // Grand total
-                    column.Item().PaddingTop(10).Element(c => ComposeGrandTotal(c, report.GrandTotal));
+                    // Grand total with better styling
+                    column.Item().PaddingTop(15).Element(c => ComposeGrandTotal(c, report.GrandTotal));
                     
                     // Signature line
-                    column.Item().PaddingTop(20).Element(c => ComposeSignature(c, report));
+                    column.Item().PaddingTop(25).Element(c => ComposeSignature(c, report));
                 });
             });
         }).GeneratePdf();
@@ -64,305 +70,379 @@ public class DriverTimesheetPdfGenerator
     
     private void ComposeHeader(IContainer container, DriverTimesheetReport report)
     {
-        container.Row(row =>
+        container.Background(HeaderColor).Padding(15).Row(row =>
         {
             row.RelativeItem().Column(column =>
             {
-                column.Item().Text($"{report.PeriodRange}")
-                    .FontSize(12).Bold();
+                column.Item().Text("URENVERANTWOORDING")
+                    .FontSize(18).Bold().FontColor(Colors.White);
                     
-                column.Item().Text($"{report.Year}")
-                    .FontSize(10);
+                column.Item().PaddingTop(5).Text($"{report.PeriodRange}")
+                    .FontSize(12).FontColor(Colors.White);
                     
-                column.Item().Text($"Periode_{report.PeriodNumber}")
-                    .FontSize(10);
+                column.Item().Text($"Jaar: {report.Year} | Periode: {report.PeriodNumber}")
+                    .FontSize(10).FontColor(Colors.White);
             });
             
             row.RelativeItem().AlignCenter().Column(column =>
             {
                 column.Item().Text(report.CompanyName)
-                    .FontSize(14).Bold();
+                    .FontSize(16).Bold().FontColor(Colors.White);
+                    
+                column.Item().PaddingTop(5).Text($"Medewerker: {report.PersonnelId}")
+                    .FontSize(12).FontColor(Colors.White);
             });
             
             row.RelativeItem().AlignRight().Column(column =>
             {
-                column.Item().Text($"Personeel ID: {report.PersonnelId}")
-                    .FontSize(10);
+                column.Item().Text($"Personeel ID:")
+                    .FontSize(9).FontColor(Colors.White);
+                column.Item().Text($"{report.PersonnelId}")
+                    .FontSize(11).Bold().FontColor(Colors.White);
+                    
+                column.Item().PaddingTop(8).Text($"Gegenereerd:")
+                    .FontSize(8).FontColor(Colors.White);
+                column.Item().Text($"{DateTime.Now:dd/MM/yyyy HH:mm}")
+                    .FontSize(8).FontColor(Colors.White);
             });
         });
     }
     
     private void ComposeEmployeeInfo(IContainer container, EmployeeInfoSection employeeInfo)
     {
-        container.Table(table =>
+        container.Border(1).BorderColor(BorderColor).Padding(10).Column(column =>
         {
-            table.ColumnsDefinition(columns =>
+            // Section header
+            column.Item().Background(AccentColor).Padding(8).Text("WERKNEMERSGEGEVENS")
+                .Bold().FontSize(11).FontColor(HeaderColor);
+            
+            // Content table
+            column.Item().PaddingTop(10).Table(table =>
             {
-                columns.RelativeColumn(2); // Label
-                columns.RelativeColumn(1); // Value
+                table.ColumnsDefinition(columns =>
+                {
+                    columns.RelativeColumn(2); // Label
+                    columns.RelativeColumn(3); // Value
+                });
+                
+                // Employment type
+                table.Cell().Text("Dienstverband:").Bold().FontSize(9);
+                table.Cell().Text($"{employeeInfo.EmploymentType} ({employeeInfo.EmploymentPercentage:F0}%)").FontSize(9);
+                
+                // Birth date
+                table.Cell().PaddingTop(5).Text("Geboortedatum:").Bold().FontSize(9);
+                table.Cell().PaddingTop(5).Text(employeeInfo.BirthDate?.ToString("dd/MM/yyyy", _dutchCulture) ?? "-").FontSize(9);
+                
+                // Employment start
+                table.Cell().PaddingTop(5).Text("In dienst sinds:").Bold().FontSize(9);
+                table.Cell().PaddingTop(5).Text(employeeInfo.EmploymentStartDate?.ToString("dd/MM/yyyy", _dutchCulture) ?? "-").FontSize(9);
+                
+                // Employment end
+                table.Cell().PaddingTop(5).Text("Uit dienst:").Bold().FontSize(9);
+                table.Cell().PaddingTop(5).Text(employeeInfo.EmploymentEndDate?.ToString("dd/MM/yyyy", _dutchCulture) ?? "-").FontSize(9);
+                
+                // Commute distance
+                table.Cell().PaddingTop(5).Text("Woon-werk km:").Bold().FontSize(9);
+                table.Cell().PaddingTop(5).Text($"{employeeInfo.CommuteKilometers:F0} km").FontSize(9);
             });
-            
-            table.Header(header =>
-            {
-                header.Cell().Text("Employee Information").Bold().FontSize(10);
-                header.Cell().Text("");
-            });
-            
-            // Employment type
-            table.Cell().Text("dienstverband");
-            table.Cell().Text($"{employeeInfo.EmploymentType} {employeeInfo.EmploymentPercentage:F0}%");
-            
-            // Birth date
-            table.Cell().Text("geb. datum");
-            table.Cell().Text(employeeInfo.BirthDate?.ToString("dd/MM/yyyy", _dutchCulture) ?? "");
-            
-            // Employment start
-            table.Cell().Text("in dienst");
-            table.Cell().Text(employeeInfo.EmploymentStartDate?.ToString("dd/MM/yyyy", _dutchCulture) ?? "");
-            
-            // Employment end
-            table.Cell().Text("uitdienst");
-            table.Cell().Text(employeeInfo.EmploymentEndDate?.ToString("dd/MM/yyyy", _dutchCulture) ?? "");
-            
-            // Commute distance
-            table.Cell().Text("woonwerk km");
-            table.Cell().Text(employeeInfo.CommuteKilometers.ToString("F0"));
         });
     }
     
     private void ComposeHoursSummary(IContainer container, HoursSummarySection hoursSummary)
     {
-        container.Table(table =>
+        container.Border(1).BorderColor(BorderColor).Padding(10).Column(column =>
         {
-            table.ColumnsDefinition(columns =>
+            // Section header
+            column.Item().Background(AccentColor).Padding(8).Text("URENOPGAVE")
+                .Bold().FontSize(11).FontColor(HeaderColor);
+            
+            // Content table
+            column.Item().PaddingTop(10).Table(table =>
             {
-                columns.RelativeColumn(1); // Percentage
-                columns.RelativeColumn(1); // Hours
+                table.ColumnsDefinition(columns =>
+                {
+                    columns.RelativeColumn(3); // Percentage (wider)
+                    columns.RelativeColumn(1); // Hours (narrower)
+                    columns.RelativeColumn(1); // Unit
+                });
+                
+                // Header row
+                table.Cell().Text("Tarief").Bold().FontSize(9).FontColor(HeaderColor);
+                table.Cell().Text("Uren").Bold().FontSize(9).FontColor(HeaderColor);
+                table.Cell().Text("").Bold().FontSize(9);
+                
+                // 100% hours
+                table.Cell().PaddingTop(5).Text("100%").FontSize(9);
+                table.Cell().PaddingTop(5).Text(hoursSummary.Hours100.ToString("F2", _dutchCulture)).FontSize(9);
+                table.Cell().PaddingTop(5).Text("uur").FontSize(8).FontColor(Colors.Grey.Darken2);
+                
+                // 130% hours
+                table.Cell().PaddingTop(3).Text("130%").FontSize(9);
+                table.Cell().PaddingTop(3).Text(hoursSummary.Hours130.ToString("F2", _dutchCulture)).FontSize(9);
+                table.Cell().PaddingTop(3).Text("uur").FontSize(8).FontColor(Colors.Grey.Darken2);
+                
+                // 150% hours
+                table.Cell().PaddingTop(3).Text("150%").FontSize(9);
+                table.Cell().PaddingTop(3).Text(hoursSummary.Hours150.ToString("F2", _dutchCulture)).FontSize(9);
+                table.Cell().PaddingTop(3).Text("uur").FontSize(8).FontColor(Colors.Grey.Darken2);
+                
+                // 200% hours
+                table.Cell().PaddingTop(3).Text("200%").FontSize(9);
+                table.Cell().PaddingTop(3).Text(hoursSummary.Hours200.ToString("F2", _dutchCulture)).FontSize(9);
+                table.Cell().PaddingTop(3).Text("uur").FontSize(8).FontColor(Colors.Grey.Darken2);
+                
+                // Night allowance
+                table.Cell().PaddingTop(8).Text("Nacht 19%").FontSize(9).FontColor(Colors.Orange.Darken2);
+                table.Cell().PaddingTop(8).Text(hoursSummary.TotalNightAllowanceAmount.ToString("C2", _dutchCulture)).FontSize(9).FontColor(Colors.Orange.Darken2);
+                table.Cell().PaddingTop(8).Text("").FontSize(8);
             });
-            
-            table.Header(header =>
-            {
-                header.Cell().Text("Uren").Bold();
-                header.Cell().Text("");
-            });
-            
-            table.Cell().Text("100%");
-            table.Cell().Text(hoursSummary.Hours100.ToString("F2", _dutchCulture));
-            
-            table.Cell().Text("130%");
-            table.Cell().Text(hoursSummary.Hours130.ToString("F2", _dutchCulture));
-            
-            table.Cell().Text("150%");
-            table.Cell().Text(hoursSummary.Hours150.ToString("F2", _dutchCulture));
-            
-            table.Cell().Text("200%");
-            table.Cell().Text(hoursSummary.Hours200.ToString("F2", _dutchCulture));
-            
-            table.Cell().Text("nacht 19%");
-            table.Cell().Text(hoursSummary.TotalNightAllowanceAmount.ToString("C2", _dutchCulture));
         });
     }
     
     private void ComposeVacationSection(IContainer container, VacationSection vacation)
     {
-        container.Table(table =>
+        container.Border(1).BorderColor(BorderColor).Padding(10).Column(column =>
         {
-            table.ColumnsDefinition(columns =>
+            // Section header
+            column.Item().Background(AccentColor).Padding(8).Text("VAKANTIE-OVERZICHT")
+                .Bold().FontSize(11).FontColor(HeaderColor);
+            
+            // Content table
+            column.Item().PaddingTop(10).Table(table =>
             {
-                columns.RelativeColumn(2); // Label
-                columns.RelativeColumn(1); // Value
+                table.ColumnsDefinition(columns =>
+                {
+                    columns.RelativeColumn(2); // Label
+                    columns.RelativeColumn(1); // Value (narrower)
+                });
+                
+                table.Cell().Text("Jaarlijks tegoed:").Bold().FontSize(9);
+                table.Cell().Text($"{vacation.AnnualEntitlementHours:F1} uur").FontSize(9);
+                
+                table.Cell().PaddingTop(5).Text("Opgenomen uren:").FontSize(9);
+                table.Cell().PaddingTop(5).Text($"{vacation.HoursUsed:F1} uur").FontSize(9);
+                
+                table.Cell().PaddingTop(5).Text("Restant uren:").Bold().FontSize(9).FontColor(Colors.Green.Darken2);
+                table.Cell().PaddingTop(5).Text($"{vacation.HoursRemaining:F1} uur").Bold().FontSize(9).FontColor(Colors.Green.Darken2);
+                
+                table.Cell().PaddingTop(8).Text("Vakantiedagen:").FontSize(9);
+                table.Cell().PaddingTop(8).Text($"{vacation.TotalVacationDays:F1} dagen").FontSize(9);
             });
-            
-            table.Header(header =>
-            {
-                header.Cell().Text("vakantie").Bold();
-                header.Cell().Text("");
-            });
-            
-            table.Cell().Text("uren jaar tegoed");
-            table.Cell().Text(vacation.AnnualEntitlementHours.ToString("F1", _dutchCulture));
-            
-            table.Cell().Text("opgenomen uren");
-            table.Cell().Text(vacation.HoursUsed.ToString("F1", _dutchCulture));
-            
-            table.Cell().Text("restant uren");
-            table.Cell().Text(vacation.HoursRemaining.ToString("F1", _dutchCulture));
-            
-            table.Cell().Text("totaal vakantie dagen");
-            table.Cell().Text(vacation.TotalVacationDays.ToString("F1", _dutchCulture));
         });
     }
     
     private void ComposeTvTSection(IContainer container, TvTSection tvt)
     {
-        container.Table(table =>
+        container.Border(1).BorderColor(BorderColor).Padding(10).Column(column =>
         {
-            table.ColumnsDefinition(columns =>
+            // Section header
+            column.Item().Background(AccentColor).Padding(8).Text("TIJD VOOR TIJD")
+                .Bold().FontSize(11).FontColor(HeaderColor);
+            
+            // Content table
+            column.Item().PaddingTop(10).Table(table =>
             {
-                columns.RelativeColumn(2); // Label
-                columns.RelativeColumn(1); // Value
+                table.ColumnsDefinition(columns =>
+                {
+                    columns.RelativeColumn(2); // Label
+                    columns.RelativeColumn(1); // Value (narrower)
+                });
+                
+                table.Cell().Text("Gespaard:").FontSize(9);
+                table.Cell().Text($"{tvt.SavedTvTHours:F1} uur").FontSize(9);
+                
+                table.Cell().PaddingTop(5).Text("Omgerekend:").FontSize(9);
+                table.Cell().PaddingTop(5).Text($"{tvt.ConvertedTvTHours:F1} uur").FontSize(9);
+                
+                table.Cell().PaddingTop(5).Text("Opgenomen:").FontSize(9);
+                table.Cell().PaddingTop(5).Text($"{tvt.UsedTvTHours:F1} uur").FontSize(9);
+                
+                table.Cell().PaddingTop(5).Text("Einde maand:").Bold().FontSize(9).FontColor(Colors.Blue.Darken2);
+                table.Cell().PaddingTop(5).Text($"{tvt.MonthEndTvTHours:F1} uur").Bold().FontSize(9).FontColor(Colors.Blue.Darken2);
             });
-            
-            table.Header(header =>
-            {
-                header.Cell().Text("tijd voor tijd").Bold();
-                header.Cell().Text("");
-            });
-            
-            table.Cell().Text("gespaarde tvt uren");
-            table.Cell().Text(tvt.SavedTvTHours.ToString("F1", _dutchCulture));
-            
-            table.Cell().Text("omgerekede tvt uren");
-            table.Cell().Text(tvt.ConvertedTvTHours.ToString("F1", _dutchCulture));
-            
-            table.Cell().Text("opgenomen tvt uren");
-            table.Cell().Text(tvt.UsedTvTHours.ToString("F1", _dutchCulture));
-            
-            table.Cell().Text("einde v/d maand tvt uren");
-            table.Cell().Text(tvt.MonthEndTvTHours.ToString("F1", _dutchCulture));
         });
     }
     
     private void ComposeDailyBreakdown(IContainer container, DriverTimesheetReport report)
     {
-        container.Table(table =>
+        container.Column(column =>
         {
-            // Define columns matching the Excel format
-            table.ColumnsDefinition(columns =>
-            {
-                columns.ConstantColumn(25); // week
-                columns.ConstantColumn(50); // dag  
-                columns.ConstantColumn(60); // datum
-                columns.ConstantColumn(60); // Dienstcode
-                columns.ConstantColumn(35); // Begin
-                columns.ConstantColumn(35); // eind
-                columns.ConstantColumn(35); // pauze
-                columns.ConstantColumn(45); // Correcties
-                columns.ConstantColumn(35); // uren
-                columns.ConstantColumn(35); // 100%
-                columns.ConstantColumn(35); // 130%
-                columns.ConstantColumn(35); // 150%
-                columns.ConstantColumn(35); // 200%
-                columns.ConstantColumn(60); // vergoeding
-                columns.ConstantColumn(35); // km
-                columns.ConstantColumn(50); // vergoeding
-                columns.ConstantColumn(35); // tvt uren
-                columns.RelativeColumn(1); // Toelichting
-            });
+            // Table header
+            column.Item().Background(HeaderColor).Padding(8).Text("DAGELIJKSE URENVERANTWOORDING")
+                .Bold().FontSize(12).FontColor(Colors.White);
             
-            // Header row
-            table.Header(header =>
+            column.Item().Table(table =>
             {
-                header.Cell().Text("week").Bold().FontSize(7);
-                header.Cell().Text("dag").Bold().FontSize(7);
-                header.Cell().Text("datum").Bold().FontSize(7);
-                header.Cell().Text("Dienstcode").Bold().FontSize(7);
-                header.Cell().Text("Begin").Bold().FontSize(7);
-                header.Cell().Text("eind").Bold().FontSize(7);
-                header.Cell().Text("pauze").Bold().FontSize(7);
-                header.Cell().Text("Correcties").Bold().FontSize(7);
-                header.Cell().Text("uren").Bold().FontSize(7);
-                header.Cell().Text("100%").Bold().FontSize(7);
-                header.Cell().Text("130%").Bold().FontSize(7);
-                header.Cell().Text("150%").Bold().FontSize(7);
-                header.Cell().Text("200%").Bold().FontSize(7);
-                header.Cell().Text("vergoeding").Bold().FontSize(7);
-                header.Cell().Text("KM").Bold().FontSize(7);
-                header.Cell().Text("vergoeding").Bold().FontSize(7);
-                header.Cell().Text("tvt uren").Bold().FontSize(7);
-                header.Cell().Text("Toelichting").Bold().FontSize(7);
-            });
-            
-            // Data rows
-            foreach (var week in report.Weeks)
-            {
-                foreach (var day in week.Days)
+                // Define columns with better proportions
+                table.ColumnsDefinition(columns =>
                 {
-                    ComposeDailyRow(table, day);
-                }
+                    columns.ConstantColumn(35);  // Week
+                    columns.ConstantColumn(25);  // Day
+                    columns.ConstantColumn(60);  // Date
+                    columns.ConstantColumn(50);  // Service Code
+                    columns.ConstantColumn(40);  // Start
+                    columns.ConstantColumn(40);  // End
+                    columns.ConstantColumn(40);  // Rest
+                    columns.ConstantColumn(40);  // Corrections
+                    columns.ConstantColumn(45);  // Total Hours
+                    columns.ConstantColumn(35);  // 100%
+                    columns.ConstantColumn(35);  // 130%
+                    columns.ConstantColumn(35);  // 150%
+                    columns.ConstantColumn(35);  // 200%
+                    columns.ConstantColumn(50);  // Allowances
+                    columns.ConstantColumn(35);  // Km
+                    columns.ConstantColumn(40);  // Km Allow
+                    columns.ConstantColumn(35);  // TvT
+                    columns.RelativeColumn(1);   // Remarks
+                });
                 
-                // Week total row
-                ComposeWeekTotalRow(table, week.WeekTotal);
-                
-                // Add some empty rows for spacing (like in Excel)
-                for (int i = 0; i < 3; i++)
+                // Header row with better styling
+                table.Header(header =>
                 {
+                    header.Cell().Background(AccentColor).Padding(5).Text("Week").Bold().FontSize(8);
+                    header.Cell().Background(AccentColor).Padding(5).Text("Dag").Bold().FontSize(8);
+                    header.Cell().Background(AccentColor).Padding(5).Text("Datum").Bold().FontSize(8);
+                    header.Cell().Background(AccentColor).Padding(5).Text("Code").Bold().FontSize(8);
+                    header.Cell().Background(AccentColor).Padding(5).Text("Van").Bold().FontSize(8);
+                    header.Cell().Background(AccentColor).Padding(5).Text("Tot").Bold().FontSize(8);
+                    header.Cell().Background(AccentColor).Padding(5).Text("Rust").Bold().FontSize(8);
+                    header.Cell().Background(AccentColor).Padding(5).Text("Corr.").Bold().FontSize(8);
+                    header.Cell().Background(AccentColor).Padding(5).Text("Totaal").Bold().FontSize(8);
+                    header.Cell().Background(AccentColor).Padding(5).Text("100%").Bold().FontSize(8);
+                    header.Cell().Background(AccentColor).Padding(5).Text("130%").Bold().FontSize(8);
+                    header.Cell().Background(AccentColor).Padding(5).Text("150%").Bold().FontSize(8);
+                    header.Cell().Background(AccentColor).Padding(5).Text("200%").Bold().FontSize(8);
+                    header.Cell().Background(AccentColor).Padding(5).Text("Toeslagen").Bold().FontSize(8);
+                    header.Cell().Background(AccentColor).Padding(5).Text("Km").Bold().FontSize(8);
+                    header.Cell().Background(AccentColor).Padding(5).Text("Km €").Bold().FontSize(8);
+                    header.Cell().Background(AccentColor).Padding(5).Text("TvT").Bold().FontSize(8);
+                    header.Cell().Background(AccentColor).Padding(5).Text("Opmerkingen").Bold().FontSize(8);
+                });
+                
+                // Data rows
+                foreach (var week in report.Weeks)
+                {
+                    // Week separator with subtle background
+                    if (week.Days.Any())
+                    {
+                        table.Cell().ColumnSpan(18).Background("#fafafa").Padding(3).Text($"Week {week.WeekNumber}")
+                            .Bold().FontSize(9).FontColor(HeaderColor);
+                    }
+                    
+                    foreach (var day in week.Days)
+                    {
+                        ComposeDailyRow(table, day);
+                    }
+                    
+                    // Week total with accent
+                    ComposeWeekTotalRow(table, week.WeekTotal);
+                    
+                    // Empty separator row
                     ComposeEmptyRow(table);
                 }
-            }
+            });
         });
     }
     
     private void ComposeDailyRow(TableDescriptor table, DailyEntry day)
     {
-        table.Cell().Text(day.WeekNumber.ToString()).FontSize(7);
-        table.Cell().Text(day.DayName).FontSize(7);
-        table.Cell().Text(day.Date.ToString("dd/MM/yyyy", _dutchCulture)).FontSize(7);
-        table.Cell().Text(day.ServiceCode).FontSize(7);
-        table.Cell().Text(day.StartTime?.ToString(@"hh\:mm") ?? "").FontSize(7);
-        table.Cell().Text(day.EndTime?.ToString(@"hh\:mm") ?? "").FontSize(7);
-        table.Cell().Text(day.BreakTime?.ToString(@"hh\:mm") ?? "").FontSize(7);
-        table.Cell().Text(day.Corrections.ToString("F2", _dutchCulture)).FontSize(7);
-        table.Cell().Text(day.TotalHours.ToString("F2", _dutchCulture)).FontSize(7);
-        table.Cell().Text(day.Hours100.ToString("F2", _dutchCulture)).FontSize(7);
-        table.Cell().Text(day.Hours130.ToString("F2", _dutchCulture)).FontSize(7);
-        table.Cell().Text(day.Hours150.ToString("F2", _dutchCulture)).FontSize(7);
-        table.Cell().Text(day.Hours200.ToString("F2", _dutchCulture)).FontSize(7);
-        table.Cell().Text((day.TaxFreeAmount + day.TaxableAmount).ToString("C2", _dutchCulture)).FontSize(7);
-        table.Cell().Text(day.Kilometers.ToString("F1", _dutchCulture)).FontSize(7);
-        table.Cell().Text(day.KilometerAllowance.ToString("C2", _dutchCulture)).FontSize(7);
-        table.Cell().Text(day.TvTHours.ToString("F1", _dutchCulture)).FontSize(7);
-        table.Cell().Text(day.Remarks).FontSize(7);
+        table.Cell().Padding(3).Text(day.WeekNumber.ToString()).FontSize(8);
+        table.Cell().Padding(3).Text(day.DayName).FontSize(8);
+        table.Cell().Padding(3).Text(day.Date.ToString("dd/MM/yyyy", _dutchCulture)).FontSize(8);
+        table.Cell().Padding(3).Text(day.ServiceCode).FontSize(8);
+        table.Cell().Padding(3).Text(day.StartTime?.ToString(@"hh\:mm") ?? "").FontSize(8);
+        table.Cell().Padding(3).Text(day.EndTime?.ToString(@"hh\:mm") ?? "").FontSize(8);
+        table.Cell().Padding(3).Text(day.BreakTime?.ToString(@"hh\:mm") ?? "").FontSize(8);
+        table.Cell().Padding(3).Text(day.Corrections.ToString("F2", _dutchCulture)).FontSize(8);
+        table.Cell().Padding(3).Text(day.TotalHours.ToString("F2", _dutchCulture)).FontSize(8);
+        table.Cell().Padding(3).Text(day.Hours100.ToString("F2", _dutchCulture)).FontSize(8);
+        table.Cell().Padding(3).Text(day.Hours130.ToString("F2", _dutchCulture)).FontSize(8);
+        table.Cell().Padding(3).Text(day.Hours150.ToString("F2", _dutchCulture)).FontSize(8);
+        table.Cell().Padding(3).Text(day.Hours200.ToString("F2", _dutchCulture)).FontSize(8);
+        table.Cell().Padding(3).Text((day.TaxFreeAmount + day.TaxableAmount).ToString("C2", _dutchCulture)).FontSize(8);
+        table.Cell().Padding(3).Text(day.Kilometers.ToString("F1", _dutchCulture)).FontSize(8);
+        table.Cell().Padding(3).Text(day.KilometerAllowance.ToString("C2", _dutchCulture)).FontSize(8);
+        table.Cell().Padding(3).Text(day.TvTHours.ToString("F1", _dutchCulture)).FontSize(8);
+        table.Cell().Padding(3).Text(day.Remarks).FontSize(8);
     }
     
     private void ComposeWeekTotalRow(TableDescriptor table, WeeklyTotal weekTotal)
     {
-        // Empty cells for week, day, date, service code
-        table.Cell().Text("");
-        table.Cell().Text("");
-        table.Cell().Text("");
-        table.Cell().Text("");
-        table.Cell().Text("");
-        table.Cell().Text("");
-        table.Cell().Text("");
-        table.Cell().Text("");
+        // Empty cells for week, day, date, service code, start, end, rest
+        for (int i = 0; i < 7; i++)
+        {
+            table.Cell().Background("#f9fafb").Text("");
+        }
         
-        // Totals
-        table.Cell().Text(weekTotal.TotalHours.ToString("F2", _dutchCulture)).Bold().FontSize(7);
-        table.Cell().Text(weekTotal.Hours100.ToString("F2", _dutchCulture)).Bold().FontSize(7);
-        table.Cell().Text(weekTotal.Hours130.ToString("F2", _dutchCulture)).Bold().FontSize(7);
-        table.Cell().Text(weekTotal.Hours150.ToString("F2", _dutchCulture)).Bold().FontSize(7);
-        table.Cell().Text(weekTotal.Hours200.ToString("F2", _dutchCulture)).Bold().FontSize(7);
-        table.Cell().Text((weekTotal.TaxFreeAmount + weekTotal.TaxableAmount).ToString("C2", _dutchCulture)).Bold().FontSize(7);
-        table.Cell().Text(weekTotal.TotalKilometers.ToString("F1", _dutchCulture)).Bold().FontSize(7);
-        table.Cell().Text(weekTotal.KilometerAllowance.ToString("C2", _dutchCulture)).Bold().FontSize(7);
-        table.Cell().Text(weekTotal.TvTHours.ToString("F1", _dutchCulture)).Bold().FontSize(7);
-        table.Cell().Text("");
+        table.Cell().Background("#f9fafb").Padding(3).Text("WEEK TOTAAL").Bold().FontSize(8).FontColor(HeaderColor);
+        
+        // Totals with accent background
+        table.Cell().Background("#f9fafb").Padding(3).Text(weekTotal.TotalHours.ToString("F2", _dutchCulture)).Bold().FontSize(8);
+        table.Cell().Background("#f9fafb").Padding(3).Text(weekTotal.Hours100.ToString("F2", _dutchCulture)).Bold().FontSize(8);
+        table.Cell().Background("#f9fafb").Padding(3).Text(weekTotal.Hours130.ToString("F2", _dutchCulture)).Bold().FontSize(8);
+        table.Cell().Background("#f9fafb").Padding(3).Text(weekTotal.Hours150.ToString("F2", _dutchCulture)).Bold().FontSize(8);
+        table.Cell().Background("#f9fafb").Padding(3).Text(weekTotal.Hours200.ToString("F2", _dutchCulture)).Bold().FontSize(8);
+        table.Cell().Background("#f9fafb").Padding(3).Text((weekTotal.TaxFreeAmount + weekTotal.TaxableAmount).ToString("C2", _dutchCulture)).Bold().FontSize(8);
+        table.Cell().Background("#f9fafb").Padding(3).Text(weekTotal.TotalKilometers.ToString("F1", _dutchCulture)).Bold().FontSize(8);
+        table.Cell().Background("#f9fafb").Padding(3).Text(weekTotal.KilometerAllowance.ToString("C2", _dutchCulture)).Bold().FontSize(8);
+        table.Cell().Background("#f9fafb").Padding(3).Text(weekTotal.TvTHours.ToString("F1", _dutchCulture)).Bold().FontSize(8);
+        table.Cell().Background("#f9fafb").Text("");
     }
     
     private void ComposeEmptyRow(TableDescriptor table)
     {
         for (int i = 0; i < 18; i++) // 18 columns total
         {
-            table.Cell().Text("");
+            table.Cell().Padding(2).Text("");
         }
     }
     
     private void ComposeGrandTotal(IContainer container, TotalSection grandTotal)
     {
-        container.Text($"Totaal Generaal: {grandTotal.TotalHours:F2} uren")
-            .Bold().FontSize(12);
+        container.Background(HeaderColor).Padding(15).Row(row =>
+        {
+            row.RelativeItem().Column(column =>
+            {
+                column.Item().Text("TOTAAL GENERAAL")
+                    .FontSize(16).Bold().FontColor(Colors.White);
+                    
+                column.Item().Text($"Totale uren: {grandTotal.TotalHours:F2}")
+                    .FontSize(14).FontColor(Colors.White);
+            });
+            
+            row.RelativeItem().AlignRight().Column(column =>
+            {
+                column.Item().Text("Totale vergoedingen:")
+                    .FontSize(12).FontColor(Colors.White);
+                column.Item().Text($"{grandTotal.TotalAllowances:C2}")
+                    .FontSize(14).Bold().FontColor(Colors.White);
+            });
+        });
     }
     
     private void ComposeSignature(IContainer container, DriverTimesheetReport report)
     {
         container.Row(row =>
         {
-            row.RelativeItem().Text($"Totaal Generaal: {report.GrandTotal.TotalHours:F2}")
-                .FontSize(10).Bold();
-                
-            row.RelativeItem().AlignRight().Text("handtekening ________________")
-                .FontSize(10);
+            row.RelativeItem().Column(column =>
+            {
+                column.Item().Text("Chauffeur:")
+                    .FontSize(10).Bold();
+                column.Item().PaddingTop(20).LineHorizontal(1).LineColor(BorderColor);
+                column.Item().PaddingTop(5).Text("Handtekening & Datum")
+                    .FontSize(8).FontColor(Colors.Grey.Darken1);
+            });
+            
+            row.ConstantItem(50); // Space between signatures
+            
+            row.RelativeItem().Column(column =>
+            {
+                column.Item().Text("Werkgever:")
+                    .FontSize(10).Bold();
+                column.Item().PaddingTop(20).LineHorizontal(1).LineColor(BorderColor);
+                column.Item().PaddingTop(5).Text("Handtekening & Datum")
+                    .FontSize(8).FontColor(Colors.Grey.Darken1);
+            });
         });
     }
 } 
