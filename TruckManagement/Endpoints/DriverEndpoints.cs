@@ -1446,9 +1446,10 @@ namespace TruckManagement.Endpoints
                 });
 
             app.MapGet("/drivers/week/details",
-                [Authorize(Roles = "driver")] async (
+                [Authorize(Roles = "driver, globalAdmin, customerAdmin")] async (
                     [FromQuery] int? year,
                     [FromQuery] int? weekNumber,
+                    [FromQuery] Guid? driverId,
                     UserManager<ApplicationUser> userManager,
                     ClaimsPrincipal currentUser,
                     ApplicationDbContext db
@@ -1464,12 +1465,71 @@ namespace TruckManagement.Endpoints
                         }
 
                         var userId = userManager.GetUserId(currentUser);
-                        var driver =
-                            await db.Drivers.FirstOrDefaultAsync(d => d.AspNetUserId == userId && !d.IsDeleted);
+                        var isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                        var isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+                        var isDriver = currentUser.IsInRole("driver");
 
-                        if (driver == null)
+                        Driver? driver = null;
+
+                        if (isDriver)
                         {
-                            return ApiResponseFactory.Error("Driver profile not found.",
+                            // Driver accessing their own data
+                            driver = await db.Drivers.FirstOrDefaultAsync(d => d.AspNetUserId == userId && !d.IsDeleted);
+                            
+                            if (driver == null)
+                            {
+                                return ApiResponseFactory.Error("Driver profile not found.",
+                                    StatusCodes.Status403Forbidden);
+                            }
+                        }
+                        else if (isGlobalAdmin || isCustomerAdmin)
+                        {
+                            // Admin accessing specific driver data
+                            if (!driverId.HasValue)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "Query parameter 'driverId' is required for admin access.",
+                                    StatusCodes.Status400BadRequest);
+                            }
+
+                            driver = await db.Drivers
+                                .Include(d => d.Company)
+                                .FirstOrDefaultAsync(d => d.Id == driverId.Value && !d.IsDeleted);
+
+                            if (driver == null)
+                            {
+                                return ApiResponseFactory.Error("Driver not found.",
+                                    StatusCodes.Status404NotFound);
+                            }
+
+                            // Authorization check for customerAdmin - they can only access drivers in their company
+                            if (isCustomerAdmin)
+                            {
+                                var contactPerson = await db.ContactPersons
+                                    .Include(cp => cp.ContactPersonClientCompanies)
+                                    .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                                if (contactPerson == null)
+                                {
+                                    return ApiResponseFactory.Error("Contact person profile not found.", 
+                                        StatusCodes.Status403Forbidden);
+                                }
+
+                                var customerAdminCompanyIds = contactPerson.ContactPersonClientCompanies
+                                    .Where(cpc => cpc.CompanyId.HasValue)
+                                    .Select(cpc => cpc.CompanyId.Value)
+                                    .ToList();
+
+                                if (!customerAdminCompanyIds.Contains(driver.CompanyId.GetValueOrDefault()))
+                                {
+                                    return ApiResponseFactory.Error("Access denied. Driver not in your company.",
+                                        StatusCodes.Status403Forbidden);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            return ApiResponseFactory.Error("Insufficient permissions.",
                                 StatusCodes.Status403Forbidden);
                         }
 
