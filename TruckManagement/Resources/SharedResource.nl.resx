@@ -63,9 +63,6 @@
     <value>U bent niet bevoegd om een rit voor dit bedrijf aan te maken.</value>
   </data>
 
-    <data name="DriverNotFound" xml:space="preserve">
-    <value>De opgegeven chauffeur bestaat niet.</value>
-  </data>
     <data name="DriverCompanyMismatch" xml:space="preserve">
     <value>Het bedrijf van de chauffeur komt niet overeen met de opgegeven companyId.</value>
   </data>
