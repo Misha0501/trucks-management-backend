@@ -4,9 +4,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using TruckManagement.Data;
+using TruckManagement.DTOs;
 using TruckManagement.Entities;
+using TruckManagement.Enums;
 using TruckManagement.Helpers;
+using TruckManagement.Options;
 using TruckManagement.Services;
 
 namespace TruckManagement.Endpoints
@@ -15,6 +19,918 @@ namespace TruckManagement.Endpoints
     {
         public static void MapDriversEndpoints(this WebApplication app)
         {
+            app.MapPost("/drivers/create-with-contract",
+                [Authorize(Roles = "globalAdmin, customerAdmin")]
+                async (
+                    [FromBody] CreateDriverWithContractRequest request,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    RoleManager<ApplicationRole> roleManager,
+                    ClaimsPrincipal currentUser,
+                    DriverCompensationService compensationService,
+                    IWebHostEnvironment env,
+                    IOptions<StorageOptions> cfg,
+                    IResourceLocalizer resourceLocalizer
+                ) =>
+                {
+                                    // 0. Validate request object is not null (model binding check)
+                if (request == null)
+                {
+                    return ApiResponseFactory.Error("Invalid request data format.", StatusCodes.Status400BadRequest);
+                }
+
+                using var transaction = await db.Database.BeginTransactionAsync();
+                try
+                {
+                    // 1. Validate required fields
+                        if (string.IsNullOrWhiteSpace(request.Email) ||
+                            string.IsNullOrWhiteSpace(request.Password) ||
+                            string.IsNullOrWhiteSpace(request.FirstName) ||
+                            string.IsNullOrWhiteSpace(request.LastName) ||
+                            string.IsNullOrWhiteSpace(request.CompanyId) ||
+                            string.IsNullOrWhiteSpace(request.Function))
+                        {
+                            return ApiResponseFactory.Error(
+                                "Required fields missing: Email, Password, FirstName, LastName, CompanyId, Function are required.",
+                                StatusCodes.Status400BadRequest);
+                        }
+
+                        // 2. Validate Company ID format and existence
+                        if (!Guid.TryParse(request.CompanyId, out Guid companyGuid))
+                        {
+                            return ApiResponseFactory.Error("Invalid Company ID format.", StatusCodes.Status400BadRequest);
+                        }
+
+                        var company = await db.Companies.FirstOrDefaultAsync(c => c.Id == companyGuid);
+                        if (company == null)
+                        {
+                            return ApiResponseFactory.Error("Company not found.", StatusCodes.Status400BadRequest);
+                        }
+
+                        // 3. Authorization check
+                        var currentUserId = userManager.GetUserId(currentUser);
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                        bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+
+                        if (isCustomerAdmin)
+                        {
+                            // Verify customerAdmin can assign to this company
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error("Contact person profile not found.", StatusCodes.Status403Forbidden);
+                            }
+
+                            var customerAdminCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Where(cpc => cpc.CompanyId.HasValue)
+                                .Select(cpc => cpc.CompanyId.Value)
+                                .ToList();
+
+                            if (!customerAdminCompanyIds.Contains(companyGuid))
+                            {
+                                return ApiResponseFactory.Error("You can only create drivers for your associated companies.", StatusCodes.Status403Forbidden);
+                            }
+                        }
+
+                        // 4. Check if email already exists
+                        var existingUser = await userManager.FindByEmailAsync(request.Email);
+                        if (existingUser != null)
+                        {
+                            return ApiResponseFactory.Error("A user with this email already exists.", StatusCodes.Status400BadRequest);
+                        }
+
+                        // 5. Create ApplicationUser
+                        var user = new ApplicationUser
+                        {
+                            UserName = request.Email,
+                            Email = request.Email,
+                            FirstName = request.FirstName,
+                            LastName = request.LastName,
+                            Address = request.Address,
+                            PhoneNumber = request.PhoneNumber,
+                            Postcode = request.Postcode,
+                            City = request.City,
+                            Country = request.Country,
+                            Remark = request.Remark,
+                            IsApproved = true
+                        };
+
+                        var createUserResult = await userManager.CreateAsync(user, request.Password);
+                        if (!createUserResult.Succeeded)
+                        {
+                            var errors = createUserResult.Errors.Select(e => e.Description).ToList();
+                            return ApiResponseFactory.Error(errors, StatusCodes.Status400BadRequest);
+                        }
+
+                        // 6. Assign driver role
+                        var assignRoleResult = await userManager.AddToRoleAsync(user, "driver");
+                        if (!assignRoleResult.Succeeded)
+                        {
+                            await userManager.DeleteAsync(user);
+                            var roleErrors = assignRoleResult.Errors.Select(e => e.Description).ToList();
+                            return ApiResponseFactory.Error(roleErrors, StatusCodes.Status400BadRequest);
+                        }
+
+                        // 7. Create Driver entity
+                        var driver = new Driver
+                        {
+                            Id = Guid.NewGuid(),
+                            AspNetUserId = user.Id,
+                            CompanyId = companyGuid
+                        };
+                        db.Drivers.Add(driver);
+
+                        // 8. Create EmployeeContract with auto-filled company data
+                        var contract = new EmployeeContract
+                        {
+                            Id = Guid.NewGuid(),
+                            DriverId = driver.Id,
+                            CompanyId = companyGuid,
+                            ReleaseVersion = 1.0m,
+                            Status = EmployeeContractStatus.Pending,
+                            
+                            // Required contract fields
+                            DateOfEmployment = request.DateOfEmployment,
+                            WorkweekDuration = request.WorkweekDuration,
+                            Function = request.Function,
+                            
+                            // Optional contract fields
+                            DateOfBirth = request.DateOfBirth,
+                            ProbationPeriod = request.ProbationPeriod,
+                            WeeklySchedule = request.WeeklySchedule,
+                            WorkingHours = request.WorkingHours,
+                            NoticePeriod = request.NoticePeriod,
+                            PayScale = request.PayScale,
+                            PayScaleStep = request.PayScaleStep,
+                            Bsn = request.BSN,
+                            LastWorkingDay = request.LastWorkingDay,
+                            VacationDays = request.VacationDays,
+                            VacationAge = request.VacationAge,
+                            WorkweekDurationPercentage = request.WorkweekDurationPercentage,
+                            
+                            // Allowances & Settings
+                            NightHoursAllowed = request.NightHoursAllowed,
+                            KilometersAllowanceAllowed = request.KilometersAllowanceAllowed,
+                            PermanentContract = request.PermanentContract,
+                            CommuteKilometers = request.CommuteKilometers,
+                            
+                            // Compensation Details
+                            CompensationPerMonthExclBtw = request.CompensationPerMonthExclBtw,
+                            CompensationPerMonthInclBtw = request.CompensationPerMonthInclBtw,
+                            HourlyWage100Percent = request.HourlyWage100Percent,
+                            DeviatingWage = request.DeviatingWage,
+                            
+                            // Travel & Expenses
+                            TravelExpenses = request.TravelExpenses,
+                            MaxTravelExpenses = request.MaxTravelExpenses,
+                            
+                            // Vacation Benefits
+                            Atv = request.Atv,
+                            VacationAllowance = request.VacationAllowance,
+                            
+                            // Auto-filled company data (can be overridden by request)
+                            CompanyName = company.Name,
+                            CompanyAddress = company.Address,
+                            CompanyPostcode = company.Postcode,
+                            CompanyCity = company.City,
+                            CompanyPhoneNumber = company.PhoneNumber,
+                            EmployerName = !string.IsNullOrWhiteSpace(request.EmployerName) ? request.EmployerName : company.Name,
+                            CompanyBtw = request.CompanyBtw,
+                            CompanyKvk = request.CompanyKvk,
+                            
+                            // Employee data from user
+                            EmployeeFirstName = user.FirstName,
+                            EmployeeLastName = user.LastName,
+                            EmployeeAddress = user.Address,
+                            EmployeePostcode = user.Postcode,
+                            EmployeeCity = user.City
+                        };
+                        db.EmployeeContracts.Add(contract);
+
+                        // 9. Create default DriverCompensationSettings
+                        await compensationService.CreateDefaultDriverCompensationSettingsAsync(driver);
+
+                        // 10. Save all changes
+                        await db.SaveChangesAsync();
+
+                        // 11. Handle file uploads
+                        var newUploads = request.NewUploads ?? new List<UploadFileRequest>();
+                        if (newUploads.Any())
+                        {
+                            var tmpRoot = Path.Combine(env.ContentRootPath, cfg.Value.TmpPath);
+                            var finalRoot = Path.Combine(env.ContentRootPath, cfg.Value.BasePathCompanies);
+
+                            DriverFileHelper.MoveUploadsToDriver(driver.Id, driver.CompanyId, newUploads, tmpRoot,
+                                finalRoot, db, resourceLocalizer);
+
+                            await db.SaveChangesAsync(); // Save DriverFile entries
+                        }
+
+                        await transaction.CommitAsync();
+
+                        // 11. Return success response
+                        return ApiResponseFactory.Success(new
+                        {
+                            UserId = user.Id,
+                            DriverId = driver.Id,
+                            ContractId = contract.Id,
+                            Email = user.Email,
+                            FullName = $"{user.FirstName} {user.LastName}",
+                            CompanyName = company.Name,
+                            ContractStatus = contract.Status.ToString(),
+                            DateOfEmployment = contract.DateOfEmployment,
+                            Function = contract.Function,
+                            WorkweekDuration = contract.WorkweekDuration
+                        }, StatusCodes.Status201Created);
+                    }
+                    catch (Exception ex)
+                    {
+                        await transaction.RollbackAsync();
+                        Console.WriteLine($"[Error] {ex.Message}");
+                        Console.WriteLine($"[StackTrace] {ex.StackTrace}");
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while creating the driver.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+                });
+
+            app.MapGet("/drivers/{driverId}/with-contract",
+                [Authorize(Roles = "globalAdmin, customerAdmin, driver")]
+                async (
+                    Guid driverId,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    try
+                    {
+                        // Get current user info for authorization
+                        var currentUserId = userManager.GetUserId(currentUser);
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                        bool isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+                        bool isDriver = currentUser.IsInRole("driver");
+
+                        // Query driver with all related data
+                        var driverQuery = db.Drivers
+                            .AsNoTracking()
+                            .Include(d => d.User)
+                            .Include(d => d.Company)
+                            .Include(d => d.Car)
+                            .Include(d => d.Files)
+                            .Where(d => d.Id == driverId && !d.IsDeleted);
+
+                        // Authorization check for non-global admins
+                        if (!isGlobalAdmin)
+                        {
+                            if (isDriver)
+                            {
+                                // Drivers can only see their own data
+                                driverQuery = driverQuery.Where(d => d.AspNetUserId == currentUserId);
+                            }
+                            else if (isCustomerAdmin)
+                            {
+                                // Customer admins can only see drivers from their associated companies
+                                var contactPerson = await db.ContactPersons
+                                    .Include(cp => cp.ContactPersonClientCompanies)
+                                    .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
+
+                                if (contactPerson == null)
+                                {
+                                    return ApiResponseFactory.Error("Contact person profile not found.", StatusCodes.Status403Forbidden);
+                                }
+
+                                var customerAdminCompanyIds = contactPerson.ContactPersonClientCompanies
+                                    .Where(cpc => cpc.CompanyId.HasValue)
+                                    .Select(cpc => cpc.CompanyId.Value)
+                                    .ToList();
+
+                                driverQuery = driverQuery.Where(d => d.CompanyId.HasValue && customerAdminCompanyIds.Contains(d.CompanyId.Value));
+                            }
+                        }
+
+                        var driver = await driverQuery.FirstOrDefaultAsync();
+                        
+                        if (driver == null)
+                        {
+                            return ApiResponseFactory.Error("Driver not found or access denied.", StatusCodes.Status404NotFound);
+                        }
+
+                        // Get the employee contract
+                        var contract = await db.EmployeeContracts
+                            .AsNoTracking()
+                            .FirstOrDefaultAsync(c => c.DriverId == driver.Id);
+
+                        // Calculate vacation hours left for current year
+                        var currentYear = DateTime.UtcNow.Year;
+                        var vacationHoursLeft = await db.PartRides
+                            .Where(pr =>
+                                pr.DriverId == driver.Id &&
+                                pr.Date.Year == currentYear)
+                            .SumAsync(pr => pr.VacationHours ?? 0);
+
+                        // Build the comprehensive response
+                        var response = new DriverWithContractDto
+                        {
+                            // User Information
+                            UserId = driver.User.Id,
+                            Email = driver.User.Email ?? "",
+                            FirstName = driver.User.FirstName ?? "",
+                            LastName = driver.User.LastName ?? "",
+                            Address = driver.User.Address,
+                            PhoneNumber = driver.User.PhoneNumber,
+                            Postcode = driver.User.Postcode,
+                            City = driver.User.City,
+                            Country = driver.User.Country,
+                            Remark = driver.User.Remark,
+                            IsApproved = driver.User.IsApproved,
+
+                            // Driver Information
+                            DriverId = driver.Id,
+                            CompanyId = driver.CompanyId,
+                            CompanyName = driver.Company?.Name,
+                            CarId = driver.CarId,
+                            CarLicensePlate = driver.Car?.LicensePlate,
+                            CarVehicleYear = driver.Car?.VehicleYear,
+                            CarRegistrationDate = driver.Car?.RegistrationDate,
+
+                            // Contract Information (if exists)
+                            ContractId = contract?.Id,
+                            ContractStatus = contract?.Status.ToString() ?? "No Contract",
+                            ReleaseVersion = contract?.ReleaseVersion,
+
+                            // Personal Details
+                            DateOfBirth = contract?.DateOfBirth,
+                            BSN = contract?.Bsn,
+
+                            // Employment Details
+                            DateOfEmployment = contract?.DateOfEmployment,
+                            LastWorkingDay = contract?.LastWorkingDay,
+                            Function = contract?.Function,
+                            ProbationPeriod = contract?.ProbationPeriod,
+                            WorkweekDuration = contract?.WorkweekDuration,
+                            WorkweekDurationPercentage = contract?.WorkweekDurationPercentage,
+                            WeeklySchedule = contract?.WeeklySchedule,
+                            WorkingHours = contract?.WorkingHours,
+                            NoticePeriod = contract?.NoticePeriod,
+
+                            // Work Allowances & Settings
+                            NightHoursAllowed = contract?.NightHoursAllowed,
+                            KilometersAllowanceAllowed = contract?.KilometersAllowanceAllowed,
+                            PermanentContract = contract?.PermanentContract,
+                            CommuteKilometers = contract?.CommuteKilometers,
+
+                            // Compensation Details
+                            PayScale = contract?.PayScale,
+                            PayScaleStep = contract?.PayScaleStep,
+                            CompensationPerMonthExclBtw = contract?.CompensationPerMonthExclBtw,
+                            CompensationPerMonthInclBtw = contract?.CompensationPerMonthInclBtw,
+                            HourlyWage100Percent = contract?.HourlyWage100Percent,
+                            DeviatingWage = contract?.DeviatingWage,
+
+                            // Travel & Expenses
+                            TravelExpenses = contract?.TravelExpenses,
+                            MaxTravelExpenses = contract?.MaxTravelExpenses,
+
+                            // Vacation & Benefits
+                            VacationAge = contract?.VacationAge,
+                            VacationDays = contract?.VacationDays,
+                            Atv = contract?.Atv,
+                            VacationAllowance = contract?.VacationAllowance,
+                            VacationHoursLeft = vacationHoursLeft,
+
+                            // Company Details (from contract)
+                            EmployerName = contract?.EmployerName,
+                            CompanyAddress = contract?.CompanyAddress,
+                            CompanyPostcode = contract?.CompanyPostcode,
+                            CompanyCity = contract?.CompanyCity,
+                            CompanyPhoneNumber = contract?.CompanyPhoneNumber,
+                            CompanyBtw = contract?.CompanyBtw,
+                            CompanyKvk = contract?.CompanyKvk,
+
+                            // Contract Signing Info
+                            AccessCode = contract?.AccessCode,
+                            SignedAt = contract?.SignedAt,
+                            SignedFileName = contract?.SignedFileName,
+
+                            // Driver Files
+                            Files = driver.Files.Select(f => new DriverFileDto
+                            {
+                                Id = f.Id,
+                                FileName = f.FileName,
+                                OriginalFileName = f.OriginalFileName,
+                                ContentType = f.ContentType,
+                                UploadedAt = f.UploadedAt
+                            }).ToList(),
+
+                            // Timestamps - using a reasonable default since we don't track creation time
+                            CreatedAt = contract?.DateOfEmployment ?? DateTime.UtcNow
+                        };
+
+                        return ApiResponseFactory.Success(response, StatusCodes.Status200OK);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Error] {ex.Message}");
+                        Console.WriteLine($"[StackTrace] {ex.StackTrace}");
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while retrieving driver information.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+                });
+
+            app.MapPut("/drivers/{driverId}/with-contract",
+                [Authorize(Roles = "globalAdmin, customerAdmin")]
+                async (
+                    Guid driverId,
+                    [FromBody] UpdateDriverWithContractRequest request,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser,
+                    IWebHostEnvironment env,
+                    IOptions<StorageOptions> cfg,
+                    IResourceLocalizer resourceLocalizer
+                ) =>
+                {
+                    // 0. Validate request object is not null
+                    if (request == null)
+                    {
+                        return ApiResponseFactory.Error("Invalid request data format.", StatusCodes.Status400BadRequest);
+                    }
+
+                    using var transaction = await db.Database.BeginTransactionAsync();
+                    try
+                    {
+                        // 1. Get current user info for authorization
+                        var currentUserId = userManager.GetUserId(currentUser);
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+
+                        // 2. Find the driver with all related data
+                        var driver = await db.Drivers
+                            .Include(d => d.User)
+                            .Include(d => d.Company)
+                            .Include(d => d.Car)
+                            .Include(d => d.Files)
+                            .FirstOrDefaultAsync(d => d.Id == driverId && !d.IsDeleted);
+
+                        if (driver == null)
+                        {
+                            return ApiResponseFactory.Error("Driver not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        // 3. Authorization check for customerAdmin
+                        if (!isGlobalAdmin)
+                        {
+                            // Customer admins can only edit drivers from their associated companies
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error("Contact person profile not found.", StatusCodes.Status403Forbidden);
+                            }
+
+                            var customerAdminCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Where(cpc => cpc.CompanyId.HasValue)
+                                .Select(cpc => cpc.CompanyId.Value)
+                                .ToList();
+
+                            if (!driver.CompanyId.HasValue || !customerAdminCompanyIds.Contains(driver.CompanyId.Value))
+                            {
+                                return ApiResponseFactory.Error("You do not have permission to edit this driver.", StatusCodes.Status403Forbidden);
+                            }
+                        }
+
+                        // 4. Validate new company if CompanyId is provided
+                        Company? newCompany = null;
+                        if (!string.IsNullOrWhiteSpace(request.CompanyId))
+                        {
+                            if (!Guid.TryParse(request.CompanyId, out var newCompanyId))
+                            {
+                                return ApiResponseFactory.Error("Invalid CompanyId format.", StatusCodes.Status400BadRequest);
+                            }
+
+                            newCompany = await db.Companies.FirstOrDefaultAsync(c => c.Id == newCompanyId);
+                            if (newCompany == null)
+                            {
+                                return ApiResponseFactory.Error("Specified company not found.", StatusCodes.Status400BadRequest);
+                            }
+
+                            // Additional authorization check for customerAdmin when changing company
+                            if (!isGlobalAdmin)
+                            {
+                                var contactPerson = await db.ContactPersons
+                                    .Include(cp => cp.ContactPersonClientCompanies)
+                                    .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
+
+                                var customerAdminCompanyIds = contactPerson.ContactPersonClientCompanies
+                                    .Where(cpc => cpc.CompanyId.HasValue)
+                                    .Select(cpc => cpc.CompanyId.Value)
+                                    .ToList();
+
+                                if (!customerAdminCompanyIds.Contains(newCompanyId))
+                                {
+                                    return ApiResponseFactory.Error("You do not have permission to assign drivers to this company.", StatusCodes.Status403Forbidden);
+                                }
+                            }
+                        }
+
+                        // 5. Validate and handle car assignment
+                        Car? newCar = null;
+                        if (!string.IsNullOrWhiteSpace(request.CarId))
+                        {
+                            if (!Guid.TryParse(request.CarId, out var newCarId))
+                            {
+                                return ApiResponseFactory.Error("Invalid CarId format.", StatusCodes.Status400BadRequest);
+                            }
+
+                            newCar = await db.Cars.FirstOrDefaultAsync(c => c.Id == newCarId);
+                            if (newCar == null)
+                            {
+                                return ApiResponseFactory.Error("Specified car not found.", StatusCodes.Status400BadRequest);
+                            }
+
+                            // Check if car is already assigned to another driver
+                            var existingAssignment = await db.Drivers
+                                .FirstOrDefaultAsync(d => d.CarId == newCarId && d.Id != driverId && !d.IsDeleted);
+                            if (existingAssignment != null)
+                            {
+                                return ApiResponseFactory.Error("This car is already assigned to another driver.", StatusCodes.Status400BadRequest);
+                            }
+
+                            // Ensure car belongs to the same company as driver (or new company)
+                            var targetCompanyId = newCompany?.Id ?? driver.CompanyId;
+                            if (newCar.CompanyId != targetCompanyId)
+                            {
+                                return ApiResponseFactory.Error("Car must belong to the same company as the driver.", StatusCodes.Status400BadRequest);
+                            }
+                        }
+
+                        // 6. Update ApplicationUser
+                        if (!string.IsNullOrWhiteSpace(request.Email) && request.Email != driver.User.Email)
+                        {
+                            // Check email uniqueness
+                            var existingUser = await userManager.FindByEmailAsync(request.Email);
+                            if (existingUser != null && existingUser.Id != driver.User.Id)
+                            {
+                                return ApiResponseFactory.Error("Email address is already in use.", StatusCodes.Status400BadRequest);
+                            }
+                            driver.User.Email = request.Email;
+                            driver.User.UserName = request.Email;
+                        }
+
+                        // Update other user fields
+                        if (request.FirstName != null) driver.User.FirstName = request.FirstName;
+                        if (request.LastName != null) driver.User.LastName = request.LastName;
+                        if (request.Address != null) driver.User.Address = request.Address;
+                        if (request.PhoneNumber != null) driver.User.PhoneNumber = request.PhoneNumber;
+                        if (request.Postcode != null) driver.User.Postcode = request.Postcode;
+                        if (request.City != null) driver.User.City = request.City;
+                        if (request.Country != null) driver.User.Country = request.Country;
+                        if (request.Remark != null) driver.User.Remark = request.Remark;
+
+                        // 7. Update Driver
+                        if (newCompany != null) driver.CompanyId = newCompany.Id;
+                        if (request.CarId != null)
+                        {
+                            if (string.IsNullOrWhiteSpace(request.CarId))
+                            {
+                                driver.CarId = null; // Unassign car
+                            }
+                            else if (newCar != null)
+                            {
+                                driver.CarId = newCar.Id; // Assign new car
+                            }
+                        }
+
+                        // 8. Update or create EmployeeContract
+                        var contract = await db.EmployeeContracts.FirstOrDefaultAsync(c => c.DriverId == driver.Id);
+                        if (contract == null)
+                        {
+                            // Create new contract if it doesn't exist
+                            contract = new EmployeeContract
+                            {
+                                Id = Guid.NewGuid(),
+                                DriverId = driver.Id,
+                                Status = EmployeeContractStatus.Pending,
+                                ReleaseVersion = 1.0m
+                            };
+                            db.EmployeeContracts.Add(contract);
+                        }
+
+                        // Update contract fields
+                        if (request.DateOfBirth.HasValue) contract.DateOfBirth = request.DateOfBirth.Value;
+                        if (request.BSN != null) contract.Bsn = request.BSN;
+                        if (request.DateOfEmployment.HasValue) contract.DateOfEmployment = request.DateOfEmployment.Value;
+                        if (request.LastWorkingDay.HasValue) contract.LastWorkingDay = request.LastWorkingDay.Value;
+                        if (request.Function != null) contract.Function = request.Function;
+                        if (request.ProbationPeriod != null) contract.ProbationPeriod = request.ProbationPeriod;
+                        if (request.WorkweekDuration.HasValue) contract.WorkweekDuration = request.WorkweekDuration.Value;
+                        if (request.WorkweekDurationPercentage.HasValue) contract.WorkweekDurationPercentage = request.WorkweekDurationPercentage.Value;
+                        if (request.WeeklySchedule != null) contract.WeeklySchedule = request.WeeklySchedule;
+                        if (request.WorkingHours != null) contract.WorkingHours = request.WorkingHours;
+                        if (request.NoticePeriod != null) contract.NoticePeriod = request.NoticePeriod;
+                        if (request.NightHoursAllowed.HasValue) contract.NightHoursAllowed = request.NightHoursAllowed.Value;
+                        if (request.KilometersAllowanceAllowed.HasValue) contract.KilometersAllowanceAllowed = request.KilometersAllowanceAllowed.Value;
+                        if (request.PermanentContract.HasValue) contract.PermanentContract = request.PermanentContract.Value;
+                        if (request.CommuteKilometers.HasValue) contract.CommuteKilometers = request.CommuteKilometers.Value;
+                        if (request.PayScale != null) contract.PayScale = request.PayScale;
+                        if (request.PayScaleStep.HasValue) contract.PayScaleStep = request.PayScaleStep.Value;
+                        if (request.CompensationPerMonthExclBtw.HasValue) contract.CompensationPerMonthExclBtw = request.CompensationPerMonthExclBtw.Value;
+                        if (request.CompensationPerMonthInclBtw.HasValue) contract.CompensationPerMonthInclBtw = request.CompensationPerMonthInclBtw.Value;
+                        if (request.HourlyWage100Percent.HasValue) contract.HourlyWage100Percent = request.HourlyWage100Percent.Value;
+                        if (request.DeviatingWage.HasValue) contract.DeviatingWage = request.DeviatingWage.Value;
+                        if (request.TravelExpenses.HasValue) contract.TravelExpenses = request.TravelExpenses.Value;
+                        if (request.MaxTravelExpenses.HasValue) contract.MaxTravelExpenses = request.MaxTravelExpenses.Value;
+                        if (request.VacationAge.HasValue) contract.VacationAge = request.VacationAge.Value;
+                        if (request.VacationDays.HasValue) contract.VacationDays = request.VacationDays.Value;
+                        if (request.Atv.HasValue) contract.Atv = request.Atv.Value;
+                        if (request.VacationAllowance.HasValue) contract.VacationAllowance = request.VacationAllowance.Value;
+
+                        // Update company-specific contract fields (auto-filled from new company if changed)
+                        if (newCompany != null)
+                        {
+                            contract.EmployerName = !string.IsNullOrWhiteSpace(request.EmployerName) ? request.EmployerName : newCompany.Name;
+                            contract.CompanyAddress = newCompany.Address;
+                            contract.CompanyPostcode = newCompany.Postcode;
+                            contract.CompanyCity = newCompany.City;
+                            contract.CompanyPhoneNumber = newCompany.PhoneNumber;
+                        }
+                        else
+                        {
+                            // Update only if explicitly provided
+                            if (request.EmployerName != null) contract.EmployerName = request.EmployerName;
+                        }
+                        
+                        if (request.CompanyBtw != null) contract.CompanyBtw = request.CompanyBtw;
+                        if (request.CompanyKvk != null) contract.CompanyKvk = request.CompanyKvk;
+
+                        // 9. Handle file operations
+                        var newUploads = request.NewUploads ?? new List<UploadFileRequest>();
+                        var fileIdsToDelete = request.FileIdsToDelete ?? new List<Guid>();
+
+                        if (newUploads.Any())
+                        {
+                            var tmpRoot = Path.Combine(env.ContentRootPath, cfg.Value.TmpPath);
+                            var finalRoot = Path.Combine(env.ContentRootPath, cfg.Value.BasePathCompanies);
+
+                            DriverFileHelper.MoveUploadsToDriver(driver.Id, driver.CompanyId, newUploads, tmpRoot,
+                                finalRoot, db, resourceLocalizer);
+                        }
+
+                        if (fileIdsToDelete.Any())
+                        {
+                            var finalRoot = Path.Combine(env.ContentRootPath, cfg.Value.BasePathCompanies);
+                            DriverFileDeleteHelper.DeleteDriverFiles(driver.Id, fileIdsToDelete, finalRoot, db);
+                        }
+
+                        // 10. Save all changes
+                        await db.SaveChangesAsync();
+                        await transaction.CommitAsync();
+
+                        // 11. Reload driver with fresh data for response
+                        var updatedDriver = await db.Drivers
+                            .AsNoTracking()
+                            .Include(d => d.User)
+                            .Include(d => d.Company)
+                            .Include(d => d.Car)
+                            .Include(d => d.Files)
+                            .FirstOrDefaultAsync(d => d.Id == driverId);
+
+                        var updatedContract = await db.EmployeeContracts
+                            .AsNoTracking()
+                            .FirstOrDefaultAsync(c => c.DriverId == driver.Id);
+
+                        // 11. Build response (reuse the same logic as GET endpoint)
+                        var response = new DriverWithContractDto
+                        {
+                            // User Information
+                            UserId = updatedDriver.User.Id,
+                            Email = updatedDriver.User.Email ?? "",
+                            FirstName = updatedDriver.User.FirstName ?? "",
+                            LastName = updatedDriver.User.LastName ?? "",
+                            Address = updatedDriver.User.Address,
+                            PhoneNumber = updatedDriver.User.PhoneNumber,
+                            Postcode = updatedDriver.User.Postcode,
+                            City = updatedDriver.User.City,
+                            Country = updatedDriver.User.Country,
+                            Remark = updatedDriver.User.Remark,
+                            IsApproved = updatedDriver.User.IsApproved,
+
+                            // Driver Information
+                            DriverId = updatedDriver.Id,
+                            CompanyId = updatedDriver.CompanyId,
+                            CompanyName = updatedDriver.Company?.Name,
+                            CarId = updatedDriver.CarId,
+                            CarLicensePlate = updatedDriver.Car?.LicensePlate,
+                            CarVehicleYear = updatedDriver.Car?.VehicleYear,
+                            CarRegistrationDate = updatedDriver.Car?.RegistrationDate,
+
+                            // Contract Information
+                            ContractId = updatedContract?.Id,
+                            ContractStatus = updatedContract?.Status.ToString() ?? "No Contract",
+                            ReleaseVersion = updatedContract?.ReleaseVersion,
+
+                            // Personal Details
+                            DateOfBirth = updatedContract?.DateOfBirth,
+                            BSN = updatedContract?.Bsn,
+
+                            // Employment Details
+                            DateOfEmployment = updatedContract?.DateOfEmployment,
+                            LastWorkingDay = updatedContract?.LastWorkingDay,
+                            Function = updatedContract?.Function,
+                            ProbationPeriod = updatedContract?.ProbationPeriod,
+                            WorkweekDuration = updatedContract?.WorkweekDuration,
+                            WorkweekDurationPercentage = updatedContract?.WorkweekDurationPercentage,
+                            WeeklySchedule = updatedContract?.WeeklySchedule,
+                            WorkingHours = updatedContract?.WorkingHours,
+                            NoticePeriod = updatedContract?.NoticePeriod,
+
+                            // Work Allowances & Settings
+                            NightHoursAllowed = updatedContract?.NightHoursAllowed,
+                            KilometersAllowanceAllowed = updatedContract?.KilometersAllowanceAllowed,
+                            PermanentContract = updatedContract?.PermanentContract,
+                            CommuteKilometers = updatedContract?.CommuteKilometers,
+
+                            // Compensation Details
+                            PayScale = updatedContract?.PayScale,
+                            PayScaleStep = updatedContract?.PayScaleStep,
+                            CompensationPerMonthExclBtw = updatedContract?.CompensationPerMonthExclBtw,
+                            CompensationPerMonthInclBtw = updatedContract?.CompensationPerMonthInclBtw,
+                            HourlyWage100Percent = updatedContract?.HourlyWage100Percent,
+                            DeviatingWage = updatedContract?.DeviatingWage,
+
+                            // Travel & Expenses
+                            TravelExpenses = updatedContract?.TravelExpenses,
+                            MaxTravelExpenses = updatedContract?.MaxTravelExpenses,
+
+                            // Vacation & Benefits
+                            VacationAge = updatedContract?.VacationAge,
+                            VacationDays = updatedContract?.VacationDays,
+                            Atv = updatedContract?.Atv,
+                            VacationAllowance = updatedContract?.VacationAllowance,
+
+                            // Company Details (from contract)
+                            EmployerName = updatedContract?.EmployerName,
+                            CompanyAddress = updatedContract?.CompanyAddress,
+                            CompanyPostcode = updatedContract?.CompanyPostcode,
+                            CompanyCity = updatedContract?.CompanyCity,
+                            CompanyPhoneNumber = updatedContract?.CompanyPhoneNumber,
+                            CompanyBtw = updatedContract?.CompanyBtw,
+                            CompanyKvk = updatedContract?.CompanyKvk,
+
+                            // Contract Signing Info
+                            AccessCode = updatedContract?.AccessCode,
+                            SignedAt = updatedContract?.SignedAt,
+                            SignedFileName = updatedContract?.SignedFileName,
+
+                            // Driver Files
+                            Files = updatedDriver.Files.Select(f => new DriverFileDto
+                            {
+                                Id = f.Id,
+                                FileName = f.FileName,
+                                OriginalFileName = f.OriginalFileName,
+                                ContentType = f.ContentType,
+                                UploadedAt = f.UploadedAt
+                            }).ToList(),
+
+                            // Timestamps
+                            CreatedAt = updatedContract?.DateOfEmployment ?? DateTime.UtcNow
+                        };
+
+                        return ApiResponseFactory.Success(response, StatusCodes.Status200OK);
+                    }
+                    catch (Exception ex)
+                    {
+                        await transaction.RollbackAsync();
+                        Console.WriteLine($"[Error] {ex.Message}");
+                        Console.WriteLine($"[StackTrace] {ex.StackTrace}");
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while updating the driver.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+                });
+
+            app.MapDelete("/drivers/{driverId}/with-contract",
+                [Authorize(Roles = "globalAdmin, customerAdmin")]
+                async (
+                    Guid driverId,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser,
+                    IWebHostEnvironment env,
+                    IOptions<StorageOptions> cfg
+                ) =>
+                {
+                    using var transaction = await db.Database.BeginTransactionAsync();
+                    try
+                    {
+                        // 1. Get current user info for authorization
+                        var currentUserId = userManager.GetUserId(currentUser);
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+
+                        // 2. Find the driver with all related data
+                        var driver = await db.Drivers
+                            .Include(d => d.User)
+                            .Include(d => d.Company)
+                            .Include(d => d.Car)
+                            .Include(d => d.Files)
+                            .FirstOrDefaultAsync(d => d.Id == driverId && !d.IsDeleted);
+
+                        if (driver == null)
+                        {
+                            return ApiResponseFactory.Error("Driver not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        // 3. Authorization check for customerAdmin
+                        if (!isGlobalAdmin)
+                        {
+                            // Customer admins can only delete drivers from their associated companies
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error("Contact person profile not found.", StatusCodes.Status403Forbidden);
+                            }
+
+                            var customerAdminCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Where(cpc => cpc.CompanyId.HasValue)
+                                .Select(cpc => cpc.CompanyId.Value)
+                                .ToList();
+
+                            if (!driver.CompanyId.HasValue || !customerAdminCompanyIds.Contains(driver.CompanyId.Value))
+                            {
+                                return ApiResponseFactory.Error("You do not have permission to delete this driver.", StatusCodes.Status403Forbidden);
+                            }
+                        }
+
+                        // 4. Handle EmployeeContract (preserve for historical/legal purposes)
+                        var contract = await db.EmployeeContracts.FirstOrDefaultAsync(c => c.DriverId == driver.Id);
+                        if (contract != null)
+                        {
+                            // Set LastWorkingDay to today if not already set (employment termination record)
+                            if (!contract.LastWorkingDay.HasValue)
+                            {
+                                contract.LastWorkingDay = DateTime.UtcNow.Date;
+                            }
+                            // Note: We keep the contract for historical/audit purposes
+                            // It will become inaccessible through normal driver queries due to soft delete
+                        }
+
+                        // 5. Unassign car from driver (1-1 relationship)
+                        if (driver.CarId.HasValue)
+                        {
+                            driver.CarId = null;
+                        }
+
+                        // 6. Delete driver files (physical files and database records)
+                        if (driver.Files.Any())
+                        {
+                            var finalRoot = Path.Combine(env.ContentRootPath, cfg.Value.BasePathCompanies);
+                            var fileIdsToDelete = driver.Files.Select(f => f.Id).ToList();
+                            DriverFileDeleteHelper.DeleteDriverFiles(driver.Id, fileIdsToDelete, finalRoot, db);
+                        }
+
+                        // 7. Soft delete the ApplicationUser
+                        driver.User.IsDeleted = true;
+
+                        // 8. Soft delete the Driver
+                        driver.IsDeleted = true;
+
+                        // 9. Save all changes
+                        await db.SaveChangesAsync();
+                        await transaction.CommitAsync();
+
+                        return ApiResponseFactory.Success(
+                            new { 
+                                DriverId = driverId,
+                                Message = "Driver and associated contract terminated successfully.",
+                                TerminationDate = DateTime.UtcNow.Date
+                            }, 
+                            StatusCodes.Status200OK
+                        );
+                    }
+                    catch (Exception ex)
+                    {
+                        await transaction.RollbackAsync();
+                        Console.WriteLine($"[Error] {ex.Message}");
+                        Console.WriteLine($"[StackTrace] {ex.StackTrace}");
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while deleting the driver.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+                });
+
             app.MapGet("/drivers",
                 [Authorize(Roles = "globalAdmin, customerAdmin, customerAccountant, employer, customer")]
                 async (
@@ -534,9 +1450,10 @@ namespace TruckManagement.Endpoints
                 });
 
             app.MapGet("/drivers/week/details",
-                [Authorize(Roles = "driver")] async (
+                [Authorize(Roles = "driver, globalAdmin, customerAdmin")] async (
                     [FromQuery] int? year,
                     [FromQuery] int? weekNumber,
+                    [FromQuery] Guid? driverId,
                     UserManager<ApplicationUser> userManager,
                     ClaimsPrincipal currentUser,
                     ApplicationDbContext db
@@ -552,12 +1469,71 @@ namespace TruckManagement.Endpoints
                         }
 
                         var userId = userManager.GetUserId(currentUser);
-                        var driver =
-                            await db.Drivers.FirstOrDefaultAsync(d => d.AspNetUserId == userId && !d.IsDeleted);
+                        var isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                        var isCustomerAdmin = currentUser.IsInRole("customerAdmin");
+                        var isDriver = currentUser.IsInRole("driver");
 
-                        if (driver == null)
+                        Driver? driver = null;
+
+                        if (isDriver)
                         {
-                            return ApiResponseFactory.Error("Driver profile not found.",
+                            // Driver accessing their own data
+                            driver = await db.Drivers.FirstOrDefaultAsync(d => d.AspNetUserId == userId && !d.IsDeleted);
+                            
+                            if (driver == null)
+                            {
+                                return ApiResponseFactory.Error("Driver profile not found.",
+                                    StatusCodes.Status403Forbidden);
+                            }
+                        }
+                        else if (isGlobalAdmin || isCustomerAdmin)
+                        {
+                            // Admin accessing specific driver data
+                            if (!driverId.HasValue)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "Query parameter 'driverId' is required for admin access.",
+                                    StatusCodes.Status400BadRequest);
+                            }
+
+                            driver = await db.Drivers
+                                .Include(d => d.Company)
+                                .FirstOrDefaultAsync(d => d.Id == driverId.Value && !d.IsDeleted);
+
+                            if (driver == null)
+                            {
+                                return ApiResponseFactory.Error("Driver not found.",
+                                    StatusCodes.Status404NotFound);
+                            }
+
+                            // Authorization check for customerAdmin - they can only access drivers in their company
+                            if (isCustomerAdmin)
+                            {
+                                var contactPerson = await db.ContactPersons
+                                    .Include(cp => cp.ContactPersonClientCompanies)
+                                    .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                                if (contactPerson == null)
+                                {
+                                    return ApiResponseFactory.Error("Contact person profile not found.", 
+                                        StatusCodes.Status403Forbidden);
+                                }
+
+                                var customerAdminCompanyIds = contactPerson.ContactPersonClientCompanies
+                                    .Where(cpc => cpc.CompanyId.HasValue)
+                                    .Select(cpc => cpc.CompanyId.Value)
+                                    .ToList();
+
+                                if (!customerAdminCompanyIds.Contains(driver.CompanyId.GetValueOrDefault()))
+                                {
+                                    return ApiResponseFactory.Error("Access denied. Driver not in your company.",
+                                        StatusCodes.Status403Forbidden);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            return ApiResponseFactory.Error("Insufficient permissions.",
                                 StatusCodes.Status403Forbidden);
                         }
 
