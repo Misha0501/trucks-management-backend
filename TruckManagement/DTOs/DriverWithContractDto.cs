@@ -47,6 +47,7 @@ namespace TruckManagement.DTOs
         // Work Allowances & Settings
         public bool? NightHoursAllowed { get; set; }
         public bool? KilometersAllowanceAllowed { get; set; }
+        public bool? PermanentContract { get; set; }
         public double? CommuteKilometers { get; set; }
         
         // Compensation Details

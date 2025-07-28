@@ -19,6 +19,7 @@ namespace TruckManagement.Entities
 
         public bool? NightHoursAllowed { get; set; }
         public bool? KilometersAllowanceAllowed { get; set; }
+        public bool? PermanentContract { get; set; }
         public double? CommuteKilometers { get; set; }
 
         public string? EmployeeFirstName { get; set; } = null!;

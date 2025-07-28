@@ -174,6 +174,7 @@ namespace TruckManagement.Endpoints
                             // Allowances & Settings
                             NightHoursAllowed = request.NightHoursAllowed,
                             KilometersAllowanceAllowed = request.KilometersAllowanceAllowed,
+                            PermanentContract = request.PermanentContract,
                             CommuteKilometers = request.CommuteKilometers,
                             
                             // Compensation Details
@@ -380,6 +381,7 @@ namespace TruckManagement.Endpoints
                             // Work Allowances & Settings
                             NightHoursAllowed = contract?.NightHoursAllowed,
                             KilometersAllowanceAllowed = contract?.KilometersAllowanceAllowed,
+                            PermanentContract = contract?.PermanentContract,
                             CommuteKilometers = contract?.CommuteKilometers,
 
                             // Compensation Details
@@ -636,6 +638,7 @@ namespace TruckManagement.Endpoints
                         if (request.NoticePeriod != null) contract.NoticePeriod = request.NoticePeriod;
                         if (request.NightHoursAllowed.HasValue) contract.NightHoursAllowed = request.NightHoursAllowed.Value;
                         if (request.KilometersAllowanceAllowed.HasValue) contract.KilometersAllowanceAllowed = request.KilometersAllowanceAllowed.Value;
+                        if (request.PermanentContract.HasValue) contract.PermanentContract = request.PermanentContract.Value;
                         if (request.CommuteKilometers.HasValue) contract.CommuteKilometers = request.CommuteKilometers.Value;
                         if (request.PayScale != null) contract.PayScale = request.PayScale;
                         if (request.PayScaleStep.HasValue) contract.PayScaleStep = request.PayScaleStep.Value;
@@ -752,6 +755,7 @@ namespace TruckManagement.Endpoints
                             // Work Allowances & Settings
                             NightHoursAllowed = updatedContract?.NightHoursAllowed,
                             KilometersAllowanceAllowed = updatedContract?.KilometersAllowanceAllowed,
+                            PermanentContract = updatedContract?.PermanentContract,
                             CommuteKilometers = updatedContract?.CommuteKilometers,
 
                             // Compensation Details
