@@ -25,15 +25,13 @@ builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("FrontendPolicy", policy =>
+    options.AddPolicy("AllowAll", policy =>
     {
-        policy.WithOrigins("https://vervoermanager.nl") 
-            .AllowAnyHeader()
+        policy.AllowAnyOrigin()
             .AllowAnyMethod()
-            .AllowCredentials();
+            .AllowAnyHeader();
     });
 });
-
 builder.Services.AddScoped<DriverCompensationService>();
 builder.Services.Configure<StorageOptions>(
     builder.Configuration.GetSection("Storage"));
@@ -67,7 +65,7 @@ var app = builder.Build();
 app.UseRequestLocalization();
 
 // Use cors
-app.UseCors("FrontendPolicy");
+app.UseCors("AllowAll");
 
 // Global Exception Handling
 app.UseMiddleware<GlobalExceptionHandlingMiddleware>();
