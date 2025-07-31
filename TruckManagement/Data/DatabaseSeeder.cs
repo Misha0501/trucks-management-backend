@@ -786,9 +786,478 @@ namespace TruckManagement.Seeding
             }
             await dbContext.SaveChangesAsync();
             
+            // 22) Seed PartRides with vacation hours for testing (2025 data)
+            await SeedVacationTestData(dbContext, seededDriverEntity);
+            
+            // 23) Seed signed weeks and periods for report testing
+            await SeedSignedWeeksTestData(dbContext, seededDriverEntity);
+            
             await CaoSeeder.SeedAsync(dbContext);
             
             await VacationRightSeeder.SeedAsync(dbContext);
+        }
+
+        private static async Task SeedVacationTestData(ApplicationDbContext dbContext, Driver? seededDriver)
+        {
+            if (seededDriver == null) return;
+
+            var existingVacationTestData = dbContext.PartRides
+                .IgnoreQueryFilters()
+                .Any(pr => pr.Remark != null && pr.Remark.Contains("VACATION_TEST_DATA"));
+            
+            if (existingVacationTestData) return; // Already seeded
+
+            var currentYear = DateTime.UtcNow.Year;
+            var testDataRides = new List<PartRide>();
+
+            // Get an existing car and client for the test data
+            var seededCar = dbContext.Cars.IgnoreQueryFilters().FirstOrDefault();
+            var seededClient = dbContext.Clients.IgnoreQueryFilters().FirstOrDefault();
+            var defaultCompanyId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+
+            if (seededCar == null || seededClient == null) return;
+
+            // 1. Work days with positive vacation hours (earned)
+            for (int i = 1; i <= 20; i++)
+            {
+                testDataRides.Add(new PartRide
+                {
+                    Id = Guid.NewGuid(),
+                    Date = DateTime.SpecifyKind(new DateTime(currentYear, 1, i), DateTimeKind.Utc), // January 2025
+                    Start = new TimeSpan(8, 0, 0),
+                    End = new TimeSpan(16, 0, 0),
+                    Rest = new TimeSpan(0, 30, 0),
+                    TotalKilometers = 100,
+                    CarId = seededCar.Id,
+                    DriverId = seededDriver.Id,
+                    ClientId = seededClient.Id,
+                    CompanyId = defaultCompanyId,
+                    DecimalHours = 8.0,
+                    VacationHours = 0.32, // Earned vacation hours per work day (~8 hours of 25 days = 200 hours per year / 260 work days ≈ 0.77 per day)
+                    Remark = "VACATION_TEST_DATA - Work day with earned vacation",
+                    Status = PartRideStatus.Accepted
+                });
+            }
+
+            // 2. More work days to accumulate vacation hours
+            for (int i = 1; i <= 15; i++)
+            {
+                testDataRides.Add(new PartRide
+                {
+                    Id = Guid.NewGuid(),
+                    Date = DateTime.SpecifyKind(new DateTime(currentYear, 2, i), DateTimeKind.Utc), // February 2025
+                    Start = new TimeSpan(9, 0, 0),
+                    End = new TimeSpan(17, 0, 0),
+                    Rest = new TimeSpan(0, 45, 0),
+                    TotalKilometers = 120,
+                    CarId = seededCar.Id,
+                    DriverId = seededDriver.Id,
+                    ClientId = seededClient.Id,
+                    CompanyId = defaultCompanyId,
+                    DecimalHours = 7.25,
+                    VacationHours = 0.29, // Different amount for variety
+                    Remark = "VACATION_TEST_DATA - Work day with earned vacation",
+                    Status = PartRideStatus.Accepted
+                });
+            }
+
+            // 3. Holiday/Vacation days with negative vacation hours (used)
+            testDataRides.Add(new PartRide
+            {
+                Id = Guid.NewGuid(),
+                Date = DateTime.SpecifyKind(new DateTime(currentYear, 2, 20), DateTimeKind.Utc), // February 20, 2025
+                Start = new TimeSpan(0, 0, 0),
+                End = new TimeSpan(0, 0, 0),
+                Rest = new TimeSpan(0, 0, 0),
+                TotalKilometers = 0,
+                CarId = seededCar.Id,
+                DriverId = seededDriver.Id,
+                ClientId = seededClient.Id,
+                CompanyId = defaultCompanyId,
+                DecimalHours = 8.0,
+                VacationHours = -8.0, // Used 8 hours of vacation
+                Remark = "VACATION_TEST_DATA - Vacation day (used vacation hours)",
+                Status = PartRideStatus.Accepted
+            });
+
+            // 4. Another vacation day
+            testDataRides.Add(new PartRide
+            {
+                Id = Guid.NewGuid(),
+                Date = DateTime.SpecifyKind(new DateTime(currentYear, 2, 21), DateTimeKind.Utc), // February 21, 2025
+                Start = new TimeSpan(0, 0, 0),
+                End = new TimeSpan(0, 0, 0),
+                Rest = new TimeSpan(0, 0, 0),
+                TotalKilometers = 0,
+                CarId = seededCar.Id,
+                DriverId = seededDriver.Id,
+                ClientId = seededClient.Id,
+                CompanyId = defaultCompanyId,
+                DecimalHours = 8.0,
+                VacationHours = -8.0, // Used another 8 hours of vacation
+                Remark = "VACATION_TEST_DATA - Vacation day (used vacation hours)",
+                Status = PartRideStatus.Accepted
+            });
+
+            // Add all test data
+            dbContext.PartRides.AddRange(testDataRides);
+            await dbContext.SaveChangesAsync();
+
+            Console.WriteLine($"✅ Added {testDataRides.Count} PartRides with vacation test data for driver {seededDriver.Id}");
+            Console.WriteLine($"📊 Expected vacation balance: {testDataRides.Sum(pr => pr.VacationHours):F2} hours");
+        }
+
+        private static async Task SeedSignedWeeksTestData(ApplicationDbContext dbContext, Driver? seededDriver)
+        {
+            if (seededDriver == null) return;
+
+            var existingSignedWeekData = dbContext.WeekApprovals
+                .IgnoreQueryFilters()
+                .Any(wa => wa.DriverId == seededDriver.Id && wa.Status == WeekApprovalStatus.Signed);
+            
+            if (existingSignedWeekData) return; // Already seeded
+
+            var currentYear = DateTime.UtcNow.Year;
+            var defaultCompanyId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+            
+            // Get existing resources
+            var seededCar = dbContext.Cars.IgnoreQueryFilters().FirstOrDefault();
+            var seededClient = dbContext.Clients.IgnoreQueryFilters().FirstOrDefault();
+            var regularHoursCode = dbContext.HoursCodes.IgnoreQueryFilters()
+                .FirstOrDefault(hc => hc.Name == "One day ride");
+            var timeForTimeCode = dbContext.HoursCodes.IgnoreQueryFilters()
+                .FirstOrDefault(hc => hc.Name == "Time for time");
+            var holidayCode = dbContext.HoursCodes.IgnoreQueryFilters()
+                .FirstOrDefault(hc => hc.Name == "Holiday");
+
+            if (seededCar == null || seededClient == null || regularHoursCode == null) return;
+
+            // Create signed weeks for period 1 (weeks 1-4) of 2025
+            var weekApprovals = new List<WeekApproval>();
+            var partRides = new List<PartRide>();
+
+            for (int weekNr = 1; weekNr <= 4; weekNr++)
+            {
+                // Create WeekApproval with Signed status
+                var weekApproval = new WeekApproval
+                {
+                    Id = Guid.NewGuid(),
+                    WeekNr = weekNr,
+                    Year = currentYear,
+                    PeriodNr = 1,
+                    DriverId = seededDriver.Id,
+                    Status = WeekApprovalStatus.Signed,
+                    DriverSignedAt = DateTime.UtcNow.AddDays(-30 + weekNr),
+                    AdminAllowedAt = DateTime.UtcNow.AddDays(-25 + weekNr)
+                };
+                weekApprovals.Add(weekApproval);
+
+                // Create PartRides for this week with various scenarios
+                var weekStartDate = GetWeekStartDate(currentYear, weekNr);
+                
+                for (int dayOfWeek = 0; dayOfWeek < 7; dayOfWeek++)
+                {
+                    var currentDate = weekStartDate.AddDays(dayOfWeek);
+                    var dayName = currentDate.DayOfWeek;
+                    
+                    // Skip some days to create realistic patterns
+                    if (dayName == DayOfWeek.Saturday && weekNr % 2 == 0) continue;
+                    if (dayName == DayOfWeek.Sunday && weekNr != 2) continue;
+
+                    var partRide = CreateTestPartRide(
+                        currentDate, 
+                        weekNr, 
+                        dayOfWeek + 1, 
+                        seededDriver.Id, 
+                        seededCar.Id, 
+                        seededClient.Id, 
+                        defaultCompanyId,
+                        regularHoursCode.Id,
+                        timeForTimeCode?.Id,
+                        holidayCode?.Id,
+                        weekApproval.Id);
+                    
+                    if (partRide != null)
+                    {
+                        partRides.Add(partRide);
+                    }
+                }
+            }
+
+            // Add additional single signed week (week 10) for single week report testing
+            var singleWeekApproval = new WeekApproval
+            {
+                Id = Guid.NewGuid(),
+                WeekNr = 10,
+                Year = currentYear,
+                PeriodNr = 3, // Period 3, but other weeks in period are not signed
+                DriverId = seededDriver.Id,
+                Status = WeekApprovalStatus.Signed,
+                DriverSignedAt = DateTime.UtcNow.AddDays(-10),
+                AdminAllowedAt = DateTime.UtcNow.AddDays(-8)
+            };
+            weekApprovals.Add(singleWeekApproval);
+
+            // Create test data for week 10 with extreme overtime scenarios
+            var week10StartDate = GetWeekStartDate(currentYear, 10);
+            for (int dayOfWeek = 0; dayOfWeek < 5; dayOfWeek++) // Monday to Friday
+            {
+                var currentDate = week10StartDate.AddDays(dayOfWeek);
+                var extremePartRide = CreateExtremeOvertimePartRide(
+                    currentDate, 
+                    10, 
+                    dayOfWeek + 1, 
+                    seededDriver.Id, 
+                    seededCar.Id, 
+                    seededClient.Id, 
+                    defaultCompanyId,
+                    regularHoursCode.Id,
+                    singleWeekApproval.Id);
+                
+                if (extremePartRide != null)
+                {
+                    partRides.Add(extremePartRide);
+                }
+            }
+
+            // Save all data
+            dbContext.WeekApprovals.AddRange(weekApprovals);
+            dbContext.PartRides.AddRange(partRides);
+            await dbContext.SaveChangesAsync();
+
+            Console.WriteLine($"✅ Added {weekApprovals.Count} signed WeekApprovals for driver {seededDriver.Id}");
+            Console.WriteLine($"✅ Added {partRides.Count} PartRides for signed weeks");
+            Console.WriteLine($"📊 Period 1 (weeks 1-4): Complete period available for testing");
+            Console.WriteLine($"📊 Week 10: Single week with extreme overtime scenarios");
+        }
+
+        private static PartRide? CreateTestPartRide(
+            DateTime date,
+            int weekNr,
+            int dayInWeek,
+            Guid driverId,
+            Guid carId,
+            Guid clientId,
+            Guid companyId,
+            Guid regularHoursCodeId,
+            Guid? timeForTimeCodeId,
+            Guid? holidayCodeId,
+            Guid weekApprovalId)
+        {
+            var dayOfWeek = date.DayOfWeek;
+            
+            // Create different scenarios based on day and week
+            return dayOfWeek switch
+            {
+                DayOfWeek.Monday => CreateRegularWorkDay(date, weekNr, driverId, carId, clientId, companyId, regularHoursCodeId, weekApprovalId, 8.0),
+                DayOfWeek.Tuesday => CreateOvertimeDay(date, weekNr, driverId, carId, clientId, companyId, regularHoursCodeId, weekApprovalId, 10.5), // 130% and 150%
+                DayOfWeek.Wednesday => CreateRegularWorkDay(date, weekNr, driverId, carId, clientId, companyId, regularHoursCodeId, weekApprovalId, 7.5),
+                DayOfWeek.Thursday => CreateNightShiftDay(date, weekNr, driverId, carId, clientId, companyId, regularHoursCodeId, weekApprovalId),
+                DayOfWeek.Friday => CreateRegularWorkDay(date, weekNr, driverId, carId, clientId, companyId, regularHoursCodeId, weekApprovalId, 8.5),
+                DayOfWeek.Saturday => CreateWeekendDay(date, weekNr, driverId, carId, clientId, companyId, regularHoursCodeId, weekApprovalId),
+                DayOfWeek.Sunday => CreateHolidayDay(date, weekNr, driverId, carId, clientId, companyId, holidayCodeId ?? regularHoursCodeId, weekApprovalId),
+                _ => null
+            };
+        }
+
+        private static PartRide CreateRegularWorkDay(DateTime date, int weekNr, Guid driverId, Guid carId, Guid clientId, Guid companyId, Guid hoursCodeId, Guid weekApprovalId, double hours)
+        {
+            return new PartRide
+            {
+                Id = Guid.NewGuid(),
+                Date = DateTime.SpecifyKind(date, DateTimeKind.Utc),
+                Start = new TimeSpan(8, 0, 0),
+                End = new TimeSpan(16, (int)((hours - 8) * 60), 0),
+                Rest = new TimeSpan(0, 30, 0),
+                TotalKilometers = 150,
+                ExtraKilometers = 25,
+                CarId = carId,
+                DriverId = driverId,
+                ClientId = clientId,
+                CompanyId = companyId,
+                WeekNumber = weekNr,
+                DecimalHours = hours,
+                HoursCodeId = hoursCodeId,
+                VacationHours = 0.32, // Earned vacation
+                NightAllowance = 0,
+                KilometerReimbursement = 25 * 0.23, // 25 km * €0.23
+                ConsignmentFee = 0,
+                TaxFreeCompensation = 5.75,
+                VariousCompensation = 0,
+                Remark = $"SIGNED_WEEK_TEST_DATA - Regular work day, Week {weekNr}",
+                Status = PartRideStatus.Accepted,
+                WeekApprovalId = weekApprovalId
+            };
+        }
+
+        private static PartRide CreateOvertimeDay(DateTime date, int weekNr, Guid driverId, Guid carId, Guid clientId, Guid companyId, Guid hoursCodeId, Guid weekApprovalId, double hours)
+        {
+            return new PartRide
+            {
+                Id = Guid.NewGuid(),
+                Date = DateTime.SpecifyKind(date, DateTimeKind.Utc),
+                Start = new TimeSpan(7, 0, 0),
+                End = new TimeSpan(18, 30, 0),
+                Rest = new TimeSpan(1, 0, 0),
+                TotalKilometers = 280,
+                ExtraKilometers = 50,
+                CarId = carId,
+                DriverId = driverId,
+                ClientId = clientId,
+                CompanyId = companyId,
+                WeekNumber = weekNr,
+                DecimalHours = hours,
+                HoursCodeId = hoursCodeId,
+                VacationHours = 0.42, // More vacation earned for longer day
+                NightAllowance = 0,
+                KilometerReimbursement = 50 * 0.23,
+                ConsignmentFee = 0,
+                TaxFreeCompensation = 8.50,
+                VariousCompensation = 12.75,
+                Remark = $"SIGNED_WEEK_TEST_DATA - Overtime day ({hours}h), Week {weekNr}",
+                Status = PartRideStatus.Accepted,
+                WeekApprovalId = weekApprovalId
+            };
+        }
+
+        private static PartRide CreateNightShiftDay(DateTime date, int weekNr, Guid driverId, Guid carId, Guid clientId, Guid companyId, Guid hoursCodeId, Guid weekApprovalId)
+        {
+            return new PartRide
+            {
+                Id = Guid.NewGuid(),
+                Date = DateTime.SpecifyKind(date, DateTimeKind.Utc),
+                Start = new TimeSpan(22, 0, 0), // Night shift
+                End = new TimeSpan(6, 0, 0),    // Next morning
+                Rest = new TimeSpan(0, 30, 0),
+                TotalKilometers = 200,
+                ExtraKilometers = 35,
+                CarId = carId,
+                DriverId = driverId,
+                ClientId = clientId,
+                CompanyId = companyId,
+                WeekNumber = weekNr,
+                DecimalHours = 7.5,
+                HoursCodeId = hoursCodeId,
+                VacationHours = 0.30,
+                NightAllowance = 7.5 * 0.19, // Night allowance
+                KilometerReimbursement = 35 * 0.23,
+                ConsignmentFee = 0,
+                TaxFreeCompensation = 15.25,
+                VariousCompensation = 0,
+                Remark = $"SIGNED_WEEK_TEST_DATA - Night shift (200%), Week {weekNr}",
+                Status = PartRideStatus.Accepted,
+                WeekApprovalId = weekApprovalId
+            };
+        }
+
+        private static PartRide CreateWeekendDay(DateTime date, int weekNr, Guid driverId, Guid carId, Guid clientId, Guid companyId, Guid hoursCodeId, Guid weekApprovalId)
+        {
+            return new PartRide
+            {
+                Id = Guid.NewGuid(),
+                Date = DateTime.SpecifyKind(date, DateTimeKind.Utc),
+                Start = new TimeSpan(9, 0, 0),
+                End = new TimeSpan(15, 0, 0),
+                Rest = new TimeSpan(0, 30, 0),
+                TotalKilometers = 120,
+                ExtraKilometers = 20,
+                CarId = carId,
+                DriverId = driverId,
+                ClientId = clientId,
+                CompanyId = companyId,
+                WeekNumber = weekNr,
+                DecimalHours = 5.5,
+                HoursCodeId = hoursCodeId,
+                VacationHours = 0.22,
+                NightAllowance = 0,
+                KilometerReimbursement = 20 * 0.23,
+                ConsignmentFee = 25.0,
+                TaxFreeCompensation = 7.50,
+                VariousCompensation = 15.00,
+                Remark = $"SIGNED_WEEK_TEST_DATA - Weekend work (200%), Week {weekNr}",
+                Status = PartRideStatus.Accepted,
+                WeekApprovalId = weekApprovalId
+            };
+        }
+
+        private static PartRide CreateHolidayDay(DateTime date, int weekNr, Guid driverId, Guid carId, Guid clientId, Guid companyId, Guid hoursCodeId, Guid weekApprovalId)
+        {
+            return new PartRide
+            {
+                Id = Guid.NewGuid(),
+                Date = DateTime.SpecifyKind(date, DateTimeKind.Utc),
+                Start = new TimeSpan(0, 0, 0),
+                End = new TimeSpan(0, 0, 0),
+                Rest = new TimeSpan(0, 0, 0),
+                TotalKilometers = 0,
+                ExtraKilometers = 0,
+                CarId = carId,
+                DriverId = driverId,
+                ClientId = clientId,
+                CompanyId = companyId,
+                WeekNumber = weekNr,
+                DecimalHours = 8.0,
+                HoursCodeId = hoursCodeId,
+                VacationHours = -8.0, // Used vacation day
+                NightAllowance = 0,
+                KilometerReimbursement = 0,
+                ConsignmentFee = 0,
+                TaxFreeCompensation = 0,
+                VariousCompensation = 0,
+                Remark = $"SIGNED_WEEK_TEST_DATA - Holiday (vacation used), Week {weekNr}",
+                Status = PartRideStatus.Accepted,
+                WeekApprovalId = weekApprovalId
+            };
+        }
+
+        private static PartRide CreateExtremeOvertimePartRide(DateTime date, int weekNr, int dayInWeek, Guid driverId, Guid carId, Guid clientId, Guid companyId, Guid hoursCodeId, Guid weekApprovalId)
+        {
+            // Create extreme scenarios for testing
+            var hours = dayInWeek switch
+            {
+                1 => 12.0, // Monday: 12 hours (150%)
+                2 => 14.0, // Tuesday: 14 hours (150%)
+                3 => 9.5,  // Wednesday: 9.5 hours (130%)
+                4 => 11.0, // Thursday: 11 hours (150%)
+                5 => 8.0,  // Friday: 8 hours (but weekly total > 40, so some 150%)
+                _ => 8.0
+            };
+
+            return new PartRide
+            {
+                Id = Guid.NewGuid(),
+                Date = DateTime.SpecifyKind(date, DateTimeKind.Utc),
+                Start = new TimeSpan(6, 0, 0),
+                End = new TimeSpan(6 + (int)hours, (int)((hours % 1) * 60), 0),
+                Rest = new TimeSpan(1, 0, 0),
+                TotalKilometers = 350,
+                ExtraKilometers = (int)(hours * 8), // More km for longer days
+                CarId = carId,
+                DriverId = driverId,
+                ClientId = clientId,
+                CompanyId = companyId,
+                WeekNumber = weekNr,
+                DecimalHours = hours,
+                HoursCodeId = hoursCodeId,
+                VacationHours = hours * 0.04, // Earned vacation
+                NightAllowance = hours > 10 ? 2.0 * 0.19 : 0, // Some night allowance for long days
+                KilometerReimbursement = (int)(hours * 8) * 0.23,
+                ConsignmentFee = hours > 10 ? 35.0 : 0,
+                TaxFreeCompensation = hours * 1.50,
+                VariousCompensation = hours > 12 ? 25.0 : 0,
+                Remark = $"SIGNED_WEEK_TEST_DATA - EXTREME OVERTIME ({hours}h), Week {weekNr}, Day {dayInWeek}",
+                Status = PartRideStatus.Accepted,
+                WeekApprovalId = weekApprovalId
+            };
+        }
+
+        private static DateTime GetWeekStartDate(int year, int weekNumber)
+        {
+            var jan1 = new DateTime(year, 1, 1);
+            var daysOffset = (int)System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.FirstDayOfWeek - (int)jan1.DayOfWeek;
+            var firstWeek = jan1.AddDays(daysOffset);
+            
+            return firstWeek.AddDays((weekNumber - 1) * 7);
         }
     }
 }

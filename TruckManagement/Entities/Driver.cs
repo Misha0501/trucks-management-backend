@@ -17,5 +17,7 @@ namespace TruckManagement.Entities
         [ForeignKey(nameof(AspNetUserId))]
         public ApplicationUser User { get; set; } = default!;
         public DriverCompensationSettings DriverCompensationSettings { get; set; } = default!;
+        
+        public ICollection<DriverFile> Files { get; set; } = new List<DriverFile>();
     }
 }
