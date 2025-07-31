@@ -178,6 +178,7 @@ namespace TruckManagement.Endpoints
                         var weeksQuery = db.WeekApprovals
                             .AsNoTracking()
                             .Include(w => w.PartRides)
+                            .ThenInclude(pr => pr.HoursCode)
                             .Where(w => w.DriverId == driver.Id &&
                                         w.Year == year &&
                                         w.PeriodNr == periodNr);
@@ -193,7 +194,7 @@ namespace TruckManagement.Endpoints
                                 var wa = weekApprovals.FirstOrDefault(w => w.WeekNr == weekNumber);
 
                                 // If week has no WeekApproval record yet, create an empty shell
-                                var rides = wa?.PartRides
+                               var rides = wa?.PartRides
                                     .OrderByDescending(r => r.Date)
                                     .Select(r => new
                                     {
@@ -204,7 +205,8 @@ namespace TruckManagement.Endpoints
                                         r.TotalKilometers,
                                         r.DecimalHours,
                                         r.Remark,
-                                        Status = r.Status
+                                        Status = r.Status,
+                                        HoursCode = r.HoursCode != null ? new { r.HoursCode.Id, r.HoursCode.Name } : null
                                     })
                                     .Cast<dynamic>()
                                     .ToList() ?? new List<dynamic>();
@@ -448,6 +450,7 @@ namespace TruckManagement.Endpoints
                         var waList = await db.WeekApprovals
                             .AsNoTracking()
                             .Include(w => w.PartRides)
+                            .ThenInclude(pr => pr.HoursCode)
                             .Where(w => w.DriverId == driver.Id &&
                                         w.Year == year &&
                                         w.PeriodNr == periodNr)
@@ -478,7 +481,8 @@ namespace TruckManagement.Endpoints
                                         r.TaxFreeCompensation,
                                         r.VariousCompensation,
                                         r.Remark,
-                                        r.Status
+                                        r.Status,
+                                        HoursCode = r.HoursCode != null ? new { r.HoursCode.Id, r.HoursCode.Name } : null
                                     })
                                     .Cast<dynamic>()
                                     .ToList() ?? new List<dynamic>();
@@ -571,6 +575,8 @@ namespace TruckManagement.Endpoints
                             .Include(wa => wa.PartRides)
                             .ThenInclude(pr => pr.Driver)
                             .ThenInclude(d => d.User)
+                            .Include(wa => wa.PartRides)
+                            .ThenInclude(pr => pr.HoursCode)
                             .Where(wa => wa.Year == year.Value && wa.WeekNr == weekNumber.Value)
                             .Where(wa =>
                                 wa.Status == WeekApprovalStatus.Signed ||
@@ -600,6 +606,7 @@ namespace TruckManagement.Endpoints
                                 pr.TotalKilometers,
                                 pr.DecimalHours,
                                 pr.Remark,
+                                HoursCode = pr.HoursCode != null ? new { pr.HoursCode.Id, pr.HoursCode.Name } : null,
                                 Car = pr.Car != null ? new { pr.Car.Id, pr.Car.LicensePlate } : null,
                                 Client = pr.Client != null ? new { pr.Client.Id, pr.Client.Name } : null,
                                 Company = pr.Company != null ? new { pr.Company.Id, pr.Company.Name } : null
