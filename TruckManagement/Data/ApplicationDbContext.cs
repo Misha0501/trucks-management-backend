@@ -39,6 +39,8 @@ namespace TruckManagement.Data
         
         public DbSet<PartRideDispute> PartRideDisputes       => Set<PartRideDispute>();
         public DbSet<PartRideDisputeComment> PartRideDisputeComments => Set<PartRideDisputeComment>();
+        
+        public DbSet<ClientCapacityTemplate> ClientCapacityTemplates { get; set; } = default!;
 
         protected override void OnModelCreating(ModelBuilder builder)
         {

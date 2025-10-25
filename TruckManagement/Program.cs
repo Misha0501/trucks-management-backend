@@ -111,5 +111,6 @@ app.MapDriverFilesEndpoints();
 app.MapDisputeEndpoints();
 app.MapWeekToSubmitEndpoints();
 app.MapReportEndpoints();
+app.MapCapacityTemplateEndpoints();
 
 app.Run();
