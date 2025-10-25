@@ -198,6 +198,149 @@ namespace TruckManagement.Endpoints
                         return ApiResponseFactory.Error($"Error generating preview: {ex.Message}", StatusCodes.Status500InternalServerError);
                     }
                 });
+
+            // POST /weekly-planning/generate
+            app.MapPost("/weekly-planning/generate",
+                [Authorize(Roles = "globalAdmin, customerAdmin, employer")]
+                async (
+                    [FromBody] GenerateRidesRequest request,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser) =>
+                {
+                    try
+                    {
+                        var userId = currentUser.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                        var user = await userManager.FindByIdAsync(userId!);
+                        if (user == null) return ApiResponseFactory.Error("User not found.", StatusCodes.Status404NotFound);
+
+                        var userRoles = await userManager.GetRolesAsync(user);
+                        var isGlobalAdmin = userRoles.Contains("globalAdmin");
+
+                        // Normalize week start date
+                        var weekStart = request.WeekStartDate.ToUniversalTime().Date;
+                        if (weekStart.DayOfWeek != DayOfWeek.Monday)
+                        {
+                            int daysToSubtract = ((int)weekStart.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
+                            weekStart = weekStart.AddDays(-daysToSubtract);
+                        }
+
+                        // Validation
+                        if (request.Days == null || request.Days.Count == 0)
+                        {
+                            return ApiResponseFactory.Error("No days provided for ride generation.", StatusCodes.Status400BadRequest);
+                        }
+
+                        var response = new GenerateRidesResponse
+                        {
+                            WeekStartDate = weekStart
+                        };
+
+                        int totalRidesGenerated = 0;
+
+                        // Process each day
+                        foreach (var day in request.Days)
+                        {
+                            var dayDate = day.Date.ToUniversalTime().Date;
+                            var dayResult = new DayRideResultDto
+                            {
+                                Date = dayDate
+                            };
+
+                            // Process each client for this day
+                            foreach (var clientRequest in day.Clients)
+                            {
+                                // Verify client exists and user has access
+                                var client = await db.Clients
+                                    .FirstOrDefaultAsync(c => c.Id == clientRequest.ClientId);
+
+                                if (client == null)
+                                {
+                                    return ApiResponseFactory.Error($"Client {clientRequest.ClientId} not found.", StatusCodes.Status404NotFound);
+                                }
+
+                                // Check access permissions
+                                if (!isGlobalAdmin)
+                                {
+                                    // Check if user has access to this client's company
+                                    var contactPerson = await db.ContactPersons
+                                        .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                                    if (contactPerson == null)
+                                    {
+                                        return ApiResponseFactory.Error("Contact person not found.", StatusCodes.Status404NotFound);
+                                    }
+
+                                    var hasAccess = await db.ContactPersonClientCompanies
+                                        .AnyAsync(cpc => cpc.ContactPersonId == contactPerson.Id && 
+                                                        cpc.CompanyId == client.CompanyId);
+
+                                    if (!hasAccess)
+                                    {
+                                        return ApiResponseFactory.Error($"Access denied to client {client.Name}.", StatusCodes.Status403Forbidden);
+                                    }
+                                }
+
+                                // Validate trucks to generate
+                                if (clientRequest.TrucksToGenerate < 0)
+                                {
+                                    return ApiResponseFactory.Error($"Invalid number of trucks for client {client.Name}.", StatusCodes.Status400BadRequest);
+                                }
+
+                                if (clientRequest.TrucksToGenerate == 0)
+                                {
+                                    // Skip this client if no trucks requested
+                                    continue;
+                                }
+
+                                // Generate rides for this client on this day
+                                var rideIds = new List<Guid>();
+                                for (int i = 0; i < clientRequest.TrucksToGenerate; i++)
+                                {
+                                    var ride = new Ride
+                                    {
+                                        Id = Guid.NewGuid(),
+                                        CompanyId = client.CompanyId,
+                                        ClientId = client.Id,
+                                        PlannedDate = dayDate,
+                                        PlannedHours = 8.0m,
+                                        CreationMethod = "TEMPLATE_GENERATED",
+                                        CreatedAt = DateTime.UtcNow,
+                                        RouteFromName = null,
+                                        RouteToName = null,
+                                        Notes = null
+                                    };
+
+                                    db.Rides.Add(ride);
+                                    rideIds.Add(ride.Id);
+                                    totalRidesGenerated++;
+                                }
+
+                                // Add to day result
+                                dayResult.Clients.Add(new ClientRideResultDto
+                                {
+                                    ClientId = client.Id,
+                                    ClientName = client.Name,
+                                    RidesGenerated = rideIds.Count,
+                                    RideIds = rideIds
+                                });
+                            }
+
+                            response.Days.Add(dayResult);
+                        }
+
+                        // Save all rides to database
+                        await db.SaveChangesAsync();
+
+                        response.TotalRidesGenerated = totalRidesGenerated;
+
+                        return ApiResponseFactory.Success(response, StatusCodes.Status201Created);
+                    }
+                    catch (Exception ex)
+                    {
+                        return ApiResponseFactory.Error($"Error generating rides: {ex.Message}", StatusCodes.Status500InternalServerError);
+                    }
+                });
         }
     }
 }
