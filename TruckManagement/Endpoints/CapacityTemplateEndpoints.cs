@@ -14,8 +14,8 @@ namespace TruckManagement.Endpoints
     {
         public static void MapCapacityTemplateEndpoints(this WebApplication app)
         {
-            // GET /api/capacity-templates?companyId={guid}
-            app.MapGet("/api/capacity-templates",
+            // GET /capacity-templates?companyId={guid}
+            app.MapGet("/capacity-templates",
                 [Authorize(Roles = "globalAdmin, customerAdmin, employer")]
                 async (
                     ApplicationDbContext db,
@@ -114,8 +114,8 @@ namespace TruckManagement.Endpoints
                     }
                 });
 
-            // POST /api/capacity-templates
-            app.MapPost("/api/capacity-templates",
+            // POST /capacity-templates
+            app.MapPost("/capacity-templates",
                 [Authorize(Roles = "globalAdmin, customerAdmin")]
                 async (
                     [FromBody] CreateCapacityTemplateRequest request,
@@ -259,8 +259,8 @@ namespace TruckManagement.Endpoints
                     }
                 });
 
-            // PUT /api/capacity-templates/{id}
-            app.MapPut("/api/capacity-templates/{id}",
+            // PUT /capacity-templates/{id}
+            app.MapPut("/capacity-templates/{id}",
                 [Authorize(Roles = "globalAdmin, customerAdmin")]
                 async (
                     Guid id,
@@ -373,8 +373,8 @@ namespace TruckManagement.Endpoints
                     }
                 });
 
-            // DELETE /api/capacity-templates/{id}
-            app.MapDelete("/api/capacity-templates/{id}",
+            // DELETE /capacity-templates/{id}
+            app.MapDelete("/capacity-templates/{id}",
                 [Authorize(Roles = "globalAdmin, customerAdmin")]
                 async (
                     Guid id,
