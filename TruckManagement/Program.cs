@@ -112,5 +112,6 @@ app.MapDisputeEndpoints();
 app.MapWeekToSubmitEndpoints();
 app.MapReportEndpoints();
 app.MapCapacityTemplateEndpoints();
+app.MapWeeklyPlanningEndpoints();
 
 app.Run();
