@@ -303,7 +303,7 @@ namespace TruckManagement.Endpoints
                                         CompanyId = client.CompanyId,
                                         ClientId = client.Id,
                                         PlannedDate = dayDate,
-                                        PlannedHours = 8.0m,
+                                        TotalPlannedHours = 8.0m,
                                         CreationMethod = "TEMPLATE_GENERATED",
                                         CreatedAt = DateTime.UtcNow,
                                         RouteFromName = null,
@@ -436,6 +436,10 @@ namespace TruckManagement.Endpoints
                         // Get all rides for the week that belong to allowed companies
                         var rides = await db.Rides
                             .Include(r => r.Client)
+                            .Include(r => r.Truck)
+                            .Include(r => r.DriverAssignments)
+                                .ThenInclude(da => da.Driver)
+                                    .ThenInclude(d => d.User)
                             .Where(r => r.PlannedDate.HasValue &&
                                        r.PlannedDate.Value >= weekStart &&
                                        r.PlannedDate.Value <= weekEnd &&
@@ -443,25 +447,6 @@ namespace TruckManagement.Endpoints
                             .OrderBy(r => r.PlannedDate)
                             .ThenBy(r => r.Client!.Name)
                             .ToListAsync();
-
-                        // Get driver and car assignments from PartRides
-                        var rideIds = rides.Select(r => r.Id).ToList();
-                        var partRides = await db.PartRides
-                            .Include(pr => pr.Driver)
-                                .ThenInclude(d => d!.User)
-                            .Include(pr => pr.Car)
-                            .Where(pr => pr.RideId.HasValue && rideIds.Contains(pr.RideId.Value))
-                            .ToListAsync();
-
-                        // Create a mapping of ride ID to assigned driver/car
-                        var rideAssignments = new Dictionary<Guid, (Driver? driver, Car? car)>();
-                        foreach (var pr in partRides)
-                        {
-                            if (pr.RideId.HasValue && !rideAssignments.ContainsKey(pr.RideId.Value))
-                            {
-                                rideAssignments[pr.RideId.Value] = (pr.Driver, pr.Car);
-                            }
-                        }
 
                         // Build response structure
                         var days = new List<DayAssignmentDto>();
@@ -487,26 +472,35 @@ namespace TruckManagement.Endpoints
                                 var clientRides = new List<RideAssignmentDto>();
                                 foreach (var ride in clientGroup)
                                 {
-                                    var assignment = rideAssignments.GetValueOrDefault(ride.Id);
+                                    var primaryDriver = ride.DriverAssignments.FirstOrDefault(da => da.IsPrimary);
+                                    var secondDriver = ride.DriverAssignments.FirstOrDefault(da => !da.IsPrimary);
                                     
                                     clientRides.Add(new RideAssignmentDto
                                     {
                                         Id = ride.Id,
-                                        PlannedHours = ride.PlannedHours,
+                                        PlannedHours = ride.TotalPlannedHours,
                                         RouteFromName = ride.RouteFromName,
                                         RouteToName = ride.RouteToName,
                                         Notes = ride.Notes,
                                         CreationMethod = ride.CreationMethod,
-                                        AssignedDriver = assignment.driver != null && assignment.driver.User != null ? new DriverBasicDto
+                                        AssignedDriver = primaryDriver != null && primaryDriver.Driver?.User != null ? new DriverBasicDto
                                         {
-                                            Id = assignment.driver.Id,
-                                            FirstName = assignment.driver.User.FirstName,
-                                            LastName = assignment.driver.User.LastName
+                                            Id = primaryDriver.Driver.Id,
+                                            FirstName = primaryDriver.Driver.User.FirstName,
+                                            LastName = primaryDriver.Driver.User.LastName,
+                                            PlannedHours = primaryDriver.PlannedHours
                                         } : null,
-                                        AssignedTruck = assignment.car != null ? new CarBasicDto
+                                        SecondDriver = secondDriver != null && secondDriver.Driver?.User != null ? new DriverBasicDto
                                         {
-                                            Id = assignment.car.Id,
-                                            LicensePlate = assignment.car.LicensePlate
+                                            Id = secondDriver.Driver.Id,
+                                            FirstName = secondDriver.Driver.User.FirstName,
+                                            LastName = secondDriver.Driver.User.LastName,
+                                            PlannedHours = secondDriver.PlannedHours
+                                        } : null,
+                                        AssignedTruck = ride.Truck != null ? new CarBasicDto
+                                        {
+                                            Id = ride.Truck.Id,
+                                            LicensePlate = ride.Truck.LicensePlate
                                         } : null
                                     });
                                 }

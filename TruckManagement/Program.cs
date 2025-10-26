@@ -113,5 +113,6 @@ app.MapWeekToSubmitEndpoints();
 app.MapReportEndpoints();
 app.MapCapacityTemplateEndpoints();
 app.MapWeeklyPlanningEndpoints();
+app.MapRideAssignmentEndpoints();
 
 app.Run();

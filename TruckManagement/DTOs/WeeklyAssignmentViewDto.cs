@@ -23,10 +23,11 @@ namespace TruckManagement.DTOs
     public class RideAssignmentDto
     {
         public Guid Id { get; set; }
-        public decimal PlannedHours { get; set; }
+        public decimal PlannedHours { get; set; } // Total ride hours (for truck)
         public string? RouteFromName { get; set; }
         public string? RouteToName { get; set; }
-        public DriverBasicDto? AssignedDriver { get; set; }
+        public DriverBasicDto? AssignedDriver { get; set; } // Primary driver with hours
+        public DriverBasicDto? SecondDriver { get; set; } // Second driver with hours
         public CarBasicDto? AssignedTruck { get; set; }
         public string? Notes { get; set; }
         public string? CreationMethod { get; set; }
@@ -38,6 +39,7 @@ namespace TruckManagement.DTOs
         public string FirstName { get; set; } = default!;
         public string LastName { get; set; } = default!;
         public string FullName => $"{FirstName} {LastName}";
+        public decimal PlannedHours { get; set; } // Individual driver hours
     }
 
     public class CarBasicDto

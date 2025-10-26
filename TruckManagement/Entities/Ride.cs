@@ -20,7 +20,10 @@ namespace TruckManagement.Entities
         
         public DateTime? PlannedDate { get; set; }
         
-        public decimal PlannedHours { get; set; } = 8.0m;
+        public decimal TotalPlannedHours { get; set; } = 8.0m; // For truck scheduling
+        
+        public Guid? TruckId { get; set; }
+        public Car? Truck { get; set; }
         
         public string? RouteFromName { get; set; }
         
@@ -32,6 +35,7 @@ namespace TruckManagement.Entities
         
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         
+        public ICollection<RideDriverAssignment> DriverAssignments { get; set; } = new List<RideDriverAssignment>();
         public ICollection<PartRide> PartRides { get; set; } = new List<PartRide>();
     }
 }
