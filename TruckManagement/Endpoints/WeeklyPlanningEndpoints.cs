@@ -341,6 +341,205 @@ namespace TruckManagement.Endpoints
                         return ApiResponseFactory.Error($"Error generating rides: {ex.Message}", StatusCodes.Status500InternalServerError);
                     }
                 });
+
+            // GET /weekly-planning/rides?weekStartDate={date}&companyId={guid}
+            app.MapGet("/weekly-planning/rides",
+                [Authorize(Roles = "globalAdmin, customerAdmin, employer")]
+                async (
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser,
+                    [FromQuery] string weekStartDate,
+                    [FromQuery] string? companyId = null
+                ) =>
+                {
+                    try
+                    {
+                        // Parse and validate week start date
+                        if (!DateTime.TryParse(weekStartDate, out var weekStart))
+                        {
+                            return ApiResponseFactory.Error("Invalid date format. Use YYYY-MM-DD.", StatusCodes.Status400BadRequest);
+                        }
+
+                        // Ensure it's a Monday
+                        if (weekStart.DayOfWeek != DayOfWeek.Monday)
+                        {
+                            int daysToSubtract = ((int)weekStart.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
+                            weekStart = weekStart.AddDays(-daysToSubtract);
+                        }
+
+                        weekStart = DateTime.SpecifyKind(weekStart.Date, DateTimeKind.Utc);
+
+                        // Get current user
+                        var currentUserId = userManager.GetUserId(currentUser);
+                        var isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+
+                        // Determine company filter
+                        Guid? filterCompanyId = null;
+                        if (!string.IsNullOrEmpty(companyId))
+                        {
+                            if (!Guid.TryParse(companyId, out var parsedCompanyId))
+                            {
+                                return ApiResponseFactory.Error("Invalid company ID format.", StatusCodes.Status400BadRequest);
+                            }
+                            filterCompanyId = parsedCompanyId;
+                        }
+
+                        // Check authorization and get allowed companies
+                        List<Guid> allowedCompanyIds = new();
+                        
+                        if (isGlobalAdmin)
+                        {
+                            if (filterCompanyId.HasValue)
+                            {
+                                allowedCompanyIds.Add(filterCompanyId.Value);
+                            }
+                            else
+                            {
+                                // Global admin without filter - get all companies
+                                allowedCompanyIds = await db.Companies.Select(c => c.Id).ToListAsync();
+                            }
+                        }
+                        else
+                        {
+                            // Non-global admin - get their companies
+                            var contactPerson = await db.ContactPersons
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error("Contact person not found.", StatusCodes.Status404NotFound);
+                            }
+
+                            allowedCompanyIds = await db.ContactPersonClientCompanies
+                                .Where(cpc => cpc.ContactPersonId == contactPerson.Id && cpc.CompanyId.HasValue)
+                                .Select(cpc => cpc.CompanyId!.Value)
+                                .Distinct()
+                                .ToListAsync();
+
+                            // If company filter specified, ensure they have access
+                            if (filterCompanyId.HasValue && !allowedCompanyIds.Contains(filterCompanyId.Value))
+                            {
+                                return ApiResponseFactory.Error("You don't have access to this company.", StatusCodes.Status403Forbidden);
+                            }
+
+                            // If filter specified, use only that company
+                            if (filterCompanyId.HasValue)
+                            {
+                                allowedCompanyIds = new List<Guid> { filterCompanyId.Value };
+                            }
+                        }
+
+                        // Calculate week end date (Sunday)
+                        var weekEnd = weekStart.AddDays(6);
+
+                        // Get all rides for the week that belong to allowed companies
+                        var rides = await db.Rides
+                            .Include(r => r.Client)
+                            .Where(r => r.PlannedDate.HasValue &&
+                                       r.PlannedDate.Value >= weekStart &&
+                                       r.PlannedDate.Value <= weekEnd &&
+                                       allowedCompanyIds.Contains(r.CompanyId))
+                            .OrderBy(r => r.PlannedDate)
+                            .ThenBy(r => r.Client!.Name)
+                            .ToListAsync();
+
+                        // Get driver and car assignments from PartRides
+                        var rideIds = rides.Select(r => r.Id).ToList();
+                        var partRides = await db.PartRides
+                            .Include(pr => pr.Driver)
+                                .ThenInclude(d => d!.User)
+                            .Include(pr => pr.Car)
+                            .Where(pr => pr.RideId.HasValue && rideIds.Contains(pr.RideId.Value))
+                            .ToListAsync();
+
+                        // Create a mapping of ride ID to assigned driver/car
+                        var rideAssignments = new Dictionary<Guid, (Driver? driver, Car? car)>();
+                        foreach (var pr in partRides)
+                        {
+                            if (pr.RideId.HasValue && !rideAssignments.ContainsKey(pr.RideId.Value))
+                            {
+                                rideAssignments[pr.RideId.Value] = (pr.Driver, pr.Car);
+                            }
+                        }
+
+                        // Build response structure
+                        var days = new List<DayAssignmentDto>();
+
+                        for (int i = 0; i < 7; i++)
+                        {
+                            var currentDate = weekStart.AddDays(i);
+                            var dayOfWeek = currentDate.DayOfWeek;
+
+                            // Get rides for this day
+                            var dayRides = rides.Where(r => r.PlannedDate.HasValue && r.PlannedDate.Value.Date == currentDate.Date).ToList();
+
+                            // Group by client
+                            var clientGroups = dayRides
+                                .Where(r => r.Client != null && r.ClientId.HasValue)
+                                .GroupBy(r => new { ClientId = r.ClientId!.Value, ClientName = r.Client!.Name })
+                                .OrderBy(g => g.Key.ClientName)
+                                .ToList();
+
+                            var clientAssignments = new List<ClientAssignmentDto>();
+                            foreach (var clientGroup in clientGroups)
+                            {
+                                var clientRides = new List<RideAssignmentDto>();
+                                foreach (var ride in clientGroup)
+                                {
+                                    var assignment = rideAssignments.GetValueOrDefault(ride.Id);
+                                    
+                                    clientRides.Add(new RideAssignmentDto
+                                    {
+                                        Id = ride.Id,
+                                        PlannedHours = ride.PlannedHours,
+                                        RouteFromName = ride.RouteFromName,
+                                        RouteToName = ride.RouteToName,
+                                        Notes = ride.Notes,
+                                        CreationMethod = ride.CreationMethod,
+                                        AssignedDriver = assignment.driver != null && assignment.driver.User != null ? new DriverBasicDto
+                                        {
+                                            Id = assignment.driver.Id,
+                                            FirstName = assignment.driver.User.FirstName,
+                                            LastName = assignment.driver.User.LastName
+                                        } : null,
+                                        AssignedTruck = assignment.car != null ? new CarBasicDto
+                                        {
+                                            Id = assignment.car.Id,
+                                            LicensePlate = assignment.car.LicensePlate
+                                        } : null
+                                    });
+                                }
+
+                                clientAssignments.Add(new ClientAssignmentDto
+                                {
+                                    ClientId = clientGroup.Key.ClientId,
+                                    ClientName = clientGroup.Key.ClientName,
+                                    Rides = clientRides
+                                });
+                            }
+
+                            days.Add(new DayAssignmentDto
+                            {
+                                Date = currentDate.ToString("yyyy-MM-dd"),
+                                DayName = currentDate.ToString("dddd", CultureInfo.InvariantCulture),
+                                Clients = clientAssignments
+                            });
+                        }
+
+                        var response = new WeeklyAssignmentViewDto
+                        {
+                            WeekStartDate = weekStart.ToString("yyyy-MM-dd"),
+                            Days = days
+                        };
+
+                        return ApiResponseFactory.Success(response);
+                    }
+                    catch (Exception ex)
+                    {
+                        return ApiResponseFactory.Error($"Error retrieving weekly assignment view: {ex.Message}", StatusCodes.Status500InternalServerError);
+                    }
+                });
         }
     }
 }
