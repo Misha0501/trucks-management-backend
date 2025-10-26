@@ -361,6 +361,82 @@ namespace TruckManagement.Endpoints
                         return ApiResponseFactory.Error($"Error updating ride hours: {ex.Message}", StatusCodes.Status500InternalServerError);
                     }
                 });
+
+            // PUT /rides/{id}/details - Update ride details (routes and notes)
+            app.MapPut("/rides/{id}/details",
+                [Authorize(Roles = "globalAdmin, customerAdmin, employer")]
+                async (
+                    Guid id,
+                    [FromBody] UpdateRideDetailsRequest request,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser) =>
+                {
+                    try
+                    {
+                        var userId = currentUser.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                        var user = await userManager.FindByIdAsync(userId!);
+                        if (user == null) return ApiResponseFactory.Error("User not found.", StatusCodes.Status404NotFound);
+
+                        var ride = await db.Rides
+                            .FirstOrDefaultAsync(r => r.Id == id);
+
+                        if (ride == null)
+                        {
+                            return ApiResponseFactory.Error("Ride not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        // Check access permissions
+                        var userRoles = await userManager.GetRolesAsync(user);
+                        var isGlobalAdmin = userRoles.Contains("globalAdmin");
+                        
+                        if (!isGlobalAdmin)
+                        {
+                            var contactPerson = await db.ContactPersons
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error("Contact person not found.", StatusCodes.Status404NotFound);
+                            }
+
+                            var hasAccess = await db.ContactPersonClientCompanies
+                                .AnyAsync(cpc => cpc.ContactPersonId == contactPerson.Id && 
+                                                cpc.CompanyId == ride.CompanyId);
+
+                            if (!hasAccess)
+                            {
+                                return ApiResponseFactory.Error("Access denied to this ride.", StatusCodes.Status403Forbidden);
+                            }
+                        }
+
+                        // Update ride details (treat empty strings as null)
+                        ride.RouteFromName = string.IsNullOrWhiteSpace(request.RouteFromName) ? null : request.RouteFromName.Trim();
+                        ride.RouteToName = string.IsNullOrWhiteSpace(request.RouteToName) ? null : request.RouteToName.Trim();
+                        ride.Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim();
+                        ride.PlannedStartTime = request.PlannedStartTime;
+                        ride.PlannedEndTime = request.PlannedEndTime;
+
+                        await db.SaveChangesAsync();
+
+                        var response = new RideDetailsDto
+                        {
+                            Id = ride.Id,
+                            RouteFromName = ride.RouteFromName,
+                            RouteToName = ride.RouteToName,
+                            Notes = ride.Notes,
+                            PlannedStartTime = ride.PlannedStartTime,
+                            PlannedEndTime = ride.PlannedEndTime,
+                            UpdatedAt = DateTime.UtcNow
+                        };
+
+                        return ApiResponseFactory.Success(response);
+                    }
+                    catch (Exception ex)
+                    {
+                        return ApiResponseFactory.Error($"Error updating ride details: {ex.Message}", StatusCodes.Status500InternalServerError);
+                    }
+                });
         }
     }
 }

@@ -22,6 +22,10 @@ namespace TruckManagement.Entities
         
         public decimal TotalPlannedHours { get; set; } = 8.0m; // For truck scheduling
         
+        public TimeSpan? PlannedStartTime { get; set; } // Time of day (e.g., 08:00:00)
+        
+        public TimeSpan? PlannedEndTime { get; set; } // Time of day (e.g., 17:00:00)
+        
         public Guid? TruckId { get; set; }
         public Car? Truck { get; set; }
         

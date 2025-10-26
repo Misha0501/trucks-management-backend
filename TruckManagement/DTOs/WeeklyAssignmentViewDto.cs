@@ -24,6 +24,8 @@ namespace TruckManagement.DTOs
     {
         public Guid Id { get; set; }
         public decimal PlannedHours { get; set; } // Total ride hours (for truck)
+        public TimeSpan? PlannedStartTime { get; set; }
+        public TimeSpan? PlannedEndTime { get; set; }
         public string? RouteFromName { get; set; }
         public string? RouteToName { get; set; }
         public DriverBasicDto? AssignedDriver { get; set; } // Primary driver with hours

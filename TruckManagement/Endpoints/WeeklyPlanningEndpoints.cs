@@ -479,6 +479,8 @@ namespace TruckManagement.Endpoints
                                     {
                                         Id = ride.Id,
                                         PlannedHours = ride.TotalPlannedHours,
+                                        PlannedStartTime = ride.PlannedStartTime,
+                                        PlannedEndTime = ride.PlannedEndTime,
                                         RouteFromName = ride.RouteFromName,
                                         RouteToName = ride.RouteToName,
                                         Notes = ride.Notes,
