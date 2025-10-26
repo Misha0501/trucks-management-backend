@@ -114,5 +114,6 @@ app.MapReportEndpoints();
 app.MapCapacityTemplateEndpoints();
 app.MapWeeklyPlanningEndpoints();
 app.MapRideAssignmentEndpoints();
+app.MapDailyPlanningEndpoints();
 
 app.Run();
