@@ -42,6 +42,8 @@ namespace TruckManagement.Data
         
         public DbSet<ClientCapacityTemplate> ClientCapacityTemplates { get; set; } = default!;
         public DbSet<RideDriverAssignment> RideDriverAssignments { get; set; } = default!;
+        public DbSet<DriverDailyAvailability> DriverDailyAvailabilities { get; set; } = default!;
+        public DbSet<TruckDailyAvailability> TruckDailyAvailabilities { get; set; } = default!;
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -220,6 +222,16 @@ namespace TruckManagement.Data
                 .WithMany(d => d.Comments)
                 .HasForeignKey(c => c.DisputeId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // DriverDailyAvailability - unique constraint on driver+date
+            builder.Entity<DriverDailyAvailability>()
+                .HasIndex(d => new { d.DriverId, d.Date })
+                .IsUnique();
+
+            // TruckDailyAvailability - unique constraint on truck+date
+            builder.Entity<TruckDailyAvailability>()
+                .HasIndex(t => new { t.TruckId, t.Date })
+                .IsUnique();
         }
     }
 }
