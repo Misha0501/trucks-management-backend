@@ -20,3 +20,5 @@ namespace TruckManagement.DTOs
     }
 }
 
+
+

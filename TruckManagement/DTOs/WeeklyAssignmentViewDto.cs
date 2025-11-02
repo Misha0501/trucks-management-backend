@@ -23,6 +23,7 @@ namespace TruckManagement.DTOs
     public class RideAssignmentDto
     {
         public Guid Id { get; set; }
+        public string? TripNumber { get; set; }
         public decimal PlannedHours { get; set; } // Total ride hours (for truck)
         public TimeSpan? PlannedStartTime { get; set; }
         public TimeSpan? PlannedEndTime { get; set; }

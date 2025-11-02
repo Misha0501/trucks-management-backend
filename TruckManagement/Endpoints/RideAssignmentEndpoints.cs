@@ -437,6 +437,73 @@ namespace TruckManagement.Endpoints
                         return ApiResponseFactory.Error($"Error updating ride details: {ex.Message}", StatusCodes.Status500InternalServerError);
                     }
                 });
+
+            // PUT /rides/{id}/trip-number - Update trip number
+            app.MapPut("/rides/{id}/trip-number",
+                [Authorize(Roles = "globalAdmin, customerAdmin, employer")]
+                async (
+                    Guid id,
+                    [FromBody] UpdateTripNumberRequest request,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser) =>
+                {
+                    try
+                    {
+                        var userId = currentUser.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                        var user = await userManager.FindByIdAsync(userId!);
+                        if (user == null) return ApiResponseFactory.Error("User not found.", StatusCodes.Status404NotFound);
+
+                        var ride = await db.Rides.FirstOrDefaultAsync(r => r.Id == id);
+
+                        if (ride == null)
+                        {
+                            return ApiResponseFactory.Error("Ride not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        // Check access permissions
+                        var userRoles = await userManager.GetRolesAsync(user);
+                        var isGlobalAdmin = userRoles.Contains("globalAdmin");
+                        
+                        if (!isGlobalAdmin)
+                        {
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error("Contact person not found.", StatusCodes.Status404NotFound);
+                            }
+
+                            var allowedCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Where(cpc => cpc.CompanyId.HasValue)
+                                .Select(cpc => cpc.CompanyId!.Value)
+                                .ToList();
+
+                            if (!allowedCompanyIds.Contains(ride.CompanyId))
+                            {
+                                return ApiResponseFactory.Error("Access denied to this ride.", StatusCodes.Status403Forbidden);
+                            }
+                        }
+
+                        // Update trip number
+                        ride.TripNumber = request.TripNumber;
+                        await db.SaveChangesAsync();
+
+                        var response = new
+                        {
+                            Id = ride.Id,
+                            TripNumber = ride.TripNumber
+                        };
+
+                        return ApiResponseFactory.Success(response);
+                    }
+                    catch (Exception ex)
+                    {
+                        return ApiResponseFactory.Error($"Error updating trip number: {ex.Message}", StatusCodes.Status500InternalServerError);
+                    }
+                });
         }
     }
 }

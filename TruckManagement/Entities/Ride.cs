@@ -35,6 +35,8 @@ namespace TruckManagement.Entities
         
         public string? Notes { get; set; }
         
+        public string? TripNumber { get; set; } // e.g., "TR-2025-001"
+        
         public string? CreationMethod { get; set; } // e.g., "TEMPLATE_GENERATED", "MANUAL"
         
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

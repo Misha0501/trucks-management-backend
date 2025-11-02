@@ -478,6 +478,7 @@ namespace TruckManagement.Endpoints
                                     clientRides.Add(new RideAssignmentDto
                                     {
                                         Id = ride.Id,
+                                        TripNumber = ride.TripNumber,
                                         PlannedHours = ride.TotalPlannedHours,
                                         PlannedStartTime = ride.PlannedStartTime,
                                         PlannedEndTime = ride.PlannedEndTime,
