@@ -116,5 +116,6 @@ app.MapWeeklyPlanningEndpoints();
 app.MapRideAssignmentEndpoints();
 app.MapDailyPlanningEndpoints();
 app.MapAvailabilityEndpoints();
+app.MapRideExecutionEndpoints();
 
 app.Run();

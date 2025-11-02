@@ -42,6 +42,7 @@ namespace TruckManagement.Data
         
         public DbSet<ClientCapacityTemplate> ClientCapacityTemplates { get; set; } = default!;
         public DbSet<RideDriverAssignment> RideDriverAssignments { get; set; } = default!;
+        public DbSet<RideDriverExecution> RideDriverExecutions { get; set; } = default!;
         public DbSet<DriverDailyAvailability> DriverDailyAvailabilities { get; set; } = default!;
         public DbSet<TruckDailyAvailability> TruckDailyAvailabilities { get; set; } = default!;
 
@@ -231,6 +232,11 @@ namespace TruckManagement.Data
             // TruckDailyAvailability - unique constraint on truck+date
             builder.Entity<TruckDailyAvailability>()
                 .HasIndex(t => new { t.TruckId, t.Date })
+                .IsUnique();
+
+            // RideDriverExecution - unique constraint on ride+driver
+            builder.Entity<RideDriverExecution>()
+                .HasIndex(e => new { e.RideId, e.DriverId })
                 .IsUnique();
         }
     }
