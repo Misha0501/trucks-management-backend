@@ -833,14 +833,15 @@ namespace TruckManagement.Endpoints
                     }
                 });
 
-            // GET /rides/pending-approval - Get rides with pending executions
+            // GET /rides/pending-approval - Get rides with executions (supports status filter)
             app.MapGet("/rides/pending-approval",
                 [Authorize(Roles = "globalAdmin, customerAdmin, employer")]
                 async (
                     ApplicationDbContext db,
                     UserManager<ApplicationUser> userManager,
                     ClaimsPrincipal currentUser,
-                    [FromQuery] Guid? companyId = null
+                    [FromQuery] Guid? companyId = null,
+                    [FromQuery] string? status = "Pending"
                 ) =>
                 {
                     try
@@ -893,10 +894,23 @@ namespace TruckManagement.Endpoints
                             }
                         }
 
-                        // Get rides with any pending executions
-                        var ridesWithPendingExecutions = await db.Rides
+                        // Build query based on status filter
+                        var query = db.Rides
                             .Where(r => allowedCompanyIds.Contains(r.CompanyId))
-                            .Where(r => r.DriverExecutions.Any(e => e.Status == RideDriverExecutionStatus.Pending))
+                            .Where(r => r.DriverExecutions.Any()); // Only rides with executions
+
+                        // Apply status filter
+                        if (!string.IsNullOrEmpty(status) && status.ToLower() != "all")
+                        {
+                            // Parse status string to enum
+                            if (Enum.TryParse<RideDriverExecutionStatus>(status, true, out var statusEnum))
+                            {
+                                query = query.Where(r => r.DriverExecutions.Any(e => e.Status == statusEnum));
+                            }
+                        }
+
+                        // Get rides with executions
+                        var ridesWithExecutions = await query
                             .Include(r => r.Client)
                             .Include(r => r.Truck)
                             .Include(r => r.Company)
@@ -912,7 +926,7 @@ namespace TruckManagement.Endpoints
                             .OrderBy(r => r.PlannedDate)
                             .ToListAsync();
 
-                        var response = ridesWithPendingExecutions.Select(ride => new
+                        var response = ridesWithExecutions.Select(ride => new
                         {
                             RideId = ride.Id,
                             PlannedDate = ride.PlannedDate?.ToString("yyyy-MM-dd"),
