@@ -67,6 +67,9 @@ namespace TruckManagement.Entities
         public string? LastModifiedBy { get; set; }
         public DateTime? ApprovedAt { get; set; }
         public string? ApprovedBy { get; set; }
+        
+        // Navigation property for files
+        public ICollection<RideDriverExecutionFile> Files { get; set; } = new List<RideDriverExecutionFile>();
     }
 }
 

@@ -19,6 +19,17 @@ namespace TruckManagement.DTOs
         public string? HoursOptionId { get; set; }
         public string? CharterId { get; set; }
         public decimal? VariousCompensation { get; set; }
+        
+        // Optional files to upload with execution
+        public List<ExecutionFileUpload>? Files { get; set; }
+    }
+    
+    // DTO for file upload within execution submission
+    public class ExecutionFileUpload
+    {
+        public string FileName { get; set; } = default!;
+        public string ContentType { get; set; } = default!;
+        public string FileDataBase64 { get; set; } = default!;
     }
 
     // Response DTO for execution data
@@ -78,6 +89,9 @@ namespace TruckManagement.DTOs
         public DateTime LastModifiedAt { get; set; }
         public DateTime? ApprovedAt { get; set; }
         public string? ApprovedBy { get; set; }
+        
+        // Uploaded files (if included in response)
+        public List<ExecutionFileDto>? Files { get; set; }
     }
 
     // Response for all executions of a ride

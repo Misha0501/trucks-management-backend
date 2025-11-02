@@ -43,6 +43,7 @@ namespace TruckManagement.Data
         public DbSet<ClientCapacityTemplate> ClientCapacityTemplates { get; set; } = default!;
         public DbSet<RideDriverAssignment> RideDriverAssignments { get; set; } = default!;
         public DbSet<RideDriverExecution> RideDriverExecutions { get; set; } = default!;
+        public DbSet<RideDriverExecutionFile> RideDriverExecutionFiles { get; set; } = default!;
         public DbSet<DriverDailyAvailability> DriverDailyAvailabilities { get; set; } = default!;
         public DbSet<TruckDailyAvailability> TruckDailyAvailabilities { get; set; } = default!;
 

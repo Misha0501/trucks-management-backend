@@ -137,6 +137,50 @@ namespace TruckManagement.Endpoints
 
                         await db.SaveChangesAsync();
 
+                        // Handle file uploads if provided
+                        var uploadedFiles = new List<ExecutionFileDto>();
+                        if (request.Files != null && request.Files.Any())
+                        {
+                            foreach (var fileUpload in request.Files)
+                            {
+                                try
+                                {
+                                    // Decode base64 file data
+                                    byte[] fileData = Convert.FromBase64String(fileUpload.FileDataBase64);
+
+                                    // Create file entity
+                                    var file = new RideDriverExecutionFile
+                                    {
+                                        RideDriverExecutionId = execution.Id,
+                                        FileName = fileUpload.FileName,
+                                        FileSize = fileData.Length,
+                                        ContentType = fileUpload.ContentType,
+                                        FileData = fileData,
+                                        UploadedBy = userId
+                                    };
+
+                                    db.RideDriverExecutionFiles.Add(file);
+                                    await db.SaveChangesAsync();
+
+                                    uploadedFiles.Add(new ExecutionFileDto
+                                    {
+                                        Id = file.Id,
+                                        RideDriverExecutionId = file.RideDriverExecutionId,
+                                        FileName = file.FileName,
+                                        FileSize = file.FileSize,
+                                        ContentType = file.ContentType,
+                                        UploadedAt = file.UploadedAt,
+                                        UploadedBy = file.UploadedBy
+                                    });
+                                }
+                                catch (FormatException)
+                                {
+                                    // Skip invalid base64 files, continue with others
+                                    continue;
+                                }
+                            }
+                        }
+
                         // Update ride completion status
                         await UpdateRideCompletionStatus(db, id);
 
@@ -180,7 +224,8 @@ namespace TruckManagement.Endpoints
                             CharterId = execution.CharterId,
                             SubmittedAt = execution.SubmittedAt,
                             LastModifiedAt = execution.LastModifiedAt,
-                            ApprovedAt = execution.ApprovedAt
+                            ApprovedAt = execution.ApprovedAt,
+                            Files = uploadedFiles.Any() ? uploadedFiles : null
                         };
 
                         return ApiResponseFactory.Success(response);
@@ -390,6 +435,175 @@ namespace TruckManagement.Endpoints
                     catch (Exception ex)
                     {
                         return ApiResponseFactory.Error($"Error retrieving executions: {ex.Message}", StatusCodes.Status500InternalServerError);
+                    }
+                });
+
+            // GET /rides/my-assigned - Driver gets rides assigned to them
+            app.MapGet("/rides/my-assigned",
+                [Authorize(Roles = "driver")]
+                async (
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser,
+                    [FromQuery] string? startDate = null,
+                    [FromQuery] string? endDate = null
+                ) =>
+                {
+                    try
+                    {
+                        var userId = currentUser.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                        var driver = await db.Drivers
+                            .FirstOrDefaultAsync(d => d.AspNetUserId == userId && !d.IsDeleted);
+
+                        if (driver == null)
+                        {
+                            return ApiResponseFactory.Error("Driver profile not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        // Parse date filters
+                        DateTime? filterStartDate = null;
+                        DateTime? filterEndDate = null;
+
+                        if (!string.IsNullOrEmpty(startDate) && DateTime.TryParse(startDate, out var parsedStart))
+                        {
+                            filterStartDate = parsedStart.Date.ToUniversalTime();
+                        }
+                        if (!string.IsNullOrEmpty(endDate) && DateTime.TryParse(endDate, out var parsedEnd))
+                        {
+                            filterEndDate = parsedEnd.Date.ToUniversalTime();
+                        }
+
+                        // Get rides where driver is assigned
+                        var query = db.RideDriverAssignments
+                            .Include(rda => rda.Ride)
+                                .ThenInclude(r => r.Client)
+                            .Include(rda => rda.Ride)
+                                .ThenInclude(r => r.Truck)
+                            .Include(rda => rda.Ride)
+                                .ThenInclude(r => r.DriverAssignments)
+                                    .ThenInclude(da => da.Driver)
+                                        .ThenInclude(d => d.User)
+                            .Include(rda => rda.Ride)
+                                .ThenInclude(r => r.DriverExecutions)
+                            .Where(rda => rda.DriverId == driver.Id);
+
+                        // Apply date filters if provided
+                        if (filterStartDate.HasValue)
+                        {
+                            query = query.Where(rda => rda.Ride.PlannedDate >= filterStartDate.Value);
+                        }
+                        if (filterEndDate.HasValue)
+                        {
+                            query = query.Where(rda => rda.Ride.PlannedDate <= filterEndDate.Value);
+                        }
+
+                        var assignments = await query
+                            .OrderBy(rda => rda.Ride.PlannedDate)
+                            .ToListAsync();
+
+                        var ridesData = assignments.Select(rda =>
+                        {
+                            var ride = rda.Ride;
+                            var myExecution = ride.DriverExecutions.FirstOrDefault(e => e.DriverId == driver.Id);
+                            
+                            // Get other drivers on this ride
+                            var otherDrivers = ride.DriverAssignments
+                                .Where(da => da.DriverId != driver.Id)
+                                .Select(da => new
+                                {
+                                    DriverId = da.DriverId,
+                                    FirstName = da.Driver?.User?.FirstName,
+                                    LastName = da.Driver?.User?.LastName,
+                                    IsPrimary = da.IsPrimary,
+                                    HasSubmittedExecution = ride.DriverExecutions.Any(e => e.DriverId == da.DriverId)
+                                })
+                                .ToList();
+
+                            return new
+                            {
+                                RideId = ride.Id,
+                                PlannedDate = ride.PlannedDate?.ToString("yyyy-MM-dd"),
+                                PlannedStartTime = ride.PlannedStartTime,
+                                PlannedEndTime = ride.PlannedEndTime,
+                                RouteFromName = ride.RouteFromName,
+                                RouteToName = ride.RouteToName,
+                                TripNumber = ride.TripNumber,
+                                ClientName = ride.Client?.Name,
+                                TruckLicensePlate = ride.Truck?.LicensePlate,
+                                MyRole = rda.IsPrimary ? "Primary" : "Second",
+                                MyPlannedHours = rda.PlannedHours,
+                                ExecutionCompletionStatus = ride.ExecutionCompletionStatus,
+                                MyExecutionStatus = myExecution != null ? new
+                                {
+                                    HasSubmitted = true,
+                                    Status = myExecution.Status.ToString(),
+                                    DecimalHours = myExecution.DecimalHours,
+                                    SubmittedAt = myExecution.SubmittedAt
+                                } : new
+                                {
+                                    HasSubmitted = false,
+                                    Status = "NotSubmitted",
+                                    DecimalHours = (decimal?)null,
+                                    SubmittedAt = (DateTime?)null
+                                },
+                                OtherDrivers = otherDrivers
+                            };
+                        }).ToList();
+
+                        return ApiResponseFactory.Success(ridesData);
+                    }
+                    catch (Exception ex)
+                    {
+                        return ApiResponseFactory.Error($"Error retrieving assigned rides: {ex.Message}", StatusCodes.Status500InternalServerError);
+                    }
+                });
+
+            // DELETE /rides/{id}/my-execution - Driver deletes their own execution
+            app.MapDelete("/rides/{id}/my-execution",
+                [Authorize(Roles = "driver")]
+                async (
+                    Guid id,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    try
+                    {
+                        var userId = currentUser.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                        var driver = await db.Drivers
+                            .FirstOrDefaultAsync(d => d.AspNetUserId == userId && !d.IsDeleted);
+
+                        if (driver == null)
+                        {
+                            return ApiResponseFactory.Error("Driver profile not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        var execution = await db.RideDriverExecutions
+                            .FirstOrDefaultAsync(e => e.RideId == id && e.DriverId == driver.Id);
+
+                        if (execution == null)
+                        {
+                            return ApiResponseFactory.Error("Execution not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        // Cannot delete if approved
+                        if (execution.Status == RideDriverExecutionStatus.Approved)
+                        {
+                            return ApiResponseFactory.Error("Cannot delete approved execution.", StatusCodes.Status409Conflict);
+                        }
+
+                        db.RideDriverExecutions.Remove(execution);
+                        await db.SaveChangesAsync();
+
+                        // Update ride completion status
+                        await UpdateRideCompletionStatus(db, id);
+
+                        return ApiResponseFactory.Success(new { Message = "Execution deleted successfully." });
+                    }
+                    catch (Exception ex)
+                    {
+                        return ApiResponseFactory.Error($"Error deleting execution: {ex.Message}", StatusCodes.Status500InternalServerError);
                     }
                 });
         }
