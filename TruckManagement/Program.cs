@@ -118,5 +118,6 @@ app.MapDailyPlanningEndpoints();
 app.MapAvailabilityEndpoints();
 app.MapRideExecutionEndpoints();
 app.MapRideExecutionFileEndpoints();
+app.MapRideExecutionCommentEndpoints();
 
 app.Run();

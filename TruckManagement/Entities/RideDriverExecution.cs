@@ -70,6 +70,9 @@ namespace TruckManagement.Entities
         
         // Navigation property for files
         public ICollection<RideDriverExecutionFile> Files { get; set; } = new List<RideDriverExecutionFile>();
+        
+        // Navigation property for comments
+        public ICollection<RideDriverExecutionComment> Comments { get; set; } = new List<RideDriverExecutionComment>();
     }
 }
 

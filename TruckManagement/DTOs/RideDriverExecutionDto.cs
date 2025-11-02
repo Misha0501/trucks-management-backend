@@ -101,5 +101,11 @@ namespace TruckManagement.DTOs
         public string? ExecutionCompletionStatus { get; set; }
         public List<RideDriverExecutionDto> Executions { get; set; } = new();
     }
+    
+    // Request for rejecting execution
+    public class RejectExecutionRequest
+    {
+        public string? Comment { get; set; }
+    }
 }
 

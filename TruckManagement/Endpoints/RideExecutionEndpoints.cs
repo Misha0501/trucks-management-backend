@@ -606,6 +606,380 @@ namespace TruckManagement.Endpoints
                         return ApiResponseFactory.Error($"Error deleting execution: {ex.Message}", StatusCodes.Status500InternalServerError);
                     }
                 });
+
+            // PUT /rides/{id}/executions/{driverId}/approve - Approve specific driver's execution
+            app.MapPut("/rides/{id}/executions/{driverId}/approve",
+                [Authorize(Roles = "globalAdmin, customerAdmin, employer")]
+                async (
+                    Guid id,
+                    Guid driverId,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    try
+                    {
+                        var userId = currentUser.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                        var user = await userManager.FindByIdAsync(userId!);
+                        if (user == null) return ApiResponseFactory.Error("User not found.", StatusCodes.Status404NotFound);
+
+                        // Get the execution
+                        var execution = await db.RideDriverExecutions
+                            .Include(e => e.Ride)
+                            .FirstOrDefaultAsync(e => e.RideId == id && e.DriverId == driverId);
+
+                        if (execution == null)
+                        {
+                            return ApiResponseFactory.Error("Execution not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        // Company scope check
+                        var userRoles = await userManager.GetRolesAsync(user);
+                        var isGlobalAdmin = userRoles.Contains("globalAdmin");
+
+                        if (!isGlobalAdmin)
+                        {
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error("Contact person not found.", StatusCodes.Status404NotFound);
+                            }
+
+                            var allowedCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Where(cpc => cpc.CompanyId.HasValue)
+                                .Select(cpc => cpc.CompanyId!.Value)
+                                .ToList();
+
+                            if (!allowedCompanyIds.Contains(execution.Ride.CompanyId))
+                            {
+                                return ApiResponseFactory.Error("Access denied to this execution.", StatusCodes.Status403Forbidden);
+                            }
+                        }
+
+                        // Approve the execution
+                        execution.Status = RideDriverExecutionStatus.Approved;
+                        execution.ApprovedAt = DateTime.UtcNow;
+                        execution.ApprovedBy = userId;
+
+                        await db.SaveChangesAsync();
+
+                        // Update ride completion status
+                        await UpdateRideCompletionStatus(db, id);
+
+                        return ApiResponseFactory.Success(new { Message = "Execution approved successfully." });
+                    }
+                    catch (Exception ex)
+                    {
+                        return ApiResponseFactory.Error($"Error approving execution: {ex.Message}", StatusCodes.Status500InternalServerError);
+                    }
+                });
+
+            // PUT /rides/{id}/executions/bulk-approve - Approve all executions for a ride
+            app.MapPut("/rides/{id}/executions/bulk-approve",
+                [Authorize(Roles = "globalAdmin, customerAdmin, employer")]
+                async (
+                    Guid id,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    try
+                    {
+                        var userId = currentUser.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                        var user = await userManager.FindByIdAsync(userId!);
+                        if (user == null) return ApiResponseFactory.Error("User not found.", StatusCodes.Status404NotFound);
+
+                        // Get all executions for this ride
+                        var executions = await db.RideDriverExecutions
+                            .Include(e => e.Ride)
+                            .Where(e => e.RideId == id)
+                            .ToListAsync();
+
+                        if (!executions.Any())
+                        {
+                            return ApiResponseFactory.Error("No executions found for this ride.", StatusCodes.Status404NotFound);
+                        }
+
+                        // Company scope check
+                        var userRoles = await userManager.GetRolesAsync(user);
+                        var isGlobalAdmin = userRoles.Contains("globalAdmin");
+
+                        if (!isGlobalAdmin)
+                        {
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error("Contact person not found.", StatusCodes.Status404NotFound);
+                            }
+
+                            var allowedCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Where(cpc => cpc.CompanyId.HasValue)
+                                .Select(cpc => cpc.CompanyId!.Value)
+                                .ToList();
+
+                            if (!allowedCompanyIds.Contains(executions.First().Ride.CompanyId))
+                            {
+                                return ApiResponseFactory.Error("Access denied to these executions.", StatusCodes.Status403Forbidden);
+                            }
+                        }
+
+                        // Approve all executions
+                        var approvedCount = 0;
+                        foreach (var execution in executions)
+                        {
+                            if (execution.Status == RideDriverExecutionStatus.Pending)
+                            {
+                                execution.Status = RideDriverExecutionStatus.Approved;
+                                execution.ApprovedAt = DateTime.UtcNow;
+                                execution.ApprovedBy = userId;
+                                approvedCount++;
+                            }
+                        }
+
+                        await db.SaveChangesAsync();
+
+                        // Update ride completion status
+                        await UpdateRideCompletionStatus(db, id);
+
+                        return ApiResponseFactory.Success(new 
+                        { 
+                            Message = $"Approved {approvedCount} execution(s) successfully.",
+                            ApprovedCount = approvedCount
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        return ApiResponseFactory.Error($"Error bulk approving executions: {ex.Message}", StatusCodes.Status500InternalServerError);
+                    }
+                });
+
+            // PUT /rides/{id}/executions/{driverId}/reject - Reject specific driver's execution
+            app.MapPut("/rides/{id}/executions/{driverId}/reject",
+                [Authorize(Roles = "globalAdmin, customerAdmin, employer")]
+                async (
+                    Guid id,
+                    Guid driverId,
+                    [FromBody] RejectExecutionRequest request,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    try
+                    {
+                        var userId = currentUser.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                        var user = await userManager.FindByIdAsync(userId!);
+                        if (user == null) return ApiResponseFactory.Error("User not found.", StatusCodes.Status404NotFound);
+
+                        // Get the execution
+                        var execution = await db.RideDriverExecutions
+                            .Include(e => e.Ride)
+                            .FirstOrDefaultAsync(e => e.RideId == id && e.DriverId == driverId);
+
+                        if (execution == null)
+                        {
+                            return ApiResponseFactory.Error("Execution not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        // Company scope check
+                        var userRoles = await userManager.GetRolesAsync(user);
+                        var isGlobalAdmin = userRoles.Contains("globalAdmin");
+
+                        if (!isGlobalAdmin)
+                        {
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error("Contact person not found.", StatusCodes.Status404NotFound);
+                            }
+
+                            var allowedCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Where(cpc => cpc.CompanyId.HasValue)
+                                .Select(cpc => cpc.CompanyId!.Value)
+                                .ToList();
+
+                            if (!allowedCompanyIds.Contains(execution.Ride.CompanyId))
+                            {
+                                return ApiResponseFactory.Error("Access denied to this execution.", StatusCodes.Status403Forbidden);
+                            }
+                        }
+
+                        // Reject the execution
+                        execution.Status = RideDriverExecutionStatus.Rejected;
+                        execution.LastModifiedAt = DateTime.UtcNow;
+                        execution.LastModifiedBy = userId;
+
+                        await db.SaveChangesAsync();
+
+                        // Update ride completion status
+                        await UpdateRideCompletionStatus(db, id);
+
+                        return ApiResponseFactory.Success(new { Message = "Execution rejected successfully." });
+                    }
+                    catch (Exception ex)
+                    {
+                        return ApiResponseFactory.Error($"Error rejecting execution: {ex.Message}", StatusCodes.Status500InternalServerError);
+                    }
+                });
+
+            // GET /rides/pending-approval - Get rides with pending executions
+            app.MapGet("/rides/pending-approval",
+                [Authorize(Roles = "globalAdmin, customerAdmin, employer")]
+                async (
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser,
+                    [FromQuery] Guid? companyId = null
+                ) =>
+                {
+                    try
+                    {
+                        var userId = currentUser.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                        var user = await userManager.FindByIdAsync(userId!);
+                        if (user == null) return ApiResponseFactory.Error("User not found.", StatusCodes.Status404NotFound);
+
+                        var userRoles = await userManager.GetRolesAsync(user);
+                        var isGlobalAdmin = userRoles.Contains("globalAdmin");
+
+                        // Determine allowed companies
+                        List<Guid> allowedCompanyIds;
+                        if (isGlobalAdmin)
+                        {
+                            if (companyId.HasValue)
+                            {
+                                allowedCompanyIds = new List<Guid> { companyId.Value };
+                            }
+                            else
+                            {
+                                allowedCompanyIds = await db.Companies.Select(c => c.Id).ToListAsync();
+                            }
+                        }
+                        else
+                        {
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == userId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error("Contact person not found.", StatusCodes.Status404NotFound);
+                            }
+
+                            allowedCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Where(cpc => cpc.CompanyId.HasValue)
+                                .Select(cpc => cpc.CompanyId!.Value)
+                                .Distinct()
+                                .ToList();
+
+                            if (companyId.HasValue && !allowedCompanyIds.Contains(companyId.Value))
+                            {
+                                return ApiResponseFactory.Error("Access denied to this company.", StatusCodes.Status403Forbidden);
+                            }
+
+                            if (companyId.HasValue)
+                            {
+                                allowedCompanyIds = new List<Guid> { companyId.Value };
+                            }
+                        }
+
+                        // Get rides with any pending executions
+                        var ridesWithPendingExecutions = await db.Rides
+                            .Where(r => allowedCompanyIds.Contains(r.CompanyId))
+                            .Where(r => r.DriverExecutions.Any(e => e.Status == RideDriverExecutionStatus.Pending))
+                            .Include(r => r.Client)
+                            .Include(r => r.Truck)
+                            .Include(r => r.Company)
+                            .Include(r => r.DriverExecutions)
+                                .ThenInclude(e => e.Driver)
+                                    .ThenInclude(d => d!.User)
+                            .Include(r => r.DriverExecutions)
+                                .ThenInclude(e => e.HoursCode)
+                            .Include(r => r.DriverExecutions)
+                                .ThenInclude(e => e.HoursOption)
+                            .Include(r => r.DriverExecutions)
+                                .ThenInclude(e => e.Files)
+                            .OrderBy(r => r.PlannedDate)
+                            .ToListAsync();
+
+                        var response = ridesWithPendingExecutions.Select(ride => new
+                        {
+                            RideId = ride.Id,
+                            PlannedDate = ride.PlannedDate?.ToString("yyyy-MM-dd"),
+                            PlannedStartTime = ride.PlannedStartTime,
+                            PlannedEndTime = ride.PlannedEndTime,
+                            RouteFromName = ride.RouteFromName,
+                            RouteToName = ride.RouteToName,
+                            TripNumber = ride.TripNumber,
+                            ClientName = ride.Client?.Name,
+                            CompanyName = ride.Company?.Name,
+                            TruckLicensePlate = ride.Truck?.LicensePlate,
+                            ExecutionCompletionStatus = ride.ExecutionCompletionStatus,
+                            Executions = ride.DriverExecutions.Select(e => new
+                            {
+                                // Basic Info
+                                ExecutionId = e.Id,
+                                DriverId = e.DriverId,
+                                DriverFirstName = e.Driver?.User?.FirstName,
+                                DriverLastName = e.Driver?.User?.LastName,
+                                IsPrimary = e.IsPrimary,
+                                Status = e.Status.ToString(),
+                                SubmittedAt = e.SubmittedAt,
+                                
+                                // Time & Work Data
+                                ActualStartTime = e.ActualStartTime,
+                                ActualEndTime = e.ActualEndTime,
+                                ActualRestTime = e.ActualRestTime,
+                                RestCalculated = e.RestCalculated,
+                                DecimalHours = e.DecimalHours,
+                                
+                                // Distance & Costs
+                                ActualKilometers = e.ActualKilometers,
+                                ExtraKilometers = e.ExtraKilometers,
+                                ActualCosts = e.ActualCosts,
+                                CostsDescription = e.CostsDescription,
+                                Remark = e.Remark,
+                                
+                                // Compensation
+                                TotalCompensation = (e.NightAllowance ?? 0) + 
+                                                   (e.KilometerReimbursement ?? 0) + 
+                                                   (e.ConsignmentFee ?? 0) + 
+                                                   (e.TaxFreeCompensation ?? 0) + 
+                                                   (e.VariousCompensation ?? 0),
+                                NightAllowance = e.NightAllowance,
+                                KilometerReimbursement = e.KilometerReimbursement,
+                                TaxFreeCompensation = e.TaxFreeCompensation,
+                                ConsignmentFee = e.ConsignmentFee,
+                                VariousCompensation = e.VariousCompensation,
+                                
+                                // Work Classification
+                                HoursCodeId = e.HoursCodeId,
+                                HoursCodeName = e.HoursCode?.Name,
+                                HoursOptionId = e.HoursOptionId,
+                                HoursOptionName = e.HoursOption?.Name,
+                                
+                                // Files
+                                FileCount = e.Files.Count
+                            }).ToList()
+                        }).ToList();
+
+                        return ApiResponseFactory.Success(response);
+                    }
+                    catch (Exception ex)
+                    {
+                        return ApiResponseFactory.Error($"Error retrieving pending approvals: {ex.Message}", StatusCodes.Status500InternalServerError);
+                    }
+                });
         }
 
         // Helper method to update ride completion status
