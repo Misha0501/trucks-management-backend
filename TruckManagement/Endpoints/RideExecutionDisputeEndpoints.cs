@@ -169,6 +169,7 @@ public static class RideExecutionDisputeEndpoints
                         ResolvedById = d.ResolvedById,
                         ResolvedByName = d.ResolvedBy != null ? $"{d.ResolvedBy.FirstName} {d.ResolvedBy.LastName}" : null,
                         ResolutionNotes = d.ResolutionNotes,
+                        ResolutionType = d.ResolutionType,
                         Comments = d.Comments.Select(c => new RideExecutionDisputeCommentDto
                         {
                             Id = c.Id,
@@ -267,6 +268,7 @@ public static class RideExecutionDisputeEndpoints
                         ResolvedById = d.ResolvedById,
                         ResolvedByName = d.ResolvedBy != null ? $"{d.ResolvedBy.FirstName} {d.ResolvedBy.LastName}" : null,
                         ResolutionNotes = d.ResolutionNotes,
+                        ResolutionType = d.ResolutionType,
                         Comments = d.Comments.Select(c => new RideExecutionDisputeCommentDto
                         {
                             Id = c.Id,
@@ -422,15 +424,33 @@ public static class RideExecutionDisputeEndpoints
                     if (dispute.Status != RideExecutionDisputeStatus.Open)
                         return ApiResponseFactory.Error("Dispute is already closed.", StatusCodes.Status400BadRequest);
 
+                    // Validate resolution type
+                    var resolutionType = request.ResolutionType?.ToLower();
+                    if (resolutionType != "accept" && resolutionType != "reject")
+                        return ApiResponseFactory.Error("ResolutionType must be 'accept' or 'reject'.", StatusCodes.Status400BadRequest);
+
                     // Close the dispute
                     dispute.Status = RideExecutionDisputeStatus.Closed;
                     dispute.ClosedAtUtc = DateTime.UtcNow;
                     dispute.ResolvedById = userId;
                     dispute.ResolvedAtUtc = DateTime.UtcNow;
                     dispute.ResolutionNotes = request.ResolutionNotes;
+                    dispute.ResolutionType = resolutionType == "accept" ? "Accept" : "Reject";
 
-                    // Update execution status back to Rejected
-                    dispute.RideDriverExecution.Status = RideDriverExecutionStatus.Rejected;
+                    // Update execution status based on resolution type
+                    if (resolutionType == "accept")
+                    {
+                        // Driver was right - approve the execution
+                        dispute.RideDriverExecution.Status = RideDriverExecutionStatus.Approved;
+                        dispute.RideDriverExecution.ApprovedAt = DateTime.UtcNow;
+                        dispute.RideDriverExecution.ApprovedBy = userId;
+                    }
+                    else
+                    {
+                        // Admin was right - keep it rejected
+                        dispute.RideDriverExecution.Status = RideDriverExecutionStatus.Rejected;
+                    }
+                    
                     dispute.RideDriverExecution.LastModifiedAt = DateTime.UtcNow;
                     dispute.RideDriverExecution.LastModifiedBy = userId;
 
@@ -438,11 +458,17 @@ public static class RideExecutionDisputeEndpoints
 
                     return ApiResponseFactory.Success(new
                     {
-                        Id = dispute.Id,
-                        Status = dispute.Status.ToString(),
-                        ClosedAtUtc = dispute.ClosedAtUtc,
-                        ResolvedById = dispute.ResolvedById,
-                        ResolutionNotes = dispute.ResolutionNotes
+                        Dispute = new
+                        {
+                            Id = dispute.Id,
+                            Status = dispute.Status.ToString(),
+                            ResolutionType = dispute.ResolutionType,
+                            ResolutionNotes = dispute.ResolutionNotes,
+                            ClosedAtUtc = dispute.ClosedAtUtc,
+                            ResolvedById = dispute.ResolvedById,
+                            ResolvedByName = user.FirstName + " " + user.LastName
+                        },
+                        ExecutionStatus = dispute.RideDriverExecution.Status.ToString()
                     });
                 }
                 catch (Exception ex)

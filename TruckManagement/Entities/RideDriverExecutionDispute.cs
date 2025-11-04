@@ -39,6 +39,9 @@ public class RideDriverExecutionDispute
 
     // Resolution notes from admin
     public string? ResolutionNotes { get; set; }
+    
+    // Resolution type: "Accept" or "Reject"
+    public string? ResolutionType { get; set; }
 
     // Comments thread
     public ICollection<RideDriverExecutionDisputeComment> Comments { get; set; } = new List<RideDriverExecutionDisputeComment>();

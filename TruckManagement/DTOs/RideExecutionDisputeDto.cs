@@ -9,6 +9,7 @@ public class CreateRideExecutionDisputeRequest
 // Request to close/resolve a dispute
 public class CloseRideExecutionDisputeRequest
 {
+    public string ResolutionType { get; set; } = default!; // "Accept" or "Reject"
     public string? ResolutionNotes { get; set; }
 }
 
@@ -46,6 +47,7 @@ public class RideExecutionDisputeDto
     public string? ResolvedById { get; set; }
     public string? ResolvedByName { get; set; }
     public string? ResolutionNotes { get; set; }
+    public string? ResolutionType { get; set; } // "Accept" or "Reject"
     public List<RideExecutionDisputeCommentDto> Comments { get; set; } = new();
 }
 
