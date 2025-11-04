@@ -119,5 +119,6 @@ app.MapAvailabilityEndpoints();
 app.MapRideExecutionEndpoints();
 app.MapRideExecutionFileEndpoints();
 app.MapRideExecutionCommentEndpoints();
+app.MapRideExecutionDisputeEndpoints();
 
 app.Run();

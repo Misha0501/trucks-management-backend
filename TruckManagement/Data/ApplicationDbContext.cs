@@ -45,6 +45,8 @@ namespace TruckManagement.Data
         public DbSet<RideDriverExecution> RideDriverExecutions { get; set; } = default!;
         public DbSet<RideDriverExecutionFile> RideDriverExecutionFiles { get; set; } = default!;
         public DbSet<RideDriverExecutionComment> RideDriverExecutionComments { get; set; } = default!;
+        public DbSet<RideDriverExecutionDispute> RideDriverExecutionDisputes { get; set; } = default!;
+        public DbSet<RideDriverExecutionDisputeComment> RideDriverExecutionDisputeComments { get; set; } = default!;
         public DbSet<DriverDailyAvailability> DriverDailyAvailabilities { get; set; } = default!;
         public DbSet<TruckDailyAvailability> TruckDailyAvailabilities { get; set; } = default!;
 

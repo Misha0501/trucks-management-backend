@@ -73,6 +73,9 @@ namespace TruckManagement.Entities
         
         // Navigation property for comments
         public ICollection<RideDriverExecutionComment> Comments { get; set; } = new List<RideDriverExecutionComment>();
+        
+        // Navigation property for disputes
+        public ICollection<RideDriverExecutionDispute> Disputes { get; set; } = new List<RideDriverExecutionDispute>();
     }
 }
 
