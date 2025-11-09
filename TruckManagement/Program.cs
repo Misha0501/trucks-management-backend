@@ -121,5 +121,6 @@ app.MapRideExecutionFileEndpoints();
 app.MapRideExecutionCommentEndpoints();
 app.MapRideExecutionDisputeEndpoints();
 app.MapRideWeekSubmissionEndpoints();
+app.MapRidePeriodEndpoints();
 
 app.Run();

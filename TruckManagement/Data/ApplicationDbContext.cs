@@ -47,6 +47,7 @@ namespace TruckManagement.Data
         public DbSet<RideDriverExecutionComment> RideDriverExecutionComments { get; set; } = default!;
         public DbSet<RideDriverExecutionDispute> RideDriverExecutionDisputes { get; set; } = default!;
         public DbSet<RideDriverExecutionDisputeComment> RideDriverExecutionDisputeComments { get; set; } = default!;
+        public DbSet<RidePeriodApproval> RidePeriodApprovals { get; set; } = default!;
         public DbSet<DriverDailyAvailability> DriverDailyAvailabilities { get; set; } = default!;
         public DbSet<TruckDailyAvailability> TruckDailyAvailabilities { get; set; } = default!;
 
@@ -241,6 +242,11 @@ namespace TruckManagement.Data
             // RideDriverExecution - unique constraint on ride+driver
             builder.Entity<RideDriverExecution>()
                 .HasIndex(e => new { e.RideId, e.DriverId })
+                .IsUnique();
+
+            // RidePeriodApproval - unique constraint on driver+year+period
+            builder.Entity<RidePeriodApproval>()
+                .HasIndex(rpa => new { rpa.DriverId, rpa.Year, rpa.PeriodNr })
                 .IsUnique();
         }
     }

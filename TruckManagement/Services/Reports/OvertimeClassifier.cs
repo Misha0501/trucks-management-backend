@@ -5,21 +5,45 @@ namespace TruckManagement.Services.Reports;
 public class OvertimeClassifier
 {
     public OvertimeBreakdown ClassifyHours(
-        PartRide partRide, 
-        double weeklyTotalHours, 
+        PartRide partRide,
+        double weeklyTotalHours,
+        bool isHoliday,
+        bool isNightShift) =>
+        ClassifyHoursInternal(
+            partRide.DecimalHours ?? 0,
+            partRide.Date.DayOfWeek,
+            weeklyTotalHours,
+            isHoliday,
+            isNightShift);
+
+    public OvertimeBreakdown ClassifyHours(
+        RideDriverExecution execution,
+        double weeklyTotalHours,
+        bool isHoliday,
+        bool isNightShift) =>
+        ClassifyHoursInternal(
+            (double)(execution.DecimalHours ?? 0m),
+            execution.Ride?.PlannedDate?.DayOfWeek ?? DayOfWeek.Monday,
+            weeklyTotalHours,
+            isHoliday,
+            isNightShift);
+
+    private OvertimeBreakdown ClassifyHoursInternal(
+        double totalHours,
+        DayOfWeek dayOfWeek,
+        double weeklyTotalHours,
         bool isHoliday,
         bool isNightShift)
     {
         var breakdown = new OvertimeBreakdown();
-        var totalHours = partRide.DecimalHours ?? 0;
-        
+
         // Rule 4: Work on Sunday/Holidays/Nights → 200%
-        if (partRide.Date.DayOfWeek == DayOfWeek.Sunday || isHoliday || isNightShift)
+        if (dayOfWeek == DayOfWeek.Sunday || isHoliday || isNightShift)
         {
             breakdown.Premium200 = totalHours;
             return breakdown;
         }
-        
+
         // Rule 3: Daily hours > 10 OR total week hours > 40 → 150%
         if (totalHours > 10 || weeklyTotalHours > 40)
         {
@@ -37,7 +61,7 @@ public class OvertimeClassifier
                     // Split: some hours at regular/130%, excess at 150%
                     var regularHours = 40 - previousWeeklyHours;
                     breakdown.Overtime150 = totalHours - regularHours;
-                    
+
                     // Apply daily rules to remaining hours
                     var dailyBreakdown = ClassifyDailyHours(regularHours);
                     breakdown.Regular100 = dailyBreakdown.Regular100;
@@ -51,10 +75,10 @@ public class OvertimeClassifier
                 breakdown.Regular100 = 8;
                 breakdown.Overtime130 = 2; // Hours 8-10
             }
-            
+
             return breakdown;
         }
-        
+
         // Rules 1 & 2: Apply daily hour classification
         return ClassifyDailyHours(totalHours);
     }
@@ -103,6 +127,28 @@ public class OvertimeClassifier
         }
         
         // Night hours: 22:00 - 06:00
+        return start < 6.0 || end > 22.0 || start >= 22.0;
+    }
+
+    public bool IsNightShift(RideDriverExecution execution)
+    {
+        if ((execution.NightAllowance ?? 0) > 0)
+            return true;
+
+        var startTime = execution.ActualStartTime ?? execution.Ride?.PlannedStartTime;
+        var endTime = execution.ActualEndTime ?? execution.Ride?.PlannedEndTime;
+
+        if (startTime is null || endTime is null)
+            return false;
+
+        var start = startTime.Value.TotalHours;
+        var end = endTime.Value.TotalHours;
+
+        if (end < start)
+        {
+            return true;
+        }
+
         return start < 6.0 || end > 22.0 || start >= 22.0;
     }
 }
