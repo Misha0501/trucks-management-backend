@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TruckManagement.Data;
@@ -11,9 +12,11 @@ using TruckManagement.Data;
 namespace TruckManagement.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251104145653_AddRideExecutionDisputeSystem")]
+    partial class AddRideExecutionDisputeSystem
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1480,9 +1483,6 @@ namespace TruckManagement.Migrations
                     b.Property<Guid>("DriverId")
                         .HasColumnType("uuid");
 
-                    b.Property<decimal?>("EndKilometers")
-                        .HasColumnType("numeric");
-
                     b.Property<decimal?>("ExtraKilometers")
                         .HasColumnType("numeric");
 
@@ -1526,9 +1526,6 @@ namespace TruckManagement.Migrations
                         .HasColumnType("numeric");
 
                     b.Property<decimal?>("StandOver")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal?>("StartKilometers")
                         .HasColumnType("numeric");
 
                     b.Property<int>("Status")
@@ -1628,9 +1625,6 @@ namespace TruckManagement.Migrations
                     b.Property<string>("ResolutionNotes")
                         .HasColumnType("text");
 
-                    b.Property<string>("ResolutionType")
-                        .HasColumnType("text");
-
                     b.Property<DateTime?>("ResolvedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -1718,59 +1712,6 @@ namespace TruckManagement.Migrations
                     b.HasIndex("RideDriverExecutionId");
 
                     b.ToTable("RideDriverExecutionFiles");
-                });
-
-            modelBuilder.Entity("TruckManagement.Entities.RidePeriodApproval", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("DriverId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("DriverPdfPath")
-                        .HasColumnType("text");
-
-                    b.Property<string>("DriverSignatureData")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("DriverSignedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("DriverSignedIp")
-                        .HasColumnType("text");
-
-                    b.Property<string>("DriverSignedUserAgent")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("FromDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("PeriodNr")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("ToDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<decimal?>("TotalCompensation")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal?>("TotalHours")
-                        .HasColumnType("numeric");
-
-                    b.Property<int>("Year")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DriverId", "Year", "PeriodNr")
-                        .IsUnique();
-
-                    b.ToTable("RidePeriodApprovals");
                 });
 
             modelBuilder.Entity("TruckManagement.Entities.Surcharge", b =>
@@ -2471,17 +2412,6 @@ namespace TruckManagement.Migrations
                         .IsRequired();
 
                     b.Navigation("RideDriverExecution");
-                });
-
-            modelBuilder.Entity("TruckManagement.Entities.RidePeriodApproval", b =>
-                {
-                    b.HasOne("TruckManagement.Entities.Driver", "Driver")
-                        .WithMany()
-                        .HasForeignKey("DriverId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Driver");
                 });
 
             modelBuilder.Entity("TruckManagement.Entities.Surcharge", b =>

@@ -43,7 +43,7 @@ public class ReportCalculationService
         };
         
         // 3. Process daily entries
-        var weeks = await ProcessWeeklyDataAsync(rawData, timeframe.GetWeekNumbers());
+        var weeks = await ProcessWeeklyDataAsync(rawData, timeframe.GetWeekNumbers(), timeframe.Year);
         report.Weeks = weeks;
         
         // 4. Calculate summaries
@@ -71,25 +71,39 @@ public class ReportCalculationService
         var contract = await _db.EmployeeContracts
             .FirstOrDefaultAsync(ec => ec.DriverId == timeframe.DriverId);
         
-        // Load part rides for the specified weeks
-        var partRides = await _db.PartRides
-            .Include(pr => pr.HoursCode)
-            .Include(pr => pr.HoursOption)
-            .Include(pr => pr.Client)
-            .Where(pr => 
-                pr.DriverId == timeframe.DriverId &&
-                pr.Date.Year == timeframe.Year &&
-                weekNumbers.Contains(pr.WeekNumber ?? 0))
-            .OrderBy(pr => pr.Date)
-            .ToListAsync();
-        
+        var executionsQuery = _db.RideDriverExecutions
+            .Include(e => e.HoursCode)
+            .Include(e => e.HoursOption)
+            .Include(e => e.Ride)
+                .ThenInclude(r => r.Client)
+            .Include(e => e.Ride)
+                .ThenInclude(r => r.Company)
+            .Where(e => e.DriverId == timeframe.DriverId)
+            .Where(e => e.Ride.PlannedDate.HasValue &&
+                        e.Ride.PlannedDate.Value.Year == timeframe.Year);
+
+        var executions = await executionsQuery.ToListAsync();
+
+        var filteredExecutions = executions
+            .Where(e =>
+            {
+                if (e.Ride?.PlannedDate is null)
+                    return false;
+
+                var week = e.WeekNumber ?? ISOWeek.GetWeekOfYear(e.Ride.PlannedDate.Value);
+                return weekNumbers.Contains(week);
+            })
+            .OrderBy(e => e.Ride!.PlannedDate)
+            .ThenBy(e => e.ActualStartTime ?? e.Ride.PlannedStartTime ?? TimeSpan.Zero)
+            .ToList();
+
         return new RawReportData
         {
             Driver = driver,
             Company = driver.Company,
             Contract = contract,
             CompensationSettings = driver.DriverCompensationSettings,
-            PartRides = partRides
+            DriverExecutions = filteredExecutions
         };
     }
     
@@ -106,14 +120,16 @@ public class ReportCalculationService
         };
     }
     
-    private async Task<List<WeeklyBreakdown>> ProcessWeeklyDataAsync(RawReportData data, List<int> weekNumbers)
+    private Task<List<WeeklyBreakdown>> ProcessWeeklyDataAsync(RawReportData data, List<int> weekNumbers, int year)
     {
         var weeklyBreakdowns = new List<WeeklyBreakdown>();
         
         foreach (var weekNumber in weekNumbers)
         {
-            var weekPartRides = data.PartRides
-                .Where(pr => pr.WeekNumber == weekNumber)
+            var weekExecutions = data.DriverExecutions
+                .Where(ex => (ex.WeekNumber ?? 0) == weekNumber)
+                .OrderBy(ex => ex.Ride?.PlannedDate)
+                .ThenBy(ex => ex.ActualStartTime ?? ex.Ride?.PlannedStartTime ?? TimeSpan.Zero)
                 .ToList();
             
             var weekBreakdown = new WeeklyBreakdown
@@ -123,14 +139,17 @@ public class ReportCalculationService
             };
             
             // Process each day of the week
-            var weekStartDate = GetWeekStartDate(data.PartRides.FirstOrDefault()?.Date.Year ?? DateTime.Now.Year, weekNumber);
+            var weekStartDate = GetWeekStartDate(year, weekNumber);
             
             for (int dayOfWeek = 0; dayOfWeek < 7; dayOfWeek++)
             {
                 var currentDate = weekStartDate.AddDays(dayOfWeek);
-                var dayPartRides = weekPartRides.Where(pr => pr.Date.Date == currentDate.Date).ToList();
+                var dayExecutions = weekExecutions
+                    .Where(ex => ex.Ride?.PlannedDate.HasValue == true &&
+                                 ex.Ride!.PlannedDate!.Value.Date == currentDate.Date)
+                    .ToList();
                 
-                var dailyEntry = await ProcessDailyEntryAsync(currentDate, dayPartRides, data);
+                var dailyEntry = ProcessDailyEntry(currentDate, dayExecutions);
                 weekBreakdown.Days.Add(dailyEntry);
             }
             
@@ -139,10 +158,10 @@ public class ReportCalculationService
             weeklyBreakdowns.Add(weekBreakdown);
         }
         
-        return weeklyBreakdowns;
+        return Task.FromResult(weeklyBreakdowns);
     }
     
-    private async Task<DailyEntry> ProcessDailyEntryAsync(DateTime date, List<PartRide> dayPartRides, RawReportData data)
+    private DailyEntry ProcessDailyEntry(DateTime date, List<RideDriverExecution> dayExecutions)
     {
         var dailyEntry = new DailyEntry
         {
@@ -157,32 +176,34 @@ public class ReportCalculationService
             TotalHours = 0
         };
         
-        if (!dayPartRides.Any())
+        if (!dayExecutions.Any())
         {
             return dailyEntry; // Empty day
         }
         
         // Aggregate multiple part rides for the same day
-        var totalHours = dayPartRides.Sum(pr => pr.DecimalHours ?? 0);
-        var corrections = dayPartRides.Sum(pr => pr.CorrectionTotalHours);
+        var totalHours = dayExecutions.Sum(ex => (double)(ex.DecimalHours ?? 0m));
+        var corrections = dayExecutions.Sum(ex => (double)ex.CorrectionTotalHours);
         
         // Take first part ride for basic info
-        var mainPartRide = dayPartRides.First();
+        var mainExecution = dayExecutions
+            .OrderBy(ex => ex.ActualStartTime ?? ex.Ride?.PlannedStartTime ?? TimeSpan.Zero)
+            .First();
         
         // Check if it's a holiday
         var workCalc = new WorkHoursCalculator(new Cao()); // You might need to get actual CAO data
-        var isHoliday = !string.IsNullOrEmpty(workCalc.GetHolidayName(date, mainPartRide.HoursOption?.Name));
-        var isNightShift = _overtimeClassifier.IsNightShift(mainPartRide);
+        var isHoliday = !string.IsNullOrEmpty(workCalc.GetHolidayName(date, mainExecution.HoursOption?.Name));
+        var isNightShift = _overtimeClassifier.IsNightShift(mainExecution);
         
         // Classify hours using overtime rules
         var weeklyTotal = 0.0; // This would need to be calculated from the week's context
-        var hourBreakdown = _overtimeClassifier.ClassifyHours(mainPartRide, weeklyTotal, isHoliday, isNightShift);
+        var hourBreakdown = _overtimeClassifier.ClassifyHours(mainExecution, weeklyTotal, isHoliday, isNightShift);
         
         // Populate daily entry
-        dailyEntry.ServiceCode = mainPartRide.HoursCode?.Name ?? "";
-        dailyEntry.StartTime = mainPartRide.Start;
-        dailyEntry.EndTime = mainPartRide.End;
-        dailyEntry.BreakTime = mainPartRide.Rest;
+        dailyEntry.ServiceCode = mainExecution.HoursCode?.Name ?? "";
+        dailyEntry.StartTime = mainExecution.ActualStartTime ?? mainExecution.Ride?.PlannedStartTime;
+        dailyEntry.EndTime = mainExecution.ActualEndTime ?? mainExecution.Ride?.PlannedEndTime;
+        dailyEntry.BreakTime = mainExecution.ActualRestTime ?? mainExecution.RestCalculated;
         dailyEntry.Corrections = corrections;
         dailyEntry.TotalHours = totalHours;
         
@@ -193,21 +214,25 @@ public class ReportCalculationService
         dailyEntry.Hours200 = hourBreakdown.Premium200;
         
         // Allowances
-        dailyEntry.TravelAllowance = (decimal)dayPartRides.Sum(pr => pr.KilometerReimbursement);
-        dailyEntry.ConsignmentFee = (decimal)dayPartRides.Sum(pr => pr.ConsignmentFee);
-        dailyEntry.VariousCompensation = (decimal)dayPartRides.Sum(pr => pr.VariousCompensation);
-        dailyEntry.TaxFreeAmount = (decimal)dayPartRides.Sum(pr => pr.TaxFreeCompensation);
-        dailyEntry.NightAllowanceAmount = (decimal)dayPartRides.Sum(pr => pr.NightAllowance);
-        dailyEntry.Kilometers = dayPartRides.Sum(pr => pr.TotalKilometers ?? 0);
+        dailyEntry.TravelAllowance = dayExecutions.Sum(ex => ex.KilometerReimbursement ?? 0);
+        dailyEntry.ConsignmentFee = dayExecutions.Sum(ex => ex.ConsignmentFee ?? 0);
+        dailyEntry.VariousCompensation = dayExecutions.Sum(ex => ex.VariousCompensation ?? 0);
+        dailyEntry.TaxFreeAmount = dayExecutions.Sum(ex => ex.TaxFreeCompensation ?? 0);
+        dailyEntry.TaxableAmount = dayExecutions.Sum(ex => ex.ActualCosts ?? 0);
+        dailyEntry.NightAllowanceAmount = dayExecutions.Sum(ex => ex.NightAllowance ?? 0);
+        dailyEntry.Kilometers = dayExecutions.Sum(ex => (double)((ex.ActualKilometers ?? 0) + (ex.ExtraKilometers ?? 0)));
+        dailyEntry.KilometerAllowance = dayExecutions.Sum(ex => ex.KilometerReimbursement ?? 0);
+        dailyEntry.DiverseAllowance = dayExecutions.Sum(ex => ex.VariousCompensation ?? 0);
+        dailyEntry.AccommodationAllowance = dayExecutions.Sum(ex => ex.StandOver ?? 0);
         
         // TvT hours (only for Time-for-Time entries)
-        dailyEntry.TvTHours = dayPartRides
-            .Where(pr => pr.HoursCode?.Name == "Time for time")
-            .Sum(pr => pr.DecimalHours ?? 0);
+        dailyEntry.TvTHours = dayExecutions
+            .Where(ex => ex.HoursCode?.Name == "Time for time")
+            .Sum(ex => (double)(ex.DecimalHours ?? 0m));
         
-        dailyEntry.Remarks = string.Join("; ", dayPartRides
-            .Where(pr => !string.IsNullOrEmpty(pr.Remark))
-            .Select(pr => pr.Remark));
+        dailyEntry.Remarks = string.Join("; ", dayExecutions
+            .Where(ex => !string.IsNullOrWhiteSpace(ex.Remark))
+            .Select(ex => ex.Remark));
         
         return dailyEntry;
     }
@@ -227,7 +252,17 @@ public class ReportCalculationService
             TotalKilometers = days.Sum(d => d.Kilometers),
             KilometerAllowance = days.Sum(d => d.KilometerAllowance),
             DiverseAllowance = days.Sum(d => d.DiverseAllowance),
-            TvTHours = days.Sum(d => d.TvTHours)
+            TvTHours = days.Sum(d => d.TvTHours),
+            TotalAllowances = days.Sum(d =>
+                d.TravelAllowance +
+                d.ConsignmentFee +
+                d.VariousCompensation +
+                d.TaxFreeAmount +
+                d.TaxableAmount +
+                d.NightAllowanceAmount +
+                d.KilometerAllowance +
+                d.DiverseAllowance +
+                d.AccommodationAllowance)
         };
     }
     
@@ -259,23 +294,17 @@ public class ReportCalculationService
             TotalKilometers = weeks.Sum(w => w.WeekTotal.TotalKilometers),
             KilometerAllowance = weeks.Sum(w => w.WeekTotal.KilometerAllowance),
             DiverseAllowance = weeks.Sum(w => w.WeekTotal.DiverseAllowance),
-            TvTHours = weeks.Sum(w => w.WeekTotal.TvTHours)
+            TvTHours = weeks.Sum(w => w.WeekTotal.TvTHours),
+            TotalAllowances = weeks.Sum(w => w.WeekTotal.TotalAllowances)
         };
     }
     
-    private DateTime GetWeekStartDate(int year, int weekNumber)
-    {
-        var jan1 = new DateTime(year, 1, 1);
-        var daysOffset = (int)CultureInfo.CurrentCulture.DateTimeFormat.FirstDayOfWeek - (int)jan1.DayOfWeek;
-        var firstWeek = jan1.AddDays(daysOffset);
-        
-        return firstWeek.AddDays((weekNumber - 1) * 7);
-    }
+    private DateTime GetWeekStartDate(int year, int weekNumber) =>
+        ISOWeek.ToDateTime(year, Math.Max(1, weekNumber), DayOfWeek.Monday);
     
     private int GetWeekNumber(DateTime date)
     {
-        var culture = CultureInfo.CurrentCulture;
-        return culture.Calendar.GetWeekOfYear(date, culture.DateTimeFormat.CalendarWeekRule, culture.DateTimeFormat.FirstDayOfWeek);
+        return ISOWeek.GetWeekOfYear(date);
     }
     
     private string GetDutchDayName(DayOfWeek dayOfWeek)
@@ -300,5 +329,5 @@ public class RawReportData
     public Company? Company { get; set; }
     public EmployeeContract? Contract { get; set; }
     public DriverCompensationSettings? CompensationSettings { get; set; }
-    public List<PartRide> PartRides { get; set; } = new List<PartRide>();
+    public List<RideDriverExecution> DriverExecutions { get; set; } = new();
 } 

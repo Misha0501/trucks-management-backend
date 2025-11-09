@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TruckManagement.Data;
@@ -11,9 +12,11 @@ using TruckManagement.Data;
 namespace TruckManagement.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251102144048_AddRideDriverExecution")]
+    partial class AddRideDriverExecution
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1480,9 +1483,6 @@ namespace TruckManagement.Migrations
                     b.Property<Guid>("DriverId")
                         .HasColumnType("uuid");
 
-                    b.Property<decimal?>("EndKilometers")
-                        .HasColumnType("numeric");
-
                     b.Property<decimal?>("ExtraKilometers")
                         .HasColumnType("numeric");
 
@@ -1526,9 +1526,6 @@ namespace TruckManagement.Migrations
                         .HasColumnType("numeric");
 
                     b.Property<decimal?>("StandOver")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal?>("StartKilometers")
                         .HasColumnType("numeric");
 
                     b.Property<int>("Status")
@@ -1575,202 +1572,6 @@ namespace TruckManagement.Migrations
                         .IsUnique();
 
                     b.ToTable("RideDriverExecutions");
-                });
-
-            modelBuilder.Entity("TruckManagement.Entities.RideDriverExecutionComment", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Comment")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("RideDriverExecutionId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RideDriverExecutionId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("RideDriverExecutionComments");
-                });
-
-            modelBuilder.Entity("TruckManagement.Entities.RideDriverExecutionDispute", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("ClosedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("DriverId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Reason")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ResolutionNotes")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ResolutionType")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("ResolvedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ResolvedById")
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("RideDriverExecutionId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DriverId");
-
-                    b.HasIndex("ResolvedById");
-
-                    b.HasIndex("RideDriverExecutionId");
-
-                    b.ToTable("RideDriverExecutionDisputes");
-                });
-
-            modelBuilder.Entity("TruckManagement.Entities.RideDriverExecutionDisputeComment", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("AuthorUserId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Body")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("DisputeId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AuthorUserId");
-
-                    b.HasIndex("DisputeId");
-
-                    b.ToTable("RideDriverExecutionDisputeComments");
-                });
-
-            modelBuilder.Entity("TruckManagement.Entities.RideDriverExecutionFile", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ContentType")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<byte[]>("FileData")
-                        .IsRequired()
-                        .HasColumnType("bytea");
-
-                    b.Property<string>("FileName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<long>("FileSize")
-                        .HasColumnType("bigint");
-
-                    b.Property<Guid>("RideDriverExecutionId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("UploadedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("UploadedBy")
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RideDriverExecutionId");
-
-                    b.ToTable("RideDriverExecutionFiles");
-                });
-
-            modelBuilder.Entity("TruckManagement.Entities.RidePeriodApproval", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("DriverId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("DriverPdfPath")
-                        .HasColumnType("text");
-
-                    b.Property<string>("DriverSignatureData")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("DriverSignedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("DriverSignedIp")
-                        .HasColumnType("text");
-
-                    b.Property<string>("DriverSignedUserAgent")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("FromDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("PeriodNr")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("ToDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<decimal?>("TotalCompensation")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal?>("TotalHours")
-                        .HasColumnType("numeric");
-
-                    b.Property<int>("Year")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DriverId", "Year", "PeriodNr")
-                        .IsUnique();
-
-                    b.ToTable("RidePeriodApprovals");
                 });
 
             modelBuilder.Entity("TruckManagement.Entities.Surcharge", b =>
@@ -2399,91 +2200,6 @@ namespace TruckManagement.Migrations
                     b.Navigation("Ride");
                 });
 
-            modelBuilder.Entity("TruckManagement.Entities.RideDriverExecutionComment", b =>
-                {
-                    b.HasOne("TruckManagement.Entities.RideDriverExecution", "RideDriverExecution")
-                        .WithMany("Comments")
-                        .HasForeignKey("RideDriverExecutionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("TruckManagement.Entities.ApplicationUser", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("RideDriverExecution");
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("TruckManagement.Entities.RideDriverExecutionDispute", b =>
-                {
-                    b.HasOne("TruckManagement.Entities.Driver", "Driver")
-                        .WithMany()
-                        .HasForeignKey("DriverId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("TruckManagement.Entities.ApplicationUser", "ResolvedBy")
-                        .WithMany()
-                        .HasForeignKey("ResolvedById");
-
-                    b.HasOne("TruckManagement.Entities.RideDriverExecution", "RideDriverExecution")
-                        .WithMany("Disputes")
-                        .HasForeignKey("RideDriverExecutionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Driver");
-
-                    b.Navigation("ResolvedBy");
-
-                    b.Navigation("RideDriverExecution");
-                });
-
-            modelBuilder.Entity("TruckManagement.Entities.RideDriverExecutionDisputeComment", b =>
-                {
-                    b.HasOne("TruckManagement.Entities.ApplicationUser", "Author")
-                        .WithMany()
-                        .HasForeignKey("AuthorUserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("TruckManagement.Entities.RideDriverExecutionDispute", "Dispute")
-                        .WithMany("Comments")
-                        .HasForeignKey("DisputeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Author");
-
-                    b.Navigation("Dispute");
-                });
-
-            modelBuilder.Entity("TruckManagement.Entities.RideDriverExecutionFile", b =>
-                {
-                    b.HasOne("TruckManagement.Entities.RideDriverExecution", "RideDriverExecution")
-                        .WithMany("Files")
-                        .HasForeignKey("RideDriverExecutionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("RideDriverExecution");
-                });
-
-            modelBuilder.Entity("TruckManagement.Entities.RidePeriodApproval", b =>
-                {
-                    b.HasOne("TruckManagement.Entities.Driver", "Driver")
-                        .WithMany()
-                        .HasForeignKey("DriverId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Driver");
-                });
-
             modelBuilder.Entity("TruckManagement.Entities.Surcharge", b =>
                 {
                     b.HasOne("TruckManagement.Entities.Client", "Client")
@@ -2603,20 +2319,6 @@ namespace TruckManagement.Migrations
                     b.Navigation("DriverExecutions");
 
                     b.Navigation("PartRides");
-                });
-
-            modelBuilder.Entity("TruckManagement.Entities.RideDriverExecution", b =>
-                {
-                    b.Navigation("Comments");
-
-                    b.Navigation("Disputes");
-
-                    b.Navigation("Files");
-                });
-
-            modelBuilder.Entity("TruckManagement.Entities.RideDriverExecutionDispute", b =>
-                {
-                    b.Navigation("Comments");
                 });
 
             modelBuilder.Entity("TruckManagement.Entities.WeekApproval", b =>

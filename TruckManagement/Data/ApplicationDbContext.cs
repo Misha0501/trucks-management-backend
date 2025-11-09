@@ -42,6 +42,12 @@ namespace TruckManagement.Data
         
         public DbSet<ClientCapacityTemplate> ClientCapacityTemplates { get; set; } = default!;
         public DbSet<RideDriverAssignment> RideDriverAssignments { get; set; } = default!;
+        public DbSet<RideDriverExecution> RideDriverExecutions { get; set; } = default!;
+        public DbSet<RideDriverExecutionFile> RideDriverExecutionFiles { get; set; } = default!;
+        public DbSet<RideDriverExecutionComment> RideDriverExecutionComments { get; set; } = default!;
+        public DbSet<RideDriverExecutionDispute> RideDriverExecutionDisputes { get; set; } = default!;
+        public DbSet<RideDriverExecutionDisputeComment> RideDriverExecutionDisputeComments { get; set; } = default!;
+        public DbSet<RidePeriodApproval> RidePeriodApprovals { get; set; } = default!;
         public DbSet<DriverDailyAvailability> DriverDailyAvailabilities { get; set; } = default!;
         public DbSet<TruckDailyAvailability> TruckDailyAvailabilities { get; set; } = default!;
 
@@ -231,6 +237,16 @@ namespace TruckManagement.Data
             // TruckDailyAvailability - unique constraint on truck+date
             builder.Entity<TruckDailyAvailability>()
                 .HasIndex(t => new { t.TruckId, t.Date })
+                .IsUnique();
+
+            // RideDriverExecution - unique constraint on ride+driver
+            builder.Entity<RideDriverExecution>()
+                .HasIndex(e => new { e.RideId, e.DriverId })
+                .IsUnique();
+
+            // RidePeriodApproval - unique constraint on driver+year+period
+            builder.Entity<RidePeriodApproval>()
+                .HasIndex(rpa => new { rpa.DriverId, rpa.Year, rpa.PeriodNr })
                 .IsUnique();
         }
     }

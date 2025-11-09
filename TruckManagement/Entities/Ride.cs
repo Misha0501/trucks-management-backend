@@ -39,9 +39,12 @@ namespace TruckManagement.Entities
         
         public string? CreationMethod { get; set; } // e.g., "TEMPLATE_GENERATED", "MANUAL"
         
+        public string? ExecutionCompletionStatus { get; set; } // "none", "partial", "complete", "approved"
+        
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         
         public ICollection<RideDriverAssignment> DriverAssignments { get; set; } = new List<RideDriverAssignment>();
+        public ICollection<RideDriverExecution> DriverExecutions { get; set; } = new List<RideDriverExecution>();
         public ICollection<PartRide> PartRides { get; set; } = new List<PartRide>();
     }
 }
