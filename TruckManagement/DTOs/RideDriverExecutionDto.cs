@@ -8,6 +8,11 @@ namespace TruckManagement.DTOs
         public TimeSpan? ActualStartTime { get; set; }
         public TimeSpan? ActualEndTime { get; set; }
         public TimeSpan? ActualRestTime { get; set; }
+        
+        // Odometer readings
+        public decimal? StartKilometers { get; set; }
+        public decimal? EndKilometers { get; set; }
+        
         public decimal? ActualKilometers { get; set; }
         public decimal? ExtraKilometers { get; set; }
         public decimal? ActualCosts { get; set; }
@@ -50,6 +55,11 @@ namespace TruckManagement.DTOs
         public TimeSpan? ActualEndTime { get; set; }
         public TimeSpan? ActualRestTime { get; set; }
         public TimeSpan? RestCalculated { get; set; }
+        
+        // Odometer readings
+        public decimal? StartKilometers { get; set; }
+        public decimal? EndKilometers { get; set; }
+        
         public decimal? ActualKilometers { get; set; }
         public decimal? ExtraKilometers { get; set; }
         public decimal? ActualCosts { get; set; }

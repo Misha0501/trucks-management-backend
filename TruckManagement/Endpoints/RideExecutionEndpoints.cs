@@ -91,6 +91,8 @@ namespace TruckManagement.Endpoints
                         execution.ActualStartTime = request.ActualStartTime;
                         execution.ActualEndTime = request.ActualEndTime;
                         execution.ActualRestTime = request.ActualRestTime;
+                        execution.StartKilometers = request.StartKilometers;
+                        execution.EndKilometers = request.EndKilometers;
                         execution.ActualKilometers = request.ActualKilometers;
                         execution.ExtraKilometers = request.ExtraKilometers;
                         execution.ActualCosts = request.ActualCosts;
@@ -197,6 +199,8 @@ namespace TruckManagement.Endpoints
                             ActualEndTime = execution.ActualEndTime,
                             ActualRestTime = execution.ActualRestTime,
                             RestCalculated = execution.RestCalculated,
+                            StartKilometers = execution.StartKilometers,
+                            EndKilometers = execution.EndKilometers,
                             ActualKilometers = execution.ActualKilometers,
                             ExtraKilometers = execution.ExtraKilometers,
                             ActualCosts = execution.ActualCosts,
@@ -281,6 +285,8 @@ namespace TruckManagement.Endpoints
                             ActualEndTime = execution.ActualEndTime,
                             ActualRestTime = execution.ActualRestTime,
                             RestCalculated = execution.RestCalculated,
+                            StartKilometers = execution.StartKilometers,
+                            EndKilometers = execution.EndKilometers,
                             ActualKilometers = execution.ActualKilometers,
                             ExtraKilometers = execution.ExtraKilometers,
                             ActualCosts = execution.ActualCosts,
@@ -390,6 +396,8 @@ namespace TruckManagement.Endpoints
                             ActualEndTime = e.ActualEndTime,
                             ActualRestTime = e.ActualRestTime,
                             RestCalculated = e.RestCalculated,
+                            StartKilometers = e.StartKilometers,
+                            EndKilometers = e.EndKilometers,
                             ActualKilometers = e.ActualKilometers,
                             ExtraKilometers = e.ExtraKilometers,
                             ActualCosts = e.ActualCosts,
@@ -958,6 +966,8 @@ namespace TruckManagement.Endpoints
                                 DecimalHours = e.DecimalHours,
                                 
                                 // Distance & Costs
+                                StartKilometers = e.StartKilometers,
+                                EndKilometers = e.EndKilometers,
                                 ActualKilometers = e.ActualKilometers,
                                 ExtraKilometers = e.ExtraKilometers,
                                 ActualCosts = e.ActualCosts,

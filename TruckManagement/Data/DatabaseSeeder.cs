@@ -14,9 +14,7 @@ namespace TruckManagement.Seeding
             var dbContext = serviceProvider.GetRequiredService<ApplicationDbContext>();
 
             // 2) Apply any pending migrations
-            // Temporarily disabled strict migration check - will auto-create table
-            await dbContext.Database.EnsureCreatedAsync();
-            // await dbContext.Database.MigrateAsync();
+            await dbContext.Database.MigrateAsync();
 
             // 3) Seed roles (including "client")
             var roleManager = serviceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
