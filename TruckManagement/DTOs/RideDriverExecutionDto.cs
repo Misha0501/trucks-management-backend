@@ -8,6 +8,7 @@ namespace TruckManagement.DTOs
         public TimeSpan? ActualStartTime { get; set; }
         public TimeSpan? ActualEndTime { get; set; }
         public TimeSpan? ActualRestTime { get; set; }
+        public TimeSpan? ContainerWaitingTime { get; set; }
         
         // Odometer readings
         public decimal? StartKilometers { get; set; }
@@ -55,6 +56,7 @@ namespace TruckManagement.DTOs
         public TimeSpan? ActualEndTime { get; set; }
         public TimeSpan? ActualRestTime { get; set; }
         public TimeSpan? RestCalculated { get; set; }
+        public TimeSpan? ContainerWaitingTime { get; set; }
         
         // Odometer readings
         public decimal? StartKilometers { get; set; }

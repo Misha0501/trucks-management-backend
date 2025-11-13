@@ -91,6 +91,7 @@ namespace TruckManagement.Endpoints
                         execution.ActualStartTime = request.ActualStartTime;
                         execution.ActualEndTime = request.ActualEndTime;
                         execution.ActualRestTime = request.ActualRestTime;
+                        execution.ContainerWaitingTime = request.ContainerWaitingTime;
                         execution.StartKilometers = request.StartKilometers;
                         execution.EndKilometers = request.EndKilometers;
                         execution.ActualKilometers = request.ActualKilometers;
@@ -199,6 +200,7 @@ namespace TruckManagement.Endpoints
                             ActualEndTime = execution.ActualEndTime,
                             ActualRestTime = execution.ActualRestTime,
                             RestCalculated = execution.RestCalculated,
+                            ContainerWaitingTime = execution.ContainerWaitingTime,
                             StartKilometers = execution.StartKilometers,
                             EndKilometers = execution.EndKilometers,
                             ActualKilometers = execution.ActualKilometers,
@@ -285,6 +287,7 @@ namespace TruckManagement.Endpoints
                             ActualEndTime = execution.ActualEndTime,
                             ActualRestTime = execution.ActualRestTime,
                             RestCalculated = execution.RestCalculated,
+                            ContainerWaitingTime = execution.ContainerWaitingTime,
                             StartKilometers = execution.StartKilometers,
                             EndKilometers = execution.EndKilometers,
                             ActualKilometers = execution.ActualKilometers,
@@ -396,6 +399,7 @@ namespace TruckManagement.Endpoints
                             ActualEndTime = e.ActualEndTime,
                             ActualRestTime = e.ActualRestTime,
                             RestCalculated = e.RestCalculated,
+                            ContainerWaitingTime = e.ContainerWaitingTime,
                             StartKilometers = e.StartKilometers,
                             EndKilometers = e.EndKilometers,
                             ActualKilometers = e.ActualKilometers,
@@ -963,6 +967,7 @@ namespace TruckManagement.Endpoints
                                 ActualEndTime = e.ActualEndTime,
                                 ActualRestTime = e.ActualRestTime,
                                 RestCalculated = e.RestCalculated,
+                                ContainerWaitingTime = e.ContainerWaitingTime,
                                 DecimalHours = e.DecimalHours,
                                 
                                 // Distance & Costs

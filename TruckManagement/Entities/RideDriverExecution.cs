@@ -22,6 +22,7 @@ namespace TruckManagement.Entities
         public TimeSpan? ActualEndTime { get; set; }
         public TimeSpan? ActualRestTime { get; set; }
         public TimeSpan? RestCalculated { get; set; }
+        public TimeSpan? ContainerWaitingTime { get; set; }
         
         // Odometer readings
         public decimal? StartKilometers { get; set; }
