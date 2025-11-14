@@ -25,7 +25,7 @@ namespace TruckManagement.Endpoints
                     [FromQuery] string? companyId,
                     [FromQuery] string? clientId,
                     [FromQuery] int pageNumber = 1,
-                    [FromQuery] int pageSize = 10
+                    [FromQuery] int pageSize = 1000
                 ) =>
                 {
                     try

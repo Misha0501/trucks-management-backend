@@ -244,7 +244,7 @@ namespace TruckManagement.Endpoints
                     ClaimsPrincipal currentUser,
                     ApplicationDbContext db,
                     int pageNumber = 1,
-                    int pageSize = 10
+                    int pageSize = 1000
                 ) =>
                 {
                     try
@@ -343,7 +343,7 @@ namespace TruckManagement.Endpoints
 
                         // 8) Pagination
                         if (pageNumber < 1) pageNumber = 1;
-                        if (pageSize < 1) pageSize = 10;
+                        if (pageSize < 1) pageSize = 1000;
 
                         var totalCount = await query.CountAsync();
 

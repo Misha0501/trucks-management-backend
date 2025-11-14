@@ -183,7 +183,7 @@ namespace TruckManagement.Endpoints
                     UserManager<ApplicationUser> userManager,
                     ClaimsPrincipal currentUser,
                     [FromQuery] int pageNumber = 1,
-                    [FromQuery] int pageSize = 10,
+                    [FromQuery] int pageSize = 1000,
                     [FromQuery] string? search = null
                 ) =>
                 {

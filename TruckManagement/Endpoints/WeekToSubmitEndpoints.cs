@@ -26,10 +26,10 @@ public static class WeeksToSubmitEndpoints
                 [FromQuery] int? weekNr,
                 [FromQuery] string? status, // hasDisputes | allApproved | hasPending
                 [FromQuery] int pageNumber = 1,
-                [FromQuery] int pageSize = 10) =>
+                [FromQuery] int pageSize = 1000) =>
             {
                 if (pageNumber < 1) pageNumber = 1;
-                if (pageSize < 1) pageSize = 10;
+                if (pageSize < 1) pageSize = 1000;
 
                 var userId = userManager.GetUserId(currentUser)!;
                 bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");

@@ -1195,7 +1195,7 @@ namespace TruckManagement.Endpoints
                     ClaimsPrincipal currentUser,
                     ApplicationDbContext db,
                     [FromQuery] int pageNumber = 1,
-                    [FromQuery] int pageSize = 10) =>
+                    [FromQuery] int pageSize = 1000) =>
                 {
                     try
                     {
@@ -1261,7 +1261,7 @@ namespace TruckManagement.Endpoints
                     ClaimsPrincipal currentUser,
                     ApplicationDbContext db,
                     [FromQuery] int pageNumber = 1,
-                    [FromQuery] int pageSize = 10) =>
+                    [FromQuery] int pageSize = 1000) =>
                 {
                     try
                     {
