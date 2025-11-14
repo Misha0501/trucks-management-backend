@@ -938,7 +938,7 @@ namespace TruckManagement.Endpoints
                     ClaimsPrincipal user,
                     UserManager<ApplicationUser> userManager,
                     [FromQuery] int pageNumber = 1,
-                    [FromQuery] int pageSize = 10
+                    [FromQuery] int pageSize = 1000
                 ) =>
                 {
                     try

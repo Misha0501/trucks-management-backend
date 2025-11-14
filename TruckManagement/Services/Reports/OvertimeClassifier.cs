@@ -5,7 +5,7 @@ namespace TruckManagement.Services.Reports;
 public class OvertimeClassifier
 {
     public OvertimeBreakdown ClassifyHours(
-        PartRide partRide,
+        PartRide partRide, 
         double weeklyTotalHours,
         bool isHoliday,
         bool isNightShift) =>
@@ -31,19 +31,19 @@ public class OvertimeClassifier
     private OvertimeBreakdown ClassifyHoursInternal(
         double totalHours,
         DayOfWeek dayOfWeek,
-        double weeklyTotalHours,
+        double weeklyTotalHours, 
         bool isHoliday,
         bool isNightShift)
     {
         var breakdown = new OvertimeBreakdown();
-
+        
         // Rule 4: Work on Sunday/Holidays/Nights → 200%
         if (dayOfWeek == DayOfWeek.Sunday || isHoliday || isNightShift)
         {
             breakdown.Premium200 = totalHours;
             return breakdown;
         }
-
+        
         // Rule 3: Daily hours > 10 OR total week hours > 40 → 150%
         if (totalHours > 10 || weeklyTotalHours > 40)
         {
@@ -61,7 +61,7 @@ public class OvertimeClassifier
                     // Split: some hours at regular/130%, excess at 150%
                     var regularHours = 40 - previousWeeklyHours;
                     breakdown.Overtime150 = totalHours - regularHours;
-
+                    
                     // Apply daily rules to remaining hours
                     var dailyBreakdown = ClassifyDailyHours(regularHours);
                     breakdown.Regular100 = dailyBreakdown.Regular100;
@@ -75,10 +75,10 @@ public class OvertimeClassifier
                 breakdown.Regular100 = 8;
                 breakdown.Overtime130 = 2; // Hours 8-10
             }
-
+            
             return breakdown;
         }
-
+        
         // Rules 1 & 2: Apply daily hour classification
         return ClassifyDailyHours(totalHours);
     }

@@ -96,7 +96,7 @@ public class ReportCalculationService
             .OrderBy(e => e.Ride!.PlannedDate)
             .ThenBy(e => e.ActualStartTime ?? e.Ride.PlannedStartTime ?? TimeSpan.Zero)
             .ToList();
-
+        
         return new RawReportData
         {
             Driver = driver,
