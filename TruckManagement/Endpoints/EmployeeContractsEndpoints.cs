@@ -115,6 +115,21 @@ namespace TruckManagement.Endpoints
                             companyGuid = parsedCompanyId;
                         }
 
+                        // 3.5) Check if BSN already exists
+                        if (!string.IsNullOrWhiteSpace(request.Bsn))
+                        {
+                            var existingBsn = await db.EmployeeContracts
+                                .AnyAsync(ec => ec.Bsn == request.Bsn);
+                            
+                            if (existingBsn)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "A contract with this BSN already exists.",
+                                    StatusCodes.Status400BadRequest
+                                );
+                            }
+                        }
+
                         // 4) Build the EmployeeContract entity
                         var contract = new EmployeeContract
                         {
@@ -761,6 +776,21 @@ namespace TruckManagement.Endpoints
                                 return ApiResponseFactory.Error(
                                     "You are not authorized to assign this contract to the specified company.",
                                     StatusCodes.Status403Forbidden);
+                            }
+                        }
+
+                        // 5.5) Check BSN uniqueness if being updated
+                        if (!string.IsNullOrWhiteSpace(request.Bsn) && request.Bsn != contract.Bsn)
+                        {
+                            var existingBsn = await db.EmployeeContracts
+                                .AnyAsync(ec => ec.Bsn == request.Bsn && ec.Id != contract.Id);
+                            
+                            if (existingBsn)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "A contract with this BSN already exists.",
+                                    StatusCodes.Status400BadRequest
+                                );
                             }
                         }
 

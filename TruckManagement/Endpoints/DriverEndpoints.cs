@@ -102,6 +102,18 @@ namespace TruckManagement.Endpoints
                             return ApiResponseFactory.Error("A user with this email already exists.", StatusCodes.Status400BadRequest);
                         }
 
+                        // 4.5. Check if BSN already exists (if provided)
+                        if (!string.IsNullOrWhiteSpace(request.BSN))
+                        {
+                            var existingBsn = await db.EmployeeContracts
+                                .AnyAsync(ec => ec.Bsn == request.BSN);
+                            
+                            if (existingBsn)
+                            {
+                                return ApiResponseFactory.Error("A driver with this BSN already exists.", StatusCodes.Status400BadRequest);
+                            }
+                        }
+
                         // 5. Create ApplicationUser
                         var user = new ApplicationUser
                         {
@@ -628,7 +640,20 @@ namespace TruckManagement.Endpoints
 
                         // Update contract fields
                         if (request.DateOfBirth.HasValue) contract.DateOfBirth = request.DateOfBirth.Value;
-                        if (request.BSN != null) contract.Bsn = request.BSN;
+                        
+                        // Check BSN uniqueness if being updated
+                        if (request.BSN != null && request.BSN != contract.Bsn)
+                        {
+                            var existingBsn = await db.EmployeeContracts
+                                .AnyAsync(ec => ec.Bsn == request.BSN && ec.Id != contract.Id);
+                            
+                            if (existingBsn)
+                            {
+                                return ApiResponseFactory.Error("A driver with this BSN already exists.", StatusCodes.Status400BadRequest);
+                            }
+                            contract.Bsn = request.BSN;
+                        }
+                        
                         if (request.IBAN != null) contract.Iban = request.IBAN;
                         if (request.DateOfEmployment.HasValue) contract.DateOfEmployment = request.DateOfEmployment.Value;
                         if (request.LastWorkingDay.HasValue) contract.LastWorkingDay = request.LastWorkingDay.Value;
