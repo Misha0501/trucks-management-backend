@@ -25,13 +25,14 @@ namespace TruckManagement.DTOs
         
         // Contract Details (Optional)
         public DateTime? DateOfBirth { get; set; }
+        public string? BSN { get; set; }
+        public string? IBAN { get; set; }
         public string? ProbationPeriod { get; set; }
         public string? WeeklySchedule { get; set; }
         public string? WorkingHours { get; set; }
         public string? NoticePeriod { get; set; }
         public string? PayScale { get; set; }
         public int? PayScaleStep { get; set; }
-        public string? BSN { get; set; }
         public DateTime? LastWorkingDay { get; set; }
         
         // Additional Contract Fields

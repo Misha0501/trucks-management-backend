@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TruckManagement.Data;
@@ -11,9 +12,11 @@ using TruckManagement.Data;
 namespace TruckManagement.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251115164038_AddCreatedAtAndCreatedByToEmployeeContract")]
+    partial class AddCreatedAtAndCreatedByToEmployeeContract
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -245,96 +248,6 @@ namespace TruckManagement.Migrations
                         .HasDatabaseName("UserNameIndex");
 
                     b.ToTable("AspNetUsers", (string)null);
-                });
-
-            modelBuilder.Entity("TruckManagement.Entities.CAOPayScale", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("EffectiveFrom")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("EffectiveTo")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("EffectiveYear")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("FourWeekWage")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("HourlyWage100")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("HourlyWage130")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("HourlyWage150")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("MonthlyWage")
-                        .HasColumnType("numeric");
-
-                    b.Property<string>("Scale")
-                        .IsRequired()
-                        .HasMaxLength(1)
-                        .HasColumnType("character varying(1)");
-
-                    b.Property<int>("Step")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("WeeklyWage")
-                        .HasColumnType("numeric");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Scale", "Step", "EffectiveYear")
-                        .IsUnique();
-
-                    b.ToTable("CAOPayScales");
-                });
-
-            modelBuilder.Entity("TruckManagement.Entities.CAOVacationDays", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("AgeFrom")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("AgeGroupDescription")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<int>("AgeTo")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("EffectiveFrom")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("EffectiveTo")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("EffectiveYear")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("VacationDays")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AgeFrom", "AgeTo", "EffectiveYear")
-                        .IsUnique();
-
-                    b.ToTable("CAOVacationDays");
                 });
 
             modelBuilder.Entity("TruckManagement.Entities.Cao", b =>
@@ -771,75 +684,6 @@ namespace TruckManagement.Migrations
                     b.HasKey("DriverId");
 
                     b.ToTable("DriverCompensationSettings");
-                });
-
-            modelBuilder.Entity("TruckManagement.Entities.DriverContractVersion", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ContentType")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("ContractDataSnapshot")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<Guid>("DriverId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("EmployeeContractId")
-                        .HasColumnType("uuid");
-
-                    b.Property<long>("FileSize")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime>("GeneratedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("GeneratedByUserId")
-                        .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
-
-                    b.Property<bool>("IsLatestVersion")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<string>("PdfFileName")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
-
-                    b.Property<string>("PdfFilePath")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("VersionNumber")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("EmployeeContractId");
-
-                    b.HasIndex("GeneratedByUserId");
-
-                    b.HasIndex("DriverId", "IsLatestVersion");
-
-                    b.HasIndex("DriverId", "VersionNumber")
-                        .IsUnique();
-
-                    b.ToTable("DriverContractVersions");
                 });
 
             modelBuilder.Entity("TruckManagement.Entities.DriverDailyAvailability", b =>
@@ -2274,32 +2118,6 @@ namespace TruckManagement.Migrations
                         .IsRequired();
 
                     b.Navigation("Driver");
-                });
-
-            modelBuilder.Entity("TruckManagement.Entities.DriverContractVersion", b =>
-                {
-                    b.HasOne("TruckManagement.Entities.Driver", "Driver")
-                        .WithMany()
-                        .HasForeignKey("DriverId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("TruckManagement.Entities.EmployeeContract", "EmployeeContract")
-                        .WithMany()
-                        .HasForeignKey("EmployeeContractId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("TruckManagement.Entities.ApplicationUser", "GeneratedByUser")
-                        .WithMany()
-                        .HasForeignKey("GeneratedByUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("Driver");
-
-                    b.Navigation("EmployeeContract");
-
-                    b.Navigation("GeneratedByUser");
                 });
 
             modelBuilder.Entity("TruckManagement.Entities.DriverDailyAvailability", b =>

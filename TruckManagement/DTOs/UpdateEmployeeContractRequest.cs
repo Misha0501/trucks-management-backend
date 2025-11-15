@@ -17,6 +17,7 @@ public class UpdateEmployeeContractRequest
 
     public DateTime DateOfBirth { get; set; }
     public string Bsn { get; set; } = null!;
+    public string? Iban { get; set; }
     public DateTime DateOfEmployment { get; set; }
     public DateTime? LastWorkingDay { get; set; }
 

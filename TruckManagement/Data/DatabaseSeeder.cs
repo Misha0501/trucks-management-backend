@@ -16,6 +16,9 @@ namespace TruckManagement.Seeding
             // 2) Apply any pending migrations
             await dbContext.Database.MigrateAsync();
 
+            // 2.5) Seed CAO lookup tables (pay scales and vacation days)
+            await CAODataSeeder.SeedCAODataAsync(dbContext);
+
             // 3) Seed roles (including "client")
             var roleManager = serviceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
             var roles = new[]
@@ -36,6 +39,12 @@ namespace TruckManagement.Seeding
                 {
                     Id = defaultCompanyId,
                     Name = "DefaultCompany",
+                    Address = "Herengracht 100",
+                    Postcode = "1015 BS",
+                    City = "Amsterdam",
+                    Country = "Netherlands",
+                    PhoneNumber = "+31 20 123 4567",
+                    Email = "info@defaultcompany.nl",
                     IsApproved = true
                 });
                 await dbContext.SaveChangesAsync();

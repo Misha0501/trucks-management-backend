@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -10,6 +11,7 @@ using TruckManagement.DTOs;
 using TruckManagement.Entities;
 using TruckManagement.Enums;
 using TruckManagement.Helpers;
+using TruckManagement.Interfaces;
 using TruckManagement.Options;
 using TruckManagement.Services;
 
@@ -19,6 +21,11 @@ namespace TruckManagement.Endpoints
     {
         public static void MapDriversEndpoints(this WebApplication app)
         {
+            // DEBUG: Test if server reloaded
+            app.MapGet("/debug/ping",
+                [Authorize(Roles = "globalAdmin")]
+                () => Results.Ok(new { Message = "Server reloaded successfully!", Timestamp = DateTime.UtcNow }));
+
             app.MapPost("/drivers/create-with-contract",
                 [Authorize(Roles = "globalAdmin, customerAdmin")]
                 async (
@@ -28,6 +35,7 @@ namespace TruckManagement.Endpoints
                     RoleManager<ApplicationRole> roleManager,
                     ClaimsPrincipal currentUser,
                     DriverCompensationService compensationService,
+                    DriverContractService contractService,
                     IWebHostEnvironment env,
                     IOptions<StorageOptions> cfg,
                     IResourceLocalizer resourceLocalizer
@@ -102,6 +110,18 @@ namespace TruckManagement.Endpoints
                             return ApiResponseFactory.Error("A user with this email already exists.", StatusCodes.Status400BadRequest);
                         }
 
+                        // 4.5. Check if BSN already exists (if provided)
+                        if (!string.IsNullOrWhiteSpace(request.BSN))
+                        {
+                            var existingBsn = await db.EmployeeContracts
+                                .AnyAsync(ec => ec.Bsn == request.BSN);
+                            
+                            if (existingBsn)
+                            {
+                                return ApiResponseFactory.Error("A driver with this BSN already exists.", StatusCodes.Status400BadRequest);
+                            }
+                        }
+
                         // 5. Create ApplicationUser
                         var user = new ApplicationUser
                         {
@@ -152,21 +172,30 @@ namespace TruckManagement.Endpoints
                             ReleaseVersion = 1.0m,
                             Status = EmployeeContractStatus.Pending,
                             
+                            // Contract creation tracking
+                            CreatedAt = DateTime.UtcNow,
+                            CreatedByUserId = currentUserId,
+                            
                             // Required contract fields
-                            DateOfEmployment = request.DateOfEmployment,
+                            DateOfEmployment = DateTime.SpecifyKind(request.DateOfEmployment, DateTimeKind.Utc),
                             WorkweekDuration = request.WorkweekDuration,
                             Function = request.Function,
                             
                             // Optional contract fields
-                            DateOfBirth = request.DateOfBirth,
+                            DateOfBirth = request.DateOfBirth.HasValue 
+                                ? DateTime.SpecifyKind(request.DateOfBirth.Value, DateTimeKind.Utc) 
+                                : (DateTime?)null,
+                            Bsn = request.BSN,
+                            Iban = request.IBAN,
                             ProbationPeriod = request.ProbationPeriod,
                             WeeklySchedule = request.WeeklySchedule,
                             WorkingHours = request.WorkingHours,
                             NoticePeriod = request.NoticePeriod,
                             PayScale = request.PayScale,
                             PayScaleStep = request.PayScaleStep,
-                            Bsn = request.BSN,
-                            LastWorkingDay = request.LastWorkingDay,
+                            LastWorkingDay = request.LastWorkingDay.HasValue 
+                                ? DateTime.SpecifyKind(request.LastWorkingDay.Value, DateTimeKind.Utc) 
+                                : (DateTime?)null,
                             VacationDays = request.VacationDays,
                             VacationAge = request.VacationAge,
                             WorkweekDurationPercentage = request.WorkweekDurationPercentage,
@@ -231,12 +260,30 @@ namespace TruckManagement.Endpoints
 
                         await transaction.CommitAsync();
 
+                        // 10.5. Generate contract PDF (after transaction commit)
+                        Guid? contractVersionId = null;
+                        try
+                        {
+                            var contractVersion = await contractService.GenerateContractAsync(
+                                driver.Id,
+                                contract.Id,
+                                currentUserId);
+                            contractVersionId = contractVersion.Id;
+                        }
+                        catch (Exception ex)
+                        {
+                            // Log error but don't fail the driver creation
+                            // Contract can be regenerated later if needed
+                            Console.WriteLine($"Warning: Contract PDF generation failed: {ex.Message}");
+                        }
+
                         // 11. Return success response
                         return ApiResponseFactory.Success(new
                         {
                             UserId = user.Id,
                             DriverId = driver.Id,
                             ContractId = contract.Id,
+                            ContractVersionId = contractVersionId,
                             Email = user.Email,
                             FullName = $"{user.FirstName} {user.LastName}",
                             CompanyName = company.Name,
@@ -251,8 +298,10 @@ namespace TruckManagement.Endpoints
                         await transaction.RollbackAsync();
                         Console.WriteLine($"[Error] {ex.Message}");
                         Console.WriteLine($"[StackTrace] {ex.StackTrace}");
+                        
+                        // DEBUG: Return actual error to help diagnose
                         return ApiResponseFactory.Error(
-                            "An unexpected error occurred while creating the driver.",
+                            $"Error creating driver: {ex.Message} | Inner: {ex.InnerException?.Message}",
                             StatusCodes.Status500InternalServerError
                         );
                     }
@@ -325,6 +374,13 @@ namespace TruckManagement.Endpoints
                             .AsNoTracking()
                             .FirstOrDefaultAsync(c => c.DriverId == driver.Id);
 
+                        // Get the user who created the contract (for contract document generation)
+                        ApplicationUser? createdByUser = null;
+                        if (contract?.CreatedByUserId != null)
+                        {
+                            createdByUser = await userManager.FindByIdAsync(contract.CreatedByUserId);
+                        }
+
                         // Calculate vacation hours left for current year
                         var currentYear = DateTime.UtcNow.Year;
                         var vacationHoursLeft = await db.PartRides
@@ -366,6 +422,7 @@ namespace TruckManagement.Endpoints
                             // Personal Details
                             DateOfBirth = contract?.DateOfBirth,
                             BSN = contract?.Bsn,
+                            IBAN = contract?.Iban,
 
                             // Employment Details
                             DateOfEmployment = contract?.DateOfEmployment,
@@ -417,6 +474,13 @@ namespace TruckManagement.Endpoints
                             SignedAt = contract?.SignedAt,
                             SignedFileName = contract?.SignedFileName,
 
+                            // Contract Creation Tracking (for document generation)
+                            ContractCreatedAt = contract?.CreatedAt,
+                            ContractCreatedByUserId = contract?.CreatedByUserId,
+                            ContractCreatedByUserName = createdByUser != null 
+                                ? $"{createdByUser.FirstName} {createdByUser.LastName}"
+                                : null,
+
                             // Driver Files
                             Files = driver.Files.Select(f => new DriverFileDto
                             {
@@ -452,6 +516,7 @@ namespace TruckManagement.Endpoints
                     ApplicationDbContext db,
                     UserManager<ApplicationUser> userManager,
                     ClaimsPrincipal currentUser,
+                    DriverContractService contractService,
                     IWebHostEnvironment env,
                     IOptions<StorageOptions> cfg,
                     IResourceLocalizer resourceLocalizer
@@ -611,6 +676,9 @@ namespace TruckManagement.Endpoints
 
                         // 8. Update or create EmployeeContract
                         var contract = await db.EmployeeContracts.FirstOrDefaultAsync(c => c.DriverId == driver.Id);
+                        bool isNewContract = false;
+                        bool contractFieldsChanged = false;
+                        
                         if (contract == null)
                         {
                             // Create new contract if it doesn't exist
@@ -622,11 +690,49 @@ namespace TruckManagement.Endpoints
                                 ReleaseVersion = 1.0m
                             };
                             db.EmployeeContracts.Add(contract);
+                            isNewContract = true;
+                        }
+                        else
+                        {
+                            // Track if contract-relevant fields changed
+                            var oldPayScale = contract.PayScale;
+                            var oldPayScaleStep = contract.PayScaleStep;
+                            var oldDateOfEmployment = contract.DateOfEmployment;
+                            var oldLastWorkingDay = contract.LastWorkingDay;
+                            var oldFunction = contract.Function;
+                            var oldBsn = contract.Bsn;
+                            var oldWorkweekDuration = contract.WorkweekDuration;
+                            var oldDateOfBirth = contract.DateOfBirth;
+                            
+                            // We'll check after updates if any of these changed
+                            contractFieldsChanged = 
+                                (request.PayScale != null && request.PayScale != oldPayScale) ||
+                                (request.PayScaleStep.HasValue && request.PayScaleStep != oldPayScaleStep) ||
+                                (request.DateOfEmployment.HasValue && request.DateOfEmployment != oldDateOfEmployment) ||
+                                (request.LastWorkingDay.HasValue && request.LastWorkingDay != oldLastWorkingDay) ||
+                                (request.Function != null && request.Function != oldFunction) ||
+                                (request.BSN != null && request.BSN != oldBsn) ||
+                                (request.WorkweekDuration.HasValue && request.WorkweekDuration != oldWorkweekDuration) ||
+                                (request.DateOfBirth.HasValue && request.DateOfBirth != oldDateOfBirth);
                         }
 
                         // Update contract fields
                         if (request.DateOfBirth.HasValue) contract.DateOfBirth = request.DateOfBirth.Value;
-                        if (request.BSN != null) contract.Bsn = request.BSN;
+                        
+                        // Check BSN uniqueness if being updated
+                        if (request.BSN != null && request.BSN != contract.Bsn)
+                        {
+                            var existingBsn = await db.EmployeeContracts
+                                .AnyAsync(ec => ec.Bsn == request.BSN && ec.Id != contract.Id);
+                            
+                            if (existingBsn)
+                            {
+                                return ApiResponseFactory.Error("A driver with this BSN already exists.", StatusCodes.Status400BadRequest);
+                            }
+                            contract.Bsn = request.BSN;
+                        }
+                        
+                        if (request.IBAN != null) contract.Iban = request.IBAN;
                         if (request.DateOfEmployment.HasValue) contract.DateOfEmployment = request.DateOfEmployment.Value;
                         if (request.LastWorkingDay.HasValue) contract.LastWorkingDay = request.LastWorkingDay.Value;
                         if (request.Function != null) contract.Function = request.Function;
@@ -694,6 +800,26 @@ namespace TruckManagement.Endpoints
                         await db.SaveChangesAsync();
                         await transaction.CommitAsync();
 
+                        // 10.5. Auto-regenerate contract PDF if relevant fields changed
+                        Guid? newContractVersionId = null;
+                        if (contractFieldsChanged)
+                        {
+                            try
+                            {
+                                var newVersion = await contractService.GenerateContractAsync(
+                                    driver.Id,
+                                    contract.Id,
+                                    currentUserId);
+                                newContractVersionId = newVersion.Id;
+                                Console.WriteLine($"Auto-regenerated contract PDF: VersionId={newVersion.Id}, Version={newVersion.VersionNumber}");
+                            }
+                            catch (Exception ex)
+                            {
+                                // Log error but don't fail the update
+                                Console.WriteLine($"Warning: Contract PDF auto-regeneration failed: {ex.Message}");
+                            }
+                        }
+
                         // 11. Reload driver with fresh data for response
                         var updatedDriver = await db.Drivers
                             .AsNoTracking()
@@ -740,6 +866,7 @@ namespace TruckManagement.Endpoints
                             // Personal Details
                             DateOfBirth = updatedContract?.DateOfBirth,
                             BSN = updatedContract?.Bsn,
+                            IBAN = updatedContract?.Iban,
 
                             // Employment Details
                             DateOfEmployment = updatedContract?.DateOfEmployment,
@@ -926,6 +1053,536 @@ namespace TruckManagement.Endpoints
                         Console.WriteLine($"[StackTrace] {ex.StackTrace}");
                         return ApiResponseFactory.Error(
                             "An unexpected error occurred while deleting the driver.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+                });
+
+            // Step 4.3: Manual Contract Regeneration Endpoint
+            app.MapPost("/drivers/{driverId}/contracts/regenerate",
+                [Authorize(Roles = "globalAdmin, customerAdmin")]
+                async (
+                    Guid driverId,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser,
+                    DriverContractService contractService
+                ) =>
+                {
+                    try
+                    {
+                        // 1. Get current user info
+                        var currentUserId = userManager.GetUserId(currentUser);
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+
+                        // 2. Find the driver
+                        var driver = await db.Drivers
+                            .Include(d => d.Company)
+                            .FirstOrDefaultAsync(d => d.Id == driverId && !d.IsDeleted);
+
+                        if (driver == null)
+                        {
+                            return ApiResponseFactory.Error("Driver not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        // 3. Authorization check for customerAdmin
+                        if (!isGlobalAdmin)
+                        {
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error("Contact person profile not found.", StatusCodes.Status403Forbidden);
+                            }
+
+                            var customerAdminCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Where(cpc => cpc.CompanyId.HasValue)
+                                .Select(cpc => cpc.CompanyId.Value)
+                                .ToList();
+
+                            if (!driver.CompanyId.HasValue || !customerAdminCompanyIds.Contains(driver.CompanyId.Value))
+                            {
+                                return ApiResponseFactory.Error("You do not have permission to regenerate this driver's contract.", StatusCodes.Status403Forbidden);
+                            }
+                        }
+
+                        // 4. Find the employee contract
+                        var contract = await db.EmployeeContracts
+                            .FirstOrDefaultAsync(ec => ec.DriverId == driverId);
+
+                        if (contract == null)
+                        {
+                            return ApiResponseFactory.Error("No contract found for this driver.", StatusCodes.Status404NotFound);
+                        }
+
+                        // 5. Generate new contract version
+                        var newVersion = await contractService.GenerateContractAsync(
+                            driverId,
+                            contract.Id,
+                            currentUserId);
+
+                        // 6. Return success response
+                        return ApiResponseFactory.Success(new
+                        {
+                            contractVersionId = newVersion.Id,
+                            versionNumber = newVersion.VersionNumber,
+                            generatedAt = newVersion.GeneratedAt,
+                            pdfDownloadUrl = $"/drivers/{driverId}/contracts/{newVersion.Id}/download",
+                            message = "Contract regenerated successfully"
+                        }, StatusCodes.Status200OK);
+                    }
+                    catch (InvalidOperationException ex)
+                    {
+                        return ApiResponseFactory.Error($"Contract generation error: {ex.Message}", StatusCodes.Status400BadRequest);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Error] {ex.Message}");
+                        Console.WriteLine($"[StackTrace] {ex.StackTrace}");
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while regenerating the contract.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+                });
+
+            // Step 5.1: List Contract Versions
+            app.MapGet("/drivers/{driverId}/contracts",
+                [Authorize(Roles = "driver, employer, customerAdmin, globalAdmin")]
+                async (
+                    Guid driverId,
+                    [FromQuery] bool includeSuperseded,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    try
+                    {
+                        // 1. Get current user info
+                        var currentUserId = userManager.GetUserId(currentUser);
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                        bool isDriver = currentUser.IsInRole("driver");
+
+                        // 2. Find the driver
+                        var driver = await db.Drivers
+                            .Include(d => d.User)
+                            .Include(d => d.Company)
+                            .FirstOrDefaultAsync(d => d.Id == driverId && !d.IsDeleted);
+
+                        if (driver == null)
+                        {
+                            return ApiResponseFactory.Error("Driver not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        // 3. Authorization check
+                        if (isDriver)
+                        {
+                            // Driver can only view their own contracts
+                            if (driver.User.Id != currentUserId)
+                            {
+                                return ApiResponseFactory.Error("You do not have permission to view this driver's contracts.", StatusCodes.Status403Forbidden);
+                            }
+                        }
+                        else if (!isGlobalAdmin)
+                        {
+                            // customerAdmin or employer can only view drivers from their associated companies
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error("Contact person profile not found.", StatusCodes.Status403Forbidden);
+                            }
+
+                            var userCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Where(cpc => cpc.CompanyId.HasValue)
+                                .Select(cpc => cpc.CompanyId.Value)
+                                .ToList();
+
+                            if (!driver.CompanyId.HasValue || !userCompanyIds.Contains(driver.CompanyId.Value))
+                            {
+                                return ApiResponseFactory.Error("You do not have permission to view this driver's contracts.", StatusCodes.Status403Forbidden);
+                            }
+                        }
+
+                        // 4. Query contract versions
+                        var query = db.DriverContractVersions
+                            .Where(cv => cv.DriverId == driverId);
+
+                        if (!includeSuperseded)
+                        {
+                            query = query.Where(cv => cv.IsLatestVersion);
+                        }
+
+                        var versions = await query
+                            .OrderByDescending(cv => cv.VersionNumber)
+                            .ToListAsync();
+
+                        // 5. Load generated by user names
+                        var userIds = versions
+                            .Where(v => !string.IsNullOrEmpty(v.GeneratedByUserId))
+                            .Select(v => v.GeneratedByUserId)
+                            .Distinct()
+                            .ToList();
+
+                        var users = await db.Users
+                            .Where(u => userIds.Contains(u.Id))
+                            .ToDictionaryAsync(u => u.Id, u => $"{u.FirstName} {u.LastName}");
+
+                        // 6. Build response
+                        var response = versions.Select(v => new
+                        {
+                            id = v.Id,
+                            versionNumber = v.VersionNumber,
+                            status = v.Status.ToString(),
+                            generatedAt = v.GeneratedAt,
+                            generatedByUserId = v.GeneratedByUserId,
+                            generatedByUserName = !string.IsNullOrEmpty(v.GeneratedByUserId) && users.ContainsKey(v.GeneratedByUserId)
+                                ? users[v.GeneratedByUserId]
+                                : "System",
+                            fileName = v.PdfFileName,
+                            fileSize = v.FileSize,
+                            isLatestVersion = v.IsLatestVersion
+                        }).ToList();
+
+                        return ApiResponseFactory.Success(response, StatusCodes.Status200OK);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Error] {ex.Message}");
+                        Console.WriteLine($"[StackTrace] {ex.StackTrace}");
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while retrieving contract versions.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+                });
+
+            // Step 5.2: Get Latest Contract Version
+            app.MapGet("/drivers/{driverId}/contracts/latest",
+                [Authorize(Roles = "driver, employer, customerAdmin, globalAdmin")]
+                async (
+                    Guid driverId,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    try
+                    {
+                        // 1. Get current user info
+                        var currentUserId = userManager.GetUserId(currentUser);
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                        bool isDriver = currentUser.IsInRole("driver");
+
+                        // 2. Find the driver
+                        var driver = await db.Drivers
+                            .Include(d => d.User)
+                            .Include(d => d.Company)
+                            .FirstOrDefaultAsync(d => d.Id == driverId && !d.IsDeleted);
+
+                        if (driver == null)
+                        {
+                            return ApiResponseFactory.Error("Driver not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        // 3. Authorization check
+                        if (isDriver)
+                        {
+                            if (driver.User.Id != currentUserId)
+                            {
+                                return ApiResponseFactory.Error("You do not have permission to view this driver's contract.", StatusCodes.Status403Forbidden);
+                            }
+                        }
+                        else if (!isGlobalAdmin)
+                        {
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error("Contact person profile not found.", StatusCodes.Status403Forbidden);
+                            }
+
+                            var userCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Where(cpc => cpc.CompanyId.HasValue)
+                                .Select(cpc => cpc.CompanyId.Value)
+                                .ToList();
+
+                            if (!driver.CompanyId.HasValue || !userCompanyIds.Contains(driver.CompanyId.Value))
+                            {
+                                return ApiResponseFactory.Error("You do not have permission to view this driver's contract.", StatusCodes.Status403Forbidden);
+                            }
+                        }
+
+                        // 4. Get latest contract version
+                        var latestVersion = await db.DriverContractVersions
+                            .Where(cv => cv.DriverId == driverId && cv.IsLatestVersion)
+                            .FirstOrDefaultAsync();
+
+                        if (latestVersion == null)
+                        {
+                            return ApiResponseFactory.Error("No contract version found for this driver.", StatusCodes.Status404NotFound);
+                        }
+
+                        // 5. Load generated by user name
+                        string generatedByUserName = "System";
+                        if (!string.IsNullOrEmpty(latestVersion.GeneratedByUserId))
+                        {
+                            var generatedByUser = await db.Users.FirstOrDefaultAsync(u => u.Id == latestVersion.GeneratedByUserId);
+                            if (generatedByUser != null)
+                            {
+                                generatedByUserName = $"{generatedByUser.FirstName} {generatedByUser.LastName}";
+                            }
+                        }
+
+                        // 6. Build response
+                        var response = new
+                        {
+                            id = latestVersion.Id,
+                            versionNumber = latestVersion.VersionNumber,
+                            status = latestVersion.Status.ToString(),
+                            generatedAt = latestVersion.GeneratedAt,
+                            generatedByUserId = latestVersion.GeneratedByUserId,
+                            generatedByUserName,
+                            fileName = latestVersion.PdfFileName,
+                            fileSize = latestVersion.FileSize,
+                            isLatestVersion = latestVersion.IsLatestVersion
+                        };
+
+                        return ApiResponseFactory.Success(response, StatusCodes.Status200OK);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Error] {ex.Message}");
+                        Console.WriteLine($"[StackTrace] {ex.StackTrace}");
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while retrieving the latest contract version.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+                });
+
+            // Step 5.3: Download Contract PDF
+            app.MapGet("/drivers/{driverId}/contracts/{versionId}/download",
+                [Authorize(Roles = "driver, employer, customerAdmin, globalAdmin")]
+                async (
+                    Guid driverId,
+                    Guid versionId,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser,
+                    IContractStorageService storageService
+                ) =>
+                {
+                    try
+                    {
+                        // 1. Get current user info
+                        var currentUserId = userManager.GetUserId(currentUser);
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                        bool isDriver = currentUser.IsInRole("driver");
+
+                        // 2. Find the driver
+                        var driver = await db.Drivers
+                            .Include(d => d.User)
+                            .Include(d => d.Company)
+                            .FirstOrDefaultAsync(d => d.Id == driverId && !d.IsDeleted);
+
+                        if (driver == null)
+                        {
+                            return Results.NotFound(ApiResponseFactory.Error("Driver not found.", StatusCodes.Status404NotFound));
+                        }
+
+                        // 3. Authorization check
+                        if (isDriver)
+                        {
+                            if (driver.User.Id != currentUserId)
+                            {
+                                return Results.Forbid();
+                            }
+                        }
+                        else if (!isGlobalAdmin)
+                        {
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
+
+                            if (contactPerson == null)
+                            {
+                                return Results.Forbid();
+                            }
+
+                            var userCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Where(cpc => cpc.CompanyId.HasValue)
+                                .Select(cpc => cpc.CompanyId.Value)
+                                .ToList();
+
+                            if (!driver.CompanyId.HasValue || !userCompanyIds.Contains(driver.CompanyId.Value))
+                            {
+                                return Results.Forbid();
+                            }
+                        }
+
+                        // 4. Find the contract version
+                        var contractVersion = await db.DriverContractVersions
+                            .FirstOrDefaultAsync(cv => cv.Id == versionId && cv.DriverId == driverId);
+
+                        if (contractVersion == null)
+                        {
+                            return Results.NotFound(ApiResponseFactory.Error("Contract version not found.", StatusCodes.Status404NotFound));
+                        }
+
+                        // 5. Check if file exists
+                        if (!await storageService.FileExistsAsync(contractVersion.PdfFilePath))
+                        {
+                            return Results.NotFound(ApiResponseFactory.Error("Contract PDF file not found.", StatusCodes.Status404NotFound));
+                        }
+
+                        // 6. Read PDF file
+                        var pdfBytes = await storageService.GetContractPdfAsync(contractVersion.PdfFilePath);
+
+                        // 7. Return PDF as download
+                        return Results.File(
+                            pdfBytes,
+                            contractVersion.ContentType,
+                            contractVersion.PdfFileName);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Error] {ex.Message}");
+                        Console.WriteLine($"[StackTrace] {ex.StackTrace}");
+                        return Results.Problem(
+                            "An unexpected error occurred while downloading the contract.",
+                            statusCode: StatusCodes.Status500InternalServerError
+                        );
+                    }
+                });
+
+            // Step 5.4: Get Contract Version Details
+            app.MapGet("/drivers/{driverId}/contracts/{versionId}",
+                [Authorize(Roles = "driver, employer, customerAdmin, globalAdmin")]
+                async (
+                    Guid driverId,
+                    Guid versionId,
+                    ApplicationDbContext db,
+                    UserManager<ApplicationUser> userManager,
+                    ClaimsPrincipal currentUser
+                ) =>
+                {
+                    try
+                    {
+                        // 1. Get current user info
+                        var currentUserId = userManager.GetUserId(currentUser);
+                        bool isGlobalAdmin = currentUser.IsInRole("globalAdmin");
+                        bool isDriver = currentUser.IsInRole("driver");
+
+                        // 2. Find the driver
+                        var driver = await db.Drivers
+                            .Include(d => d.User)
+                            .Include(d => d.Company)
+                            .FirstOrDefaultAsync(d => d.Id == driverId && !d.IsDeleted);
+
+                        if (driver == null)
+                        {
+                            return ApiResponseFactory.Error("Driver not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        // 3. Authorization check
+                        if (isDriver)
+                        {
+                            if (driver.User.Id != currentUserId)
+                            {
+                                return ApiResponseFactory.Error("You do not have permission to view this driver's contract.", StatusCodes.Status403Forbidden);
+                            }
+                        }
+                        else if (!isGlobalAdmin)
+                        {
+                            var contactPerson = await db.ContactPersons
+                                .Include(cp => cp.ContactPersonClientCompanies)
+                                .FirstOrDefaultAsync(cp => cp.AspNetUserId == currentUserId);
+
+                            if (contactPerson == null)
+                            {
+                                return ApiResponseFactory.Error("Contact person profile not found.", StatusCodes.Status403Forbidden);
+                            }
+
+                            var userCompanyIds = contactPerson.ContactPersonClientCompanies
+                                .Where(cpc => cpc.CompanyId.HasValue)
+                                .Select(cpc => cpc.CompanyId.Value)
+                                .ToList();
+
+                            if (!driver.CompanyId.HasValue || !userCompanyIds.Contains(driver.CompanyId.Value))
+                            {
+                                return ApiResponseFactory.Error("You do not have permission to view this driver's contract.", StatusCodes.Status403Forbidden);
+                            }
+                        }
+
+                        // 4. Find the contract version
+                        var contractVersion = await db.DriverContractVersions
+                            .FirstOrDefaultAsync(cv => cv.Id == versionId && cv.DriverId == driverId);
+
+                        if (contractVersion == null)
+                        {
+                            return ApiResponseFactory.Error("Contract version not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        // 5. Load generated by user name
+                        string generatedByUserName = "System";
+                        if (!string.IsNullOrEmpty(contractVersion.GeneratedByUserId))
+                        {
+                            var generatedByUser = await db.Users.FirstOrDefaultAsync(u => u.Id == contractVersion.GeneratedByUserId);
+                            if (generatedByUser != null)
+                            {
+                                generatedByUserName = $"{generatedByUser.FirstName} {generatedByUser.LastName}";
+                            }
+                        }
+
+                        // 6. Parse contract snapshot (if available)
+                        object? contractSnapshot = null;
+                        if (!string.IsNullOrEmpty(contractVersion.ContractDataSnapshot))
+                        {
+                            try
+                            {
+                                contractSnapshot = JsonSerializer.Deserialize<object>(contractVersion.ContractDataSnapshot);
+                            }
+                            catch
+                            {
+                                // If JSON parsing fails, ignore and leave null
+                            }
+                        }
+
+                        // 7. Build response
+                        var response = new
+                        {
+                            id = contractVersion.Id,
+                            driverId = contractVersion.DriverId,
+                            driverName = $"{driver.User.FirstName} {driver.User.LastName}",
+                            versionNumber = contractVersion.VersionNumber,
+                            status = contractVersion.Status.ToString(),
+                            generatedAt = contractVersion.GeneratedAt,
+                            generatedByUserId = contractVersion.GeneratedByUserId,
+                            generatedByUserName,
+                            fileName = contractVersion.PdfFileName,
+                            filePath = contractVersion.PdfFilePath,
+                            fileSize = contractVersion.FileSize,
+                            isLatestVersion = contractVersion.IsLatestVersion,
+                            notes = contractVersion.Notes,
+                            contractSnapshot
+                        };
+
+                        return ApiResponseFactory.Success(response, StatusCodes.Status200OK);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Error] {ex.Message}");
+                        Console.WriteLine($"[StackTrace] {ex.StackTrace}");
+                        return ApiResponseFactory.Error(
+                            "An unexpected error occurred while retrieving contract version details.",
                             StatusCodes.Status500InternalServerError
                         );
                     }

@@ -50,6 +50,13 @@ namespace TruckManagement.Data
         public DbSet<RidePeriodApproval> RidePeriodApprovals { get; set; } = default!;
         public DbSet<DriverDailyAvailability> DriverDailyAvailabilities { get; set; } = default!;
         public DbSet<TruckDailyAvailability> TruckDailyAvailabilities { get; set; } = default!;
+        
+        // CAO Lookup Tables
+        public DbSet<CAOPayScale> CAOPayScales { get; set; } = default!;
+        public DbSet<CAOVacationDays> CAOVacationDays { get; set; } = default!;
+        
+        // Driver Contract Versions
+        public DbSet<DriverContractVersion> DriverContractVersions { get; set; } = default!;
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -248,6 +255,59 @@ namespace TruckManagement.Data
             builder.Entity<RidePeriodApproval>()
                 .HasIndex(rpa => new { rpa.DriverId, rpa.Year, rpa.PeriodNr })
                 .IsUnique();
+
+            // CAOPayScale - unique constraint on scale+step+year
+            builder.Entity<CAOPayScale>()
+                .HasIndex(ps => new { ps.Scale, ps.Step, ps.EffectiveYear })
+                .IsUnique();
+
+            // CAOVacationDays - unique constraint on age range+year
+            builder.Entity<CAOVacationDays>()
+                .HasIndex(vd => new { vd.AgeFrom, vd.AgeTo, vd.EffectiveYear })
+                .IsUnique();
+
+            // DriverContractVersion - relationships and constraints
+            builder.Entity<DriverContractVersion>(entity =>
+            {
+                // Relationship with Driver
+                entity.HasOne(cv => cv.Driver)
+                    .WithMany() // Driver doesn't need navigation property to versions
+                    .HasForeignKey(cv => cv.DriverId)
+                    .OnDelete(DeleteBehavior.Cascade); // If driver deleted, delete all contract versions
+
+                // Relationship with EmployeeContract
+                entity.HasOne(cv => cv.EmployeeContract)
+                    .WithMany() // EmployeeContract doesn't need navigation property
+                    .HasForeignKey(cv => cv.EmployeeContractId)
+                    .OnDelete(DeleteBehavior.Restrict); // Don't delete contract if versions exist
+
+                // Relationship with GeneratedByUser (optional)
+                entity.HasOne(cv => cv.GeneratedByUser)
+                    .WithMany()
+                    .HasForeignKey(cv => cv.GeneratedByUserId)
+                    .OnDelete(DeleteBehavior.SetNull); // If user deleted, set to null
+
+                // Unique constraint: each driver can only have one contract with a specific version number
+                entity.HasIndex(cv => new { cv.DriverId, cv.VersionNumber })
+                    .IsUnique();
+
+                // Index for fast lookup of latest version
+                entity.HasIndex(cv => new { cv.DriverId, cv.IsLatestVersion });
+
+                // Index for employee contract lookup
+                entity.HasIndex(cv => cv.EmployeeContractId);
+
+                // Convert enum to string in database
+                entity.Property(cv => cv.Status)
+                    .HasConversion<string>();
+
+                // Ensure GeneratedAt is stored as UTC
+                entity.Property(cv => cv.GeneratedAt)
+                    .HasConversion(
+                        v => v, // When saving to DB (already UTC)
+                        v => DateTime.SpecifyKind(v, DateTimeKind.Utc) // When reading from DB
+                    );
+            });
         }
     }
 }
