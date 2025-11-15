@@ -173,7 +173,13 @@ namespace TruckManagement.Services
                 column.Item().Text("Artikel 2: Proeftijd")
                     .FontSize(11).Bold().FontColor(HeaderColor);
                 
-                if (!string.IsNullOrWhiteSpace(contract.ProbationPeriod))
+                // Check if probation period exists and is not "0" (treat "0" as no probation)
+                bool hasProbation = !string.IsNullOrWhiteSpace(contract.ProbationPeriod) 
+                                    && contract.ProbationPeriod.Trim() != "0"
+                                    && contract.ProbationPeriod.Trim() != "0 maanden"
+                                    && contract.ProbationPeriod.Trim() != "0 maand";
+                
+                if (hasProbation)
                 {
                     column.Item().PaddingTop(6).Text($"Dit arbeidscontract is aangegaan met inachtneming van een wederzijdse proeftijd van {contract.ProbationPeriod}. Gedurende deze proeftijd kunnen beide partijen het arbeidscontract met directe ingang beëindigen. Een schriftelijke bevestiging hiervan is niet benodigd. De proeftijd is van toepassing indien een dienstverband voor een minimale duur van 12 maanden is aangegaan.")
                         .FontSize(10).LineHeight(1.4f);
