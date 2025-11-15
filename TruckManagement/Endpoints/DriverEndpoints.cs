@@ -19,6 +19,11 @@ namespace TruckManagement.Endpoints
     {
         public static void MapDriversEndpoints(this WebApplication app)
         {
+            // DEBUG: Test if server reloaded
+            app.MapGet("/debug/ping",
+                [Authorize(Roles = "globalAdmin")]
+                () => Results.Ok(new { Message = "Server reloaded successfully!", Timestamp = DateTime.UtcNow }));
+
             app.MapPost("/drivers/create-with-contract",
                 [Authorize(Roles = "globalAdmin, customerAdmin")]
                 async (
@@ -28,6 +33,7 @@ namespace TruckManagement.Endpoints
                     RoleManager<ApplicationRole> roleManager,
                     ClaimsPrincipal currentUser,
                     DriverCompensationService compensationService,
+                    DriverContractService contractService,
                     IWebHostEnvironment env,
                     IOptions<StorageOptions> cfg,
                     IResourceLocalizer resourceLocalizer
@@ -169,12 +175,14 @@ namespace TruckManagement.Endpoints
                             CreatedByUserId = currentUserId,
                             
                             // Required contract fields
-                            DateOfEmployment = request.DateOfEmployment,
+                            DateOfEmployment = DateTime.SpecifyKind(request.DateOfEmployment, DateTimeKind.Utc),
                             WorkweekDuration = request.WorkweekDuration,
                             Function = request.Function,
                             
                             // Optional contract fields
-                            DateOfBirth = request.DateOfBirth,
+                            DateOfBirth = request.DateOfBirth.HasValue 
+                                ? DateTime.SpecifyKind(request.DateOfBirth.Value, DateTimeKind.Utc) 
+                                : (DateTime?)null,
                             Bsn = request.BSN,
                             Iban = request.IBAN,
                             ProbationPeriod = request.ProbationPeriod,
@@ -183,7 +191,9 @@ namespace TruckManagement.Endpoints
                             NoticePeriod = request.NoticePeriod,
                             PayScale = request.PayScale,
                             PayScaleStep = request.PayScaleStep,
-                            LastWorkingDay = request.LastWorkingDay,
+                            LastWorkingDay = request.LastWorkingDay.HasValue 
+                                ? DateTime.SpecifyKind(request.LastWorkingDay.Value, DateTimeKind.Utc) 
+                                : (DateTime?)null,
                             VacationDays = request.VacationDays,
                             VacationAge = request.VacationAge,
                             WorkweekDurationPercentage = request.WorkweekDurationPercentage,
@@ -248,12 +258,30 @@ namespace TruckManagement.Endpoints
 
                         await transaction.CommitAsync();
 
+                        // 10.5. Generate contract PDF (after transaction commit)
+                        Guid? contractVersionId = null;
+                        try
+                        {
+                            var contractVersion = await contractService.GenerateContractAsync(
+                                driver.Id,
+                                contract.Id,
+                                currentUserId);
+                            contractVersionId = contractVersion.Id;
+                        }
+                        catch (Exception ex)
+                        {
+                            // Log error but don't fail the driver creation
+                            // Contract can be regenerated later if needed
+                            Console.WriteLine($"Warning: Contract PDF generation failed: {ex.Message}");
+                        }
+
                         // 11. Return success response
                         return ApiResponseFactory.Success(new
                         {
                             UserId = user.Id,
                             DriverId = driver.Id,
                             ContractId = contract.Id,
+                            ContractVersionId = contractVersionId,
                             Email = user.Email,
                             FullName = $"{user.FirstName} {user.LastName}",
                             CompanyName = company.Name,
@@ -268,8 +296,10 @@ namespace TruckManagement.Endpoints
                         await transaction.RollbackAsync();
                         Console.WriteLine($"[Error] {ex.Message}");
                         Console.WriteLine($"[StackTrace] {ex.StackTrace}");
+                        
+                        // DEBUG: Return actual error to help diagnose
                         return ApiResponseFactory.Error(
-                            "An unexpected error occurred while creating the driver.",
+                            $"Error creating driver: {ex.Message} | Inner: {ex.InnerException?.Message}",
                             StatusCodes.Status500InternalServerError
                         );
                     }

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Localization;
 using TruckManagement.Api.Endpoints;
 using TruckManagement.Endpoints;
 using TruckManagement.Extensions;
+using TruckManagement.Interfaces;
 using TruckManagement.Options;
 using TruckManagement.Routes;
 using TruckManagement.Seeding;
@@ -33,6 +34,12 @@ builder.Services.AddCors(options =>
     });
 });
 builder.Services.AddScoped<DriverCompensationService>();
+
+// Contract generation services
+builder.Services.AddScoped<IContractStorageService, LocalContractStorageService>();
+builder.Services.AddScoped<DriverContractPdfBuilder>();
+builder.Services.AddScoped<DriverContractService>();
+
 builder.Services.Configure<StorageOptions>(
     builder.Configuration.GetSection("Storage"));
 
