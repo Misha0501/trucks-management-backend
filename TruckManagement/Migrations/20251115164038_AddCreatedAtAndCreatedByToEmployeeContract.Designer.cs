@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TruckManagement.Data;
@@ -11,9 +12,11 @@ using TruckManagement.Data;
 namespace TruckManagement.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251115164038_AddCreatedAtAndCreatedByToEmployeeContract")]
+    partial class AddCreatedAtAndCreatedByToEmployeeContract
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -245,96 +248,6 @@ namespace TruckManagement.Migrations
                         .HasDatabaseName("UserNameIndex");
 
                     b.ToTable("AspNetUsers", (string)null);
-                });
-
-            modelBuilder.Entity("TruckManagement.Entities.CAOPayScale", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("EffectiveFrom")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("EffectiveTo")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("EffectiveYear")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("FourWeekWage")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("HourlyWage100")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("HourlyWage130")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("HourlyWage150")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("MonthlyWage")
-                        .HasColumnType("numeric");
-
-                    b.Property<string>("Scale")
-                        .IsRequired()
-                        .HasMaxLength(1)
-                        .HasColumnType("character varying(1)");
-
-                    b.Property<int>("Step")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("WeeklyWage")
-                        .HasColumnType("numeric");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Scale", "Step", "EffectiveYear")
-                        .IsUnique();
-
-                    b.ToTable("CAOPayScales");
-                });
-
-            modelBuilder.Entity("TruckManagement.Entities.CAOVacationDays", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("AgeFrom")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("AgeGroupDescription")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<int>("AgeTo")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("EffectiveFrom")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("EffectiveTo")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("EffectiveYear")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("VacationDays")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AgeFrom", "AgeTo", "EffectiveYear")
-                        .IsUnique();
-
-                    b.ToTable("CAOVacationDays");
                 });
 
             modelBuilder.Entity("TruckManagement.Entities.Cao", b =>

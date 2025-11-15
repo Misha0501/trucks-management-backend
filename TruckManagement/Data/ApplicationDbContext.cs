@@ -50,6 +50,10 @@ namespace TruckManagement.Data
         public DbSet<RidePeriodApproval> RidePeriodApprovals { get; set; } = default!;
         public DbSet<DriverDailyAvailability> DriverDailyAvailabilities { get; set; } = default!;
         public DbSet<TruckDailyAvailability> TruckDailyAvailabilities { get; set; } = default!;
+        
+        // CAO Lookup Tables
+        public DbSet<CAOPayScale> CAOPayScales { get; set; } = default!;
+        public DbSet<CAOVacationDays> CAOVacationDays { get; set; } = default!;
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -247,6 +251,16 @@ namespace TruckManagement.Data
             // RidePeriodApproval - unique constraint on driver+year+period
             builder.Entity<RidePeriodApproval>()
                 .HasIndex(rpa => new { rpa.DriverId, rpa.Year, rpa.PeriodNr })
+                .IsUnique();
+
+            // CAOPayScale - unique constraint on scale+step+year
+            builder.Entity<CAOPayScale>()
+                .HasIndex(ps => new { ps.Scale, ps.Step, ps.EffectiveYear })
+                .IsUnique();
+
+            // CAOVacationDays - unique constraint on age range+year
+            builder.Entity<CAOVacationDays>()
+                .HasIndex(vd => new { vd.AgeFrom, vd.AgeTo, vd.EffectiveYear })
                 .IsUnique();
         }
     }

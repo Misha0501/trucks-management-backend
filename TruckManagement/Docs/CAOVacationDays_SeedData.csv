@@ -1,0 +1,9 @@
+AgeFrom,AgeTo,AgeGroupDescription,VacationDays
+0,16,< 16 jaar,22
+17,18,17 en 18 jaar,23
+19,39,19 t/m 39 jaar,24
+40,44,40 t/m 44 jaar,24
+45,49,45 t/m 49 jaar,25
+50,54,50 t/m 54 jaar,26
+55,59,55 t/m 59 jaar,27
+60,140,> 60 jaar,28

@@ -75,5 +75,9 @@ namespace TruckManagement.Entities
         public string? SignedByIp { get; set; }
         public string? SignedUserAgent { get; set; }
         public string? SignatureText { get; set; }
+
+        // Contract creation tracking (for contract document generation)
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public string? CreatedByUserId { get; set; }
     }
 }

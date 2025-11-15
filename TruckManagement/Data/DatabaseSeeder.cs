@@ -16,6 +16,9 @@ namespace TruckManagement.Seeding
             // 2) Apply any pending migrations
             await dbContext.Database.MigrateAsync();
 
+            // 2.5) Seed CAO lookup tables (pay scales and vacation days)
+            await CAODataSeeder.SeedCAODataAsync(dbContext);
+
             // 3) Seed roles (including "client")
             var roleManager = serviceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
             var roles = new[]

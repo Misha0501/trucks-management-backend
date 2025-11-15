@@ -131,12 +131,17 @@ namespace TruckManagement.Endpoints
                         }
 
                         // 4) Build the EmployeeContract entity
+                        var currentUserId = userManager.GetUserId(currentUser);
                         var contract = new EmployeeContract
                         {
                             Id = Guid.NewGuid(),
                             DriverId = driverGuid,
                             CompanyId = companyGuid,
                             ReleaseVersion = 1.0m,
+
+                            // Contract creation tracking
+                            CreatedAt = DateTime.UtcNow,
+                            CreatedByUserId = currentUserId,
 
                             NightHoursAllowed = request.NightHoursAllowed,
                             KilometersAllowanceAllowed = request.KilometersAllowanceAllowed,

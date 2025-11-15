@@ -164,6 +164,10 @@ namespace TruckManagement.Endpoints
                             ReleaseVersion = 1.0m,
                             Status = EmployeeContractStatus.Pending,
                             
+                            // Contract creation tracking
+                            CreatedAt = DateTime.UtcNow,
+                            CreatedByUserId = currentUserId,
+                            
                             // Required contract fields
                             DateOfEmployment = request.DateOfEmployment,
                             WorkweekDuration = request.WorkweekDuration,
@@ -338,6 +342,13 @@ namespace TruckManagement.Endpoints
                             .AsNoTracking()
                             .FirstOrDefaultAsync(c => c.DriverId == driver.Id);
 
+                        // Get the user who created the contract (for contract document generation)
+                        ApplicationUser? createdByUser = null;
+                        if (contract?.CreatedByUserId != null)
+                        {
+                            createdByUser = await userManager.FindByIdAsync(contract.CreatedByUserId);
+                        }
+
                         // Calculate vacation hours left for current year
                         var currentYear = DateTime.UtcNow.Year;
                         var vacationHoursLeft = await db.PartRides
@@ -430,6 +441,13 @@ namespace TruckManagement.Endpoints
                             AccessCode = contract?.AccessCode,
                             SignedAt = contract?.SignedAt,
                             SignedFileName = contract?.SignedFileName,
+
+                            // Contract Creation Tracking (for document generation)
+                            ContractCreatedAt = contract?.CreatedAt,
+                            ContractCreatedByUserId = contract?.CreatedByUserId,
+                            ContractCreatedByUserName = createdByUser != null 
+                                ? $"{createdByUser.FirstName} {createdByUser.LastName}"
+                                : null,
 
                             // Driver Files
                             Files = driver.Files.Select(f => new DriverFileDto
