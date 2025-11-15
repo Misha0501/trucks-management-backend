@@ -134,6 +134,7 @@ namespace TruckManagement.Endpoints
                             EmployeeCity = request.EmployeeCity,
                             DateOfBirth = request.DateOfBirth,
                             Bsn = request.Bsn,
+                            Iban = request.Iban,
                             DateOfEmployment = request.DateOfEmployment,
                             LastWorkingDay = request.LastWorkingDay,
 
@@ -191,6 +192,7 @@ namespace TruckManagement.Endpoints
                             contract.EmployeeCity,
                             contract.DateOfBirth,
                             contract.Bsn,
+                            contract.Iban,
                             contract.DateOfEmployment,
                             contract.LastWorkingDay,
 
@@ -388,6 +390,7 @@ namespace TruckManagement.Endpoints
                                 c.EmployeeCity,
                                 c.DateOfBirth,
                                 c.Bsn,
+                                c.Iban,
                                 c.DateOfEmployment,
                                 c.LastWorkingDay,
                                 c.Function,
@@ -527,6 +530,7 @@ namespace TruckManagement.Endpoints
                             contract.EmployeeCity,
                             contract.DateOfBirth,
                             contract.Bsn,
+                            contract.Iban,
                             contract.DateOfEmployment,
                             contract.LastWorkingDay,
                             contract.Function,
@@ -775,6 +779,7 @@ namespace TruckManagement.Endpoints
                         contract.EmployeeCity = request.EmployeeCity;
                         contract.DateOfBirth = request.DateOfBirth;
                         contract.Bsn = request.Bsn;
+                        contract.Iban = request.Iban;
                         contract.DateOfEmployment = request.DateOfEmployment;
                         contract.LastWorkingDay = request.LastWorkingDay;
 
@@ -896,6 +901,7 @@ namespace TruckManagement.Endpoints
                             contract.EmployeeCity,
                             contract.DateOfBirth,
                             contract.Bsn,
+                            contract.Iban,
                             contract.DateOfEmployment,
                             contract.LastWorkingDay,
                             contract.Function,

@@ -32,6 +32,7 @@ namespace TruckManagement.DTOs
         // Personal Details
         public DateTime? DateOfBirth { get; set; }
         public string? BSN { get; set; }
+        public string? IBAN { get; set; }
         
         // Employment Details
         public DateTime? DateOfEmployment { get; set; }

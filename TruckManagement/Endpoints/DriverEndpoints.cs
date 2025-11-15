@@ -159,13 +159,14 @@ namespace TruckManagement.Endpoints
                             
                             // Optional contract fields
                             DateOfBirth = request.DateOfBirth,
+                            Bsn = request.BSN,
+                            Iban = request.IBAN,
                             ProbationPeriod = request.ProbationPeriod,
                             WeeklySchedule = request.WeeklySchedule,
                             WorkingHours = request.WorkingHours,
                             NoticePeriod = request.NoticePeriod,
                             PayScale = request.PayScale,
                             PayScaleStep = request.PayScaleStep,
-                            Bsn = request.BSN,
                             LastWorkingDay = request.LastWorkingDay,
                             VacationDays = request.VacationDays,
                             VacationAge = request.VacationAge,
@@ -366,6 +367,7 @@ namespace TruckManagement.Endpoints
                             // Personal Details
                             DateOfBirth = contract?.DateOfBirth,
                             BSN = contract?.Bsn,
+                            IBAN = contract?.Iban,
 
                             // Employment Details
                             DateOfEmployment = contract?.DateOfEmployment,
@@ -627,6 +629,7 @@ namespace TruckManagement.Endpoints
                         // Update contract fields
                         if (request.DateOfBirth.HasValue) contract.DateOfBirth = request.DateOfBirth.Value;
                         if (request.BSN != null) contract.Bsn = request.BSN;
+                        if (request.IBAN != null) contract.Iban = request.IBAN;
                         if (request.DateOfEmployment.HasValue) contract.DateOfEmployment = request.DateOfEmployment.Value;
                         if (request.LastWorkingDay.HasValue) contract.LastWorkingDay = request.LastWorkingDay.Value;
                         if (request.Function != null) contract.Function = request.Function;
@@ -740,6 +743,7 @@ namespace TruckManagement.Endpoints
                             // Personal Details
                             DateOfBirth = updatedContract?.DateOfBirth,
                             BSN = updatedContract?.Bsn,
+                            IBAN = updatedContract?.Iban,
 
                             // Employment Details
                             DateOfEmployment = updatedContract?.DateOfEmployment,

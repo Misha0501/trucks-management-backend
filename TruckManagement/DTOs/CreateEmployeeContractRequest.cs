@@ -18,6 +18,7 @@ public class CreateEmployeeContractRequest
     public string EmployeeCity { get; set; } = default!;
     public DateTime DateOfBirth { get; set; }
     public string Bsn { get; set; } = default!;
+    public string? Iban { get; set; }
     public DateTime DateOfEmployment { get; set; }
     public DateTime? LastWorkingDay { get; set; }
 

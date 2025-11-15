@@ -30,6 +30,7 @@ namespace TruckManagement.Entities
 
         public DateTime? DateOfBirth { get; set; }
         public string? Bsn { get; set; } = null!;
+        public string? Iban { get; set; } = null!;
         public DateTime? DateOfEmployment { get; set; }
         public DateTime? LastWorkingDay { get; set; }
 
