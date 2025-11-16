@@ -125,7 +125,7 @@ namespace TruckManagement.Endpoints
 
             // GET /drivers/{id}/telegram/registration-link - Generate registration link for driver
             app.MapGet("/drivers/{id}/telegram/registration-link",
-                [Authorize(Roles = "globalAdmin, customerAdmin")]
+                [Authorize(Roles = "globalAdmin, customerAdmin, driver")]
                 async (
                     Guid id,
                     ApplicationDbContext db,
@@ -141,6 +141,17 @@ namespace TruckManagement.Endpoints
                         if (driver == null)
                         {
                             return ApiResponseFactory.Error("Driver not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        // If user is a driver, verify they can only access their own link
+                        var userId = currentUser.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                        var isDriver = currentUser.IsInRole("driver");
+                        
+                        if (isDriver && driver.AspNetUserId != userId)
+                        {
+                            return ApiResponseFactory.Error(
+                                "You can only generate a registration link for yourself.", 
+                                StatusCodes.Status403Forbidden);
                         }
 
                         // Generate a unique registration token (24-hour validity)
@@ -175,7 +186,7 @@ namespace TruckManagement.Endpoints
 
             // DELETE /drivers/{id}/telegram - Disable Telegram notifications for driver
             app.MapDelete("/drivers/{id}/telegram",
-                [Authorize(Roles = "globalAdmin, customerAdmin")]
+                [Authorize(Roles = "globalAdmin, customerAdmin, driver")]
                 async (
                     Guid id,
                     ApplicationDbContext db,
@@ -188,6 +199,17 @@ namespace TruckManagement.Endpoints
                         if (driver == null)
                         {
                             return ApiResponseFactory.Error("Driver not found.", StatusCodes.Status404NotFound);
+                        }
+
+                        // If user is a driver, verify they can only disable their own notifications
+                        var userId = currentUser.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                        var isDriver = currentUser.IsInRole("driver");
+                        
+                        if (isDriver && driver.AspNetUserId != userId)
+                        {
+                            return ApiResponseFactory.Error(
+                                "You can only disable your own notifications.", 
+                                StatusCodes.Status403Forbidden);
                         }
 
                         // Clear Telegram registration data
