@@ -455,9 +455,10 @@ public static class RideWeekSubmissionEndpoints
                             WeekCount = g.Count(),
                             SignedWeekCount = g.Count(w => w.Status == WeekApprovalStatus.Signed),
                             PendingWeekCount = g.Count(w => w.Status == WeekApprovalStatus.PendingDriver),
-                            HasPendingWeeks = g.Any(w => w.Status == WeekApprovalStatus.PendingDriver)
+                            HasPendingWeeks = g.Any(w => w.Status == WeekApprovalStatus.PendingDriver),
+                            IsFullySigned = g.All(w => w.Status == WeekApprovalStatus.Signed)
                         })
-                        .Where(p => p.HasPendingWeeks) // Only periods with pending weeks
+                        .Where(p => !p.IsFullySigned) // Include periods that are NOT fully signed (all 4 weeks)
                         .OrderByDescending(p => p.Year)
                         .ThenByDescending(p => p.PeriodNr)
                         .ToList();
