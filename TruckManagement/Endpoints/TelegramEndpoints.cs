@@ -19,14 +19,16 @@ namespace TruckManagement.Endpoints
             app.MapPost("/telegram/webhook", async (
                 [FromBody] Update update,
                 ApplicationDbContext db,
-                IOptions<TelegramOptions> telegramOptions) =>
+                IOptions<TelegramOptions> telegramOptions,
+                ITelegramNotificationService telegramService) =>
             {
                 try
                 {
                     // Only handle text messages with /start command
                     if (update.Message?.Text == null || !update.Message.Text.StartsWith("/start"))
                     {
-                        return Results.Ok("Ignored");
+                        // Return empty 200 OK for Telegram
+                        return Results.Ok();
                     }
 
                     var chatId = update.Message.Chat.Id;
@@ -37,7 +39,14 @@ namespace TruckManagement.Endpoints
                     var parts = messageText.Split(' ', StringSplitOptions.RemoveEmptyEntries);
                     if (parts.Length < 2)
                     {
-                        return Results.Ok("No token provided");
+                        // No token - send help message to user
+                        await telegramService.SendMessageAsync(
+                            chatId, 
+                            "ℹ️ <b>Welkom bij VervoerManager Driver Bot!</b>\n\n" +
+                            "Om notificaties te ontvangen, moet je een activatielink gebruiken die je van je werkgever hebt ontvangen.\n\n" +
+                            "Neem contact op met je werkgever voor een activatielink.");
+                        
+                        return Results.Ok();
                     }
 
                     var registrationToken = parts[1];
@@ -51,8 +60,14 @@ namespace TruckManagement.Endpoints
 
                     if (driver == null)
                     {
-                        // Token expired or invalid
-                        return Results.Ok("Invalid or expired token");
+                        // Token expired or invalid - notify user
+                        await telegramService.SendMessageAsync(
+                            chatId, 
+                            "❌ <b>Activatielink ongeldig of verlopen</b>\n\n" +
+                            "Deze activatielink is niet meer geldig. Activatielinks zijn 24 uur geldig.\n\n" +
+                            "Vraag je werkgever om een nieuwe activatielink.");
+                        
+                        return Results.Ok();
                     }
 
                     // Register the driver's Telegram chat ID
@@ -64,12 +79,23 @@ namespace TruckManagement.Endpoints
 
                     await db.SaveChangesAsync();
 
-                    return Results.Ok("Driver registered successfully");
+                    // Send success message to driver
+                    await telegramService.SendMessageAsync(
+                        chatId, 
+                        "✅ <b>Registratie geslaagd!</b>\n\n" +
+                        "Je ontvangt nu meldingen over je ritten voor vandaag.");
+
+                    Console.WriteLine($"[Telegram Webhook] Driver {driver.Id} registered successfully with Chat ID {chatId}");
+                    
+                    return Results.Ok();
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"[Telegram Webhook] Error: {ex.Message}");
-                    return Results.Ok("Error processing webhook");
+                    Console.WriteLine($"[Telegram Webhook] Stack trace: {ex.StackTrace}");
+                    
+                    // Always return 200 OK to Telegram, even on errors
+                    return Results.Ok();
                 }
             }).AllowAnonymous(); // Webhook needs to be accessible without auth
 
