@@ -7,6 +7,7 @@ using TruckManagement.Data;
 using TruckManagement.DTOs;
 using TruckManagement.Entities;
 using TruckManagement.Helpers;
+using TruckManagement.Interfaces;
 
 namespace TruckManagement.Endpoints
 {
@@ -22,7 +23,8 @@ namespace TruckManagement.Endpoints
                     [FromBody] AssignRideRequest request,
                     ApplicationDbContext db,
                     UserManager<ApplicationUser> userManager,
-                    ClaimsPrincipal currentUser) =>
+                    ClaimsPrincipal currentUser,
+                    ITelegramNotificationService telegramService) =>
                 {
                     try
                     {
@@ -124,6 +126,22 @@ namespace TruckManagement.Endpoints
 
                         await db.SaveChangesAsync();
 
+                        // Send Telegram notification (awaited with timeout protection)
+                        if (request.DriverId.HasValue)
+                        {
+                            try
+                            {
+                                await telegramService.NotifyDriversOnRideAssignedAsync(
+                                    id, 
+                                    new List<Guid> { request.DriverId.Value });
+                            }
+                            catch (Exception ex)
+                            {
+                                // Log but don't fail the API call
+                                Console.WriteLine($"[Telegram] Notification failed: {ex.Message}");
+                            }
+                        }
+
                         return ApiResponseFactory.Success("Ride assignment updated successfully.");
                     }
                     catch (Exception ex)
@@ -140,7 +158,8 @@ namespace TruckManagement.Endpoints
                     [FromBody] AddSecondDriverRequest request,
                     ApplicationDbContext db,
                     UserManager<ApplicationUser> userManager,
-                    ClaimsPrincipal currentUser) =>
+                    ClaimsPrincipal currentUser,
+                    ITelegramNotificationService telegramService) =>
                 {
                     try
                     {
@@ -207,6 +226,40 @@ namespace TruckManagement.Endpoints
                         db.RideDriverAssignments.Add(newAssignment);
                         await db.SaveChangesAsync();
 
+                        // Get driver names for notifications
+                        var secondDriver = await db.Drivers
+                            .Include(d => d.User)
+                            .FirstOrDefaultAsync(d => d.Id == request.DriverId);
+                        
+                        var secondDriverName = secondDriver != null 
+                            ? $"{secondDriver.User?.FirstName} {secondDriver.User?.LastName}".Trim()
+                            : "Onbekend";
+
+                        var primaryAssignmentId = ride.DriverAssignments.FirstOrDefault(da => da.IsPrimary)?.DriverId;
+
+                        // Notify both drivers (awaited with error handling)
+                        try
+                        {
+                            // Notify in parallel for speed
+                            var notificationTasks = new List<Task>
+                            {
+                                telegramService.NotifyDriversOnRideAssignedAsync(id, new List<Guid> { request.DriverId })
+                            };
+
+                            if (primaryAssignmentId.HasValue)
+                            {
+                                notificationTasks.Add(
+                                    telegramService.NotifyDriverOnSecondDriverAddedAsync(id, primaryAssignmentId.Value, secondDriverName)
+                                );
+                            }
+
+                            await Task.WhenAll(notificationTasks);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[Telegram] Notification failed: {ex.Message}");
+                        }
+
                         return ApiResponseFactory.Success("Second driver added successfully.", StatusCodes.Status201Created);
                     }
                     catch (Exception ex)
@@ -222,7 +275,8 @@ namespace TruckManagement.Endpoints
                     Guid id,
                     ApplicationDbContext db,
                     UserManager<ApplicationUser> userManager,
-                    ClaimsPrincipal currentUser) =>
+                    ClaimsPrincipal currentUser,
+                    ITelegramNotificationService telegramService) =>
                 {
                     try
                     {
@@ -269,8 +323,26 @@ namespace TruckManagement.Endpoints
                             return ApiResponseFactory.Error("No second driver assigned to this ride.", StatusCodes.Status404NotFound);
                         }
 
+                        // Save info BEFORE deleting
+                        var removedDriverId = secondDriver.DriverId;
+                        var rideDetails = $"{ride.PlannedDate:dd-MM-yyyy} {ride.PlannedStartTime:hh\\:mm}";
+                        var isToday = ride.PlannedDate.HasValue && ride.PlannedDate.Value.Date == DateTime.UtcNow.Date;
+
                         db.RideDriverAssignments.Remove(secondDriver);
                         await db.SaveChangesAsync();
+
+                        // Notify removed driver (awaited with error handling)
+                        if (isToday)
+                        {
+                            try
+                            {
+                                await telegramService.NotifyDriverOnRemovedFromRideAsync(removedDriverId, rideDetails);
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"[Telegram] Notification failed: {ex.Message}");
+                            }
+                        }
 
                         return ApiResponseFactory.Success("Second driver removed successfully.");
                     }
@@ -370,7 +442,8 @@ namespace TruckManagement.Endpoints
                     [FromBody] UpdateRideDetailsRequest request,
                     ApplicationDbContext db,
                     UserManager<ApplicationUser> userManager,
-                    ClaimsPrincipal currentUser) =>
+                    ClaimsPrincipal currentUser,
+                    ITelegramNotificationService telegramService) =>
                 {
                     try
                     {
@@ -410,6 +483,17 @@ namespace TruckManagement.Endpoints
                             }
                         }
 
+                        // Track changes for notification
+                        var changes = new List<string>();
+                        if (ride.RouteFromName != (string.IsNullOrWhiteSpace(request.RouteFromName) ? null : request.RouteFromName.Trim()))
+                            changes.Add($"Van locatie: {request.RouteFromName}");
+                        if (ride.RouteToName != (string.IsNullOrWhiteSpace(request.RouteToName) ? null : request.RouteToName.Trim()))
+                            changes.Add($"Naar locatie: {request.RouteToName}");
+                        if (ride.PlannedStartTime != request.PlannedStartTime)
+                            changes.Add($"Starttijd: {request.PlannedStartTime:hh\\:mm}");
+                        if (ride.PlannedEndTime != request.PlannedEndTime)
+                            changes.Add($"Eindtijd: {request.PlannedEndTime:hh\\:mm}");
+
                         // Update ride details (treat empty strings as null)
                         ride.RouteFromName = string.IsNullOrWhiteSpace(request.RouteFromName) ? null : request.RouteFromName.Trim();
                         ride.RouteToName = string.IsNullOrWhiteSpace(request.RouteToName) ? null : request.RouteToName.Trim();
@@ -418,6 +502,20 @@ namespace TruckManagement.Endpoints
                         ride.PlannedEndTime = request.PlannedEndTime;
 
                         await db.SaveChangesAsync();
+
+                        // Send Telegram notification if there were changes (awaited with error handling)
+                        if (changes.Any())
+                        {
+                            try
+                            {
+                                var changesSummary = string.Join("\n", changes.Select(c => $"- {c}"));
+                                await telegramService.NotifyDriversOnRideUpdatedAsync(id, changesSummary);
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"[Telegram] Notification failed: {ex.Message}");
+                            }
+                        }
 
                         var response = new RideDetailsDto
                         {
@@ -446,7 +544,8 @@ namespace TruckManagement.Endpoints
                     [FromBody] UpdateTripNumberRequest request,
                     ApplicationDbContext db,
                     UserManager<ApplicationUser> userManager,
-                    ClaimsPrincipal currentUser) =>
+                    ClaimsPrincipal currentUser,
+                    ITelegramNotificationService telegramService) =>
                 {
                     try
                     {
@@ -487,9 +586,26 @@ namespace TruckManagement.Endpoints
                             }
                         }
 
+                        // Track change for notification
+                        var tripNumberChanged = ride.TripNumber != request.TripNumber;
+
                         // Update trip number
                         ride.TripNumber = request.TripNumber;
                         await db.SaveChangesAsync();
+
+                        // Send Telegram notification if trip number changed (awaited with error handling)
+                        if (tripNumberChanged)
+                        {
+                            try
+                            {
+                                var changesSummary = $"- Ritnummer: {request.TripNumber}";
+                                await telegramService.NotifyDriversOnRideUpdatedAsync(id, changesSummary);
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"[Telegram] Notification failed: {ex.Message}");
+                            }
+                        }
 
                         var response = new
                         {
