@@ -17,22 +17,46 @@ namespace TruckManagement.Endpoints
         {
             // POST /telegram/webhook - Telegram bot webhook endpoint (for automatic registration)
             app.MapPost("/telegram/webhook", async (
-                [FromBody] Update update,
+                HttpContext context,
                 ApplicationDbContext db,
                 IOptions<TelegramOptions> telegramOptions,
                 ITelegramNotificationService telegramService) =>
             {
                 try
                 {
-                    // Only handle text messages with /start command
-                    if (update.Message?.Text == null || !update.Message.Text.StartsWith("/start"))
+                    // Read raw JSON from request body
+                    using var reader = new StreamReader(context.Request.Body);
+                    var json = await reader.ReadToEndAsync();
+                    
+                    Console.WriteLine($"[Telegram Webhook] Received update: {json}");
+
+                    // Parse JSON manually to extract message text and chat ID
+                    using var doc = System.Text.Json.JsonDocument.Parse(json);
+                    var root = doc.RootElement;
+
+                    // Check if this is a message update with text
+                    if (!root.TryGetProperty("message", out var message) ||
+                        !message.TryGetProperty("text", out var textElement))
                     {
-                        // Return empty 200 OK for Telegram
+                        // Not a text message, return 200 OK
                         return Results.Ok();
                     }
 
-                    var chatId = update.Message.Chat.Id;
-                    var messageText = update.Message.Text;
+                    var messageText = textElement.GetString();
+                    if (string.IsNullOrEmpty(messageText) || !messageText.StartsWith("/start"))
+                    {
+                        // Not a /start command, return 200 OK
+                        return Results.Ok();
+                    }
+
+                    // Extract chat ID
+                    if (!message.TryGetProperty("chat", out var chat) ||
+                        !chat.TryGetProperty("id", out var chatIdElement))
+                    {
+                        return Results.Ok();
+                    }
+
+                    var chatId = chatIdElement.GetInt64();
 
                     // Extract registration token from /start command
                     // Format: /start TOKEN
