@@ -938,8 +938,9 @@ namespace TruckManagement.Endpoints
                         await transaction.RollbackAsync();
                         Console.WriteLine($"[Error] {ex.Message}");
                         Console.WriteLine($"[StackTrace] {ex.StackTrace}");
+                        // DEBUG: Return actual error to help diagnose
                         return ApiResponseFactory.Error(
-                            "An unexpected error occurred while updating the driver.",
+                            $"Error updating driver: {ex.Message} | Inner: {ex.InnerException?.Message}",
                             StatusCodes.Status500InternalServerError
                         );
                     }
