@@ -79,11 +79,13 @@ public static class RidePeriodEndpoints
                     // Calculate totals
                     var totalHours = Math.Round(executions.Sum(e => e.DecimalHours ?? 0), 2);
                     var totalCompensation = Math.Round(executions.Sum(e =>
+                        (e.HourlyCompensation ?? 0) +
                         (e.NightAllowance ?? 0) +
                         (e.KilometerReimbursement ?? 0) +
                         (e.ConsignmentFee ?? 0) +
                         (e.VariousCompensation ?? 0) +
                         (e.TaxFreeCompensation ?? 0)), 2);
+                    var totalExceedingContainerWaitingTime = Math.Round(executions.Sum(e => e.ExceedingContainerWaitingTime ?? 0), 2);
 
                     // Build week summaries
                     var weekSummaries = new List<object>();
@@ -99,11 +101,13 @@ public static class RidePeriodEndpoints
                             WeekInPeriod = i + 1,
                             TotalHours = Math.Round(weekExecutions.Sum(e => e.DecimalHours ?? 0), 2),
                             TotalCompensation = Math.Round(weekExecutions.Sum(e =>
+                                (e.HourlyCompensation ?? 0) +
                                 (e.NightAllowance ?? 0) +
                                 (e.KilometerReimbursement ?? 0) +
                                 (e.ConsignmentFee ?? 0) +
                                 (e.VariousCompensation ?? 0) +
                                 (e.TaxFreeCompensation ?? 0)), 2),
+                            TotalExceedingContainerWaitingTime = Math.Round(weekExecutions.Sum(e => e.ExceedingContainerWaitingTime ?? 0), 2),
                             ExecutionCount = weekExecutions.Count,
                             Status = weekApproval?.Status ?? WeekApprovalStatus.PendingAdmin
                         });
@@ -134,6 +138,7 @@ public static class RidePeriodEndpoints
                         ToDate = toDate,
                         TotalHours = totalHours,
                         TotalCompensation = totalCompensation,
+                        TotalExceedingContainerWaitingTime = totalExceedingContainerWaitingTime,
                         Weeks = weekSummaries,
                         SignedAt = periodApproval?.DriverSignedAt
                     });
@@ -212,6 +217,7 @@ public static class RidePeriodEndpoints
 
                     var totalHours = (decimal)Math.Round(executions.Sum(e => e.DecimalHours ?? 0), 2);
                     var totalCompensation = (decimal)Math.Round(executions.Sum(e =>
+                        (e.HourlyCompensation ?? 0) +
                         (e.NightAllowance ?? 0) +
                         (e.KilometerReimbursement ?? 0) +
                         (e.ConsignmentFee ?? 0) +

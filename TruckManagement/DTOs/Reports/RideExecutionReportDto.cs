@@ -26,6 +26,7 @@ public class RideExecutionReportItemDto
     public string? HoursOptionName { get; set; }
     public decimal DecimalHours { get; set; }
     public decimal CorrectionTotalHours { get; set; }
+    public decimal HourlyCompensation { get; set; }
     public decimal NightAllowance { get; set; }
     public decimal KilometerReimbursement { get; set; }
     public decimal ConsignmentFee { get; set; }
@@ -35,6 +36,7 @@ public class RideExecutionReportItemDto
     public decimal SaturdayHours { get; set; }
     public decimal SundayHolidayHours { get; set; }
     public decimal VacationHoursEarned { get; set; }
+    public decimal ExceedingContainerWaitingTime { get; set; }
     public decimal ActualKilometers { get; set; }
     public decimal ExtraKilometers { get; set; }
     public decimal ActualCosts { get; set; }
@@ -45,6 +47,7 @@ public class RideExecutionReportItemDto
     public string CompanyName { get; set; } = string.Empty;
     public string? ClientName { get; set; }
     public decimal TotalCompensation =>
+        HourlyCompensation +
         NightAllowance +
         KilometerReimbursement +
         ConsignmentFee +
@@ -58,6 +61,7 @@ public class RideExecutionReportTotalsDto
     public int TotalExecutions { get; set; }
     public decimal TotalHours { get; set; }
     public decimal TotalCorrectedHours { get; set; }
+    public decimal TotalHourlyCompensation { get; set; }
     public decimal TotalNightAllowance { get; set; }
     public decimal TotalKilometerReimbursement { get; set; }
     public decimal TotalConsignmentFee { get; set; }
@@ -67,11 +71,13 @@ public class RideExecutionReportTotalsDto
     public decimal TotalSaturdayHours { get; set; }
     public decimal TotalSundayHolidayHours { get; set; }
     public decimal TotalVacationHoursEarned { get; set; }
+    public decimal TotalExceedingContainerWaitingTime { get; set; }
     public decimal TotalKilometers { get; set; }
     public decimal TotalExtraKilometers { get; set; }
     public decimal TotalActualCosts { get; set; }
     public decimal TotalTurnover { get; set; }
     public decimal TotalCompensation =>
+        TotalHourlyCompensation +
         TotalNightAllowance +
         TotalKilometerReimbursement +
         TotalConsignmentFee +

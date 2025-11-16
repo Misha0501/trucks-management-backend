@@ -28,7 +28,8 @@ namespace TruckManagement.Services
                 HoursCodeId: execution.HoursCodeId ?? Guid.Parse("AAAA1111-1111-1111-1111-111111111111"), // Default hours code
                 HoursOptionId: execution.HoursOptionId,
                 ExtraKilometers: (double)(execution.ExtraKilometers ?? 0),
-                CorrectionTotalHours: (double)execution.CorrectionTotalHours
+                CorrectionTotalHours: (double)execution.CorrectionTotalHours,
+                ContainerWaitingTime: execution.ContainerWaitingTime
             );
 
             var result = await _calculator.CalculateAsync(calcContext);
@@ -46,6 +47,8 @@ namespace TruckManagement.Services
             execution.PeriodNumber = result.PeriodNumber;
             execution.WeekNrInPeriod = result.WeekNrInPeriod;
             execution.VacationHoursEarned = (decimal)result.VacationHoursEarned;
+            execution.HourlyCompensation = (decimal)result.HourlyCompensation;
+            execution.ExceedingContainerWaitingTime = (decimal)result.ExceedingContainerWaitingTime;
             
             // Calculate week number
             execution.WeekNumber = DateHelper.GetIso8601WeekOfYear(executionDate);

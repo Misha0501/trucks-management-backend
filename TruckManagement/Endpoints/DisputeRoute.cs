@@ -761,7 +761,8 @@ namespace TruckManagement.Endpoints
                                 HoursCodeId: dispute.PartRide.HoursCodeId ?? Guid.Empty,
                                 HoursOptionId: dispute.PartRide.HoursOptionId,
                                 ExtraKilometers: dispute.PartRide.ExtraKilometers ?? 0,
-                                CorrectionTotalHours: dispute.PartRide.CorrectionTotalHours
+                                CorrectionTotalHours: dispute.PartRide.CorrectionTotalHours,
+                                ContainerWaitingTime: null
                             );
                             var calcResult = await calculator.CalculateAsync(calcContext);
                             dispute.PartRide.ApplyCalculated(calcResult);

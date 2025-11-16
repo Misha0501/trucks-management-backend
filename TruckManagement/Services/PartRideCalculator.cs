@@ -18,7 +18,8 @@ public record PartRideCalculationContext(
     Guid     HoursCodeId,
     Guid?    HoursOptionId,
     double   ExtraKilometers,
-    double   CorrectionTotalHours);
+    double   CorrectionTotalHours,
+    TimeSpan? ContainerWaitingTime);
 
 // ────────────────────────────────────────────────────────────────
 // 2. Result → property names match PartRide exactly
@@ -35,7 +36,9 @@ public record PartRideCalculationResult(
     TimeSpan RestCalculated,
     int PeriodNumber,
     int WeekNrInPeriod,
-    double VacationHoursEarned
+    double VacationHoursEarned,
+    double HourlyCompensation,
+    double ExceedingContainerWaitingTime
     );
 
 public sealed class PartRideCalculator
@@ -196,6 +199,17 @@ public sealed class PartRideCalculator
 
         if (string.Equals(hoursCode.Name, "Holiday", StringComparison.OrdinalIgnoreCase)) { vacationHoursEarned = -netHours; }
         
+        // Calculate hourly compensation: DecimalHours * DriverRatePerHour
+        double hourlyCompensation = netHours * (double)compensation.DriverRatePerHour;
+        
+        // Calculate exceeding container waiting time: max(0, ContainerWaitingTime - 2 hours)
+        double exceedingContainerWaitingTime = 0;
+        if (c.ContainerWaitingTime.HasValue)
+        {
+            double containerWaitingHours = c.ContainerWaitingTime.Value.TotalHours;
+            exceedingContainerWaitingTime = Math.Max(0, containerWaitingHours - 2.0);
+        }
+        
         // 4. Return with your *exact* property names
         return new PartRideCalculationResult(
             DecimalHours          : netHours,
@@ -209,7 +223,9 @@ public sealed class PartRideCalculator
             RestCalculated        : TimeSpan.FromHours(totalBreakCalculated),
             PeriodNumber          : periodNr,
             WeekNrInPeriod        : weekNrInPeriod,
-            VacationHoursEarned   : vacationHoursEarned
+            VacationHoursEarned   : vacationHoursEarned,
+            HourlyCompensation    : hourlyCompensation,
+            ExceedingContainerWaitingTime: exceedingContainerWaitingTime
             );
     }
 }

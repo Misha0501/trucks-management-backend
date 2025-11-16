@@ -98,12 +98,14 @@ public static class RideWeekSubmissionEndpoints
                             ExecutionCount = g.Count(),
                             TotalHours = Math.Round(g.Sum(e => e.DecimalHours ?? 0), 2),
                             TotalCompensation = Math.Round(g.Sum(e => 
+                                (e.HourlyCompensation ?? 0) +
                                 (e.NightAllowance ?? 0) +
                                 (e.KilometerReimbursement ?? 0) +
                                 (e.ConsignmentFee ?? 0) +
                                 (e.VariousCompensation ?? 0) +
                                 (e.TaxFreeCompensation ?? 0)
                             ), 2),
+                            TotalExceedingContainerWaitingTime = Math.Round(g.Sum(e => e.ExceedingContainerWaitingTime ?? 0), 2),
                             // Check if this week has already been submitted
                             WeekStartDate = GetWeekStartDate(g.Key.Year, g.Key.WeekNumber)
                         })
@@ -562,11 +564,13 @@ public static class RideWeekSubmissionEndpoints
 
                     var totalHours = Math.Round(executions.Sum(e => e.DecimalHours ?? 0), 2);
                     var totalCompensation = Math.Round(executions.Sum(e =>
+                        (e.HourlyCompensation ?? 0) +
                         (e.NightAllowance ?? 0) +
                         (e.KilometerReimbursement ?? 0) +
                         (e.ConsignmentFee ?? 0) +
                         (e.VariousCompensation ?? 0) +
                         (e.TaxFreeCompensation ?? 0)), 2);
+                    var totalExceedingContainerWaitingTime = Math.Round(executions.Sum(e => e.ExceedingContainerWaitingTime ?? 0), 2);
 
                     return ApiResponseFactory.Success(new
                     {
@@ -576,6 +580,7 @@ public static class RideWeekSubmissionEndpoints
                         Status = (int)weekApproval.Status,
                         TotalHours = totalHours,
                         TotalCompensation = totalCompensation,
+                        TotalExceedingContainerWaitingTime = totalExceedingContainerWaitingTime,
                         AdminAllowedAt = weekApproval.AdminAllowedAt,
                         Executions = executionDetails
                     });

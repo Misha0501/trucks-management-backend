@@ -215,6 +215,7 @@ namespace TruckManagement.Endpoints
                             PeriodNumber = execution.PeriodNumber,
                             WeekNrInPeriod = execution.WeekNrInPeriod,
                             WeekNumber = execution.WeekNumber,
+                            HourlyCompensation = execution.HourlyCompensation,
                             NightAllowance = execution.NightAllowance,
                             KilometerReimbursement = execution.KilometerReimbursement,
                             ConsignmentFee = execution.ConsignmentFee,
@@ -224,6 +225,7 @@ namespace TruckManagement.Endpoints
                             SaturdayHours = execution.SaturdayHours,
                             SundayHolidayHours = execution.SundayHolidayHours,
                             VacationHoursEarned = execution.VacationHoursEarned,
+                            ExceedingContainerWaitingTime = execution.ExceedingContainerWaitingTime,
                             Status = execution.Status,
                             HoursCodeId = execution.HoursCodeId,
                             HoursOptionId = execution.HoursOptionId,
@@ -302,6 +304,7 @@ namespace TruckManagement.Endpoints
                             PeriodNumber = execution.PeriodNumber,
                             WeekNrInPeriod = execution.WeekNrInPeriod,
                             WeekNumber = execution.WeekNumber,
+                            HourlyCompensation = execution.HourlyCompensation,
                             NightAllowance = execution.NightAllowance,
                             KilometerReimbursement = execution.KilometerReimbursement,
                             ConsignmentFee = execution.ConsignmentFee,
@@ -311,6 +314,7 @@ namespace TruckManagement.Endpoints
                             SaturdayHours = execution.SaturdayHours,
                             SundayHolidayHours = execution.SundayHolidayHours,
                             VacationHoursEarned = execution.VacationHoursEarned,
+                            ExceedingContainerWaitingTime = execution.ExceedingContainerWaitingTime,
                             Status = execution.Status,
                             HoursCodeId = execution.HoursCodeId,
                             HoursCodeName = execution.HoursCode?.Name,
@@ -414,6 +418,7 @@ namespace TruckManagement.Endpoints
                             PeriodNumber = e.PeriodNumber,
                             WeekNrInPeriod = e.WeekNrInPeriod,
                             WeekNumber = e.WeekNumber,
+                            HourlyCompensation = e.HourlyCompensation,
                             NightAllowance = e.NightAllowance,
                             KilometerReimbursement = e.KilometerReimbursement,
                             ConsignmentFee = e.ConsignmentFee,
@@ -423,6 +428,7 @@ namespace TruckManagement.Endpoints
                             SaturdayHours = e.SaturdayHours,
                             SundayHolidayHours = e.SundayHolidayHours,
                             VacationHoursEarned = e.VacationHoursEarned,
+                            ExceedingContainerWaitingTime = e.ExceedingContainerWaitingTime,
                             Status = e.Status,
                             HoursCodeId = e.HoursCodeId,
                             HoursCodeName = e.HoursCode?.Name,
@@ -980,16 +986,19 @@ namespace TruckManagement.Endpoints
                                 Remark = e.Remark,
                                 
                                 // Compensation
-                                TotalCompensation = (e.NightAllowance ?? 0) + 
+                                TotalCompensation = (e.HourlyCompensation ?? 0) +
+                                                   (e.NightAllowance ?? 0) + 
                                                    (e.KilometerReimbursement ?? 0) + 
                                                    (e.ConsignmentFee ?? 0) + 
                                                    (e.TaxFreeCompensation ?? 0) + 
                                                    (e.VariousCompensation ?? 0),
+                                HourlyCompensation = e.HourlyCompensation,
                                 NightAllowance = e.NightAllowance,
                                 KilometerReimbursement = e.KilometerReimbursement,
                                 TaxFreeCompensation = e.TaxFreeCompensation,
                                 ConsignmentFee = e.ConsignmentFee,
                                 VariousCompensation = e.VariousCompensation,
+                                ExceedingContainerWaitingTime = e.ExceedingContainerWaitingTime,
                                 
                                 // Work Classification
                                 HoursCodeId = e.HoursCodeId,

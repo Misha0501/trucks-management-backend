@@ -54,6 +54,17 @@ namespace TruckManagement.Entities
         public decimal? SundayHolidayHours { get; set; }
         public decimal? VacationHoursEarned { get; set; }
         
+        /// <summary>
+        /// Base hourly compensation: DecimalHours * DriverRatePerHour
+        /// </summary>
+        public decimal? HourlyCompensation { get; set; }
+        
+        /// <summary>
+        /// Container waiting time exceeding 2 hours: max(0, ContainerWaitingTime - 2)
+        /// Stored in hours as decimal
+        /// </summary>
+        public decimal? ExceedingContainerWaitingTime { get; set; }
+        
         // Status & References
         public RideDriverExecutionStatus Status { get; set; } = RideDriverExecutionStatus.Pending;
         
