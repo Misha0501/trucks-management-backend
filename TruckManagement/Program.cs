@@ -40,6 +40,11 @@ builder.Services.AddScoped<IContractStorageService, LocalContractStorageService>
 builder.Services.AddScoped<DriverContractPdfBuilder>();
 builder.Services.AddScoped<DriverContractService>();
 
+// Telegram notification services (Singleton because it's used in fire-and-forget scenarios)
+builder.Services.Configure<TelegramOptions>(
+    builder.Configuration.GetSection("Telegram"));
+builder.Services.AddSingleton<ITelegramNotificationService, TelegramNotificationService>();
+
 builder.Services.Configure<StorageOptions>(
     builder.Configuration.GetSection("Storage"));
 
@@ -129,5 +134,7 @@ app.MapRideExecutionCommentEndpoints();
 app.MapRideExecutionDisputeEndpoints();
 app.MapRideWeekSubmissionEndpoints();
 app.MapRidePeriodEndpoints();
+app.MapTelegramEndpoints();
+app.MapTelegramTestEndpoints();
 
 app.Run();
