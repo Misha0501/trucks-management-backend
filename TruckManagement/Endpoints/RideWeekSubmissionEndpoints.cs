@@ -553,12 +553,14 @@ public static class RideWeekSubmissionEndpoints
                         ActualEndTime = e.ActualEndTime?.ToString(@"hh\:mm"),
                         ActualRestTime = e.ActualRestTime?.ToString(@"hh\:mm"),
                         TotalHours = Math.Round(e.DecimalHours ?? 0, 2),
-                        Compensation = Math.Round(
+                        HourlyCompensation = Math.Round(e.HourlyCompensation ?? 0, 2),
+                        AdditionalCompensation = Math.Round(
                             (e.NightAllowance ?? 0) +
                             (e.KilometerReimbursement ?? 0) +
                             (e.ConsignmentFee ?? 0) +
                             (e.VariousCompensation ?? 0) +
                             (e.TaxFreeCompensation ?? 0), 2),
+                        ExceedingContainerWaitingTime = Math.Round(e.ExceedingContainerWaitingTime ?? 0, 2),
                         HoursCodeName = e.HoursCode?.Name
                     }).ToList();
 
