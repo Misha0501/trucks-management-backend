@@ -247,6 +247,96 @@ namespace TruckManagement.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
+            modelBuilder.Entity("TruckManagement.Entities.CAOPayScale", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("EffectiveFrom")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("EffectiveTo")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("EffectiveYear")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("FourWeekWage")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("HourlyWage100")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("HourlyWage130")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("HourlyWage150")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("MonthlyWage")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("Scale")
+                        .IsRequired()
+                        .HasMaxLength(1)
+                        .HasColumnType("character varying(1)");
+
+                    b.Property<int>("Step")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("WeeklyWage")
+                        .HasColumnType("numeric");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Scale", "Step", "EffectiveYear")
+                        .IsUnique();
+
+                    b.ToTable("CAOPayScales");
+                });
+
+            modelBuilder.Entity("TruckManagement.Entities.CAOVacationDays", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AgeFrom")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("AgeGroupDescription")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("AgeTo")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("EffectiveFrom")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("EffectiveTo")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("EffectiveYear")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("VacationDays")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgeFrom", "AgeTo", "EffectiveYear")
+                        .IsUnique();
+
+                    b.ToTable("CAOVacationDays");
+                });
+
             modelBuilder.Entity("TruckManagement.Entities.Cao", b =>
                 {
                     b.Property<int>("Id")
@@ -453,6 +543,63 @@ namespace TruckManagement.Migrations
                     b.ToTable("Clients");
                 });
 
+            modelBuilder.Entity("TruckManagement.Entities.ClientCapacityTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ClientId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("EndDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("FridayTrucks")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("MondayTrucks")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
+
+                    b.Property<int>("SaturdayTrucks")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("StartDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("SundayTrucks")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ThursdayTrucks")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TuesdayTrucks")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("WednesdayTrucks")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientId");
+
+                    b.HasIndex("CompanyId");
+
+                    b.ToTable("ClientCapacityTemplates");
+                });
+
             modelBuilder.Entity("TruckManagement.Entities.Company", b =>
                 {
                     b.Property<Guid>("Id")
@@ -561,6 +708,21 @@ namespace TruckManagement.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
+                    b.Property<long?>("TelegramChatId")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("TelegramNotificationsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("TelegramRegisteredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TelegramRegistrationToken")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("TelegramTokenExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AspNetUserId")
@@ -624,6 +786,109 @@ namespace TruckManagement.Migrations
                     b.HasKey("DriverId");
 
                     b.ToTable("DriverCompensationSettings");
+                });
+
+            modelBuilder.Entity("TruckManagement.Entities.DriverContractVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ContractDataSnapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid>("DriverId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("EmployeeContractId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("FileSize")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("GeneratedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("GeneratedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<bool>("IsLatestVersion")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("PdfFileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("PdfFilePath")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("VersionNumber")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeContractId");
+
+                    b.HasIndex("GeneratedByUserId");
+
+                    b.HasIndex("DriverId", "IsLatestVersion");
+
+                    b.HasIndex("DriverId", "VersionNumber")
+                        .IsUnique();
+
+                    b.ToTable("DriverContractVersions");
+                });
+
+            modelBuilder.Entity("TruckManagement.Entities.DriverDailyAvailability", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("AvailableHours")
+                        .HasColumnType("numeric");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DriverId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("DriverId", "Date")
+                        .IsUnique();
+
+                    b.ToTable("DriverDailyAvailabilities");
                 });
 
             modelBuilder.Entity("TruckManagement.Entities.DriverFile", b =>
@@ -709,6 +974,12 @@ namespace TruckManagement.Migrations
                     b.Property<decimal?>("CompensationPerMonthInclBtw")
                         .HasColumnType("numeric");
 
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedByUserId")
+                        .HasColumnType("text");
+
                     b.Property<DateTime?>("DateOfBirth")
                         .HasColumnType("timestamp with time zone");
 
@@ -744,6 +1015,9 @@ namespace TruckManagement.Migrations
 
                     b.Property<decimal?>("HourlyWage100Percent")
                         .HasColumnType("numeric");
+
+                    b.Property<string>("Iban")
+                        .HasColumnType("text");
 
                     b.Property<bool?>("KilometersAllowanceAllowed")
                         .HasColumnType("boolean");
@@ -1255,21 +1529,434 @@ namespace TruckManagement.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ClientId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("CompanyId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreationMethod")
                         .HasColumnType("text");
+
+                    b.Property<string>("ExecutionCompletionStatus")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("PlannedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<TimeSpan?>("PlannedEndTime")
+                        .HasColumnType("interval");
+
+                    b.Property<TimeSpan?>("PlannedStartTime")
+                        .HasColumnType("interval");
 
                     b.Property<string>("Remark")
                         .HasColumnType("text");
 
+                    b.Property<string>("RouteFromName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("RouteToName")
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("TotalPlannedHours")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("TripNumber")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("TruckId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("ClientId");
 
                     b.HasIndex("CompanyId");
 
+                    b.HasIndex("TruckId");
+
                     b.ToTable("Rides");
+                });
+
+            modelBuilder.Entity("TruckManagement.Entities.RideDriverAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("AssignedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DriverId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("PlannedHours")
+                        .HasColumnType("numeric");
+
+                    b.Property<Guid>("RideId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DriverId");
+
+                    b.HasIndex("RideId");
+
+                    b.ToTable("RideDriverAssignments");
+                });
+
+            modelBuilder.Entity("TruckManagement.Entities.RideDriverExecution", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("ActualCosts")
+                        .HasColumnType("numeric");
+
+                    b.Property<TimeSpan?>("ActualEndTime")
+                        .HasColumnType("interval");
+
+                    b.Property<decimal?>("ActualKilometers")
+                        .HasColumnType("numeric");
+
+                    b.Property<TimeSpan?>("ActualRestTime")
+                        .HasColumnType("interval");
+
+                    b.Property<TimeSpan?>("ActualStartTime")
+                        .HasColumnType("interval");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ApprovedBy")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("CharterId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("ConsignmentFee")
+                        .HasColumnType("numeric");
+
+                    b.Property<TimeSpan?>("ContainerWaitingTime")
+                        .HasColumnType("interval");
+
+                    b.Property<decimal>("CorrectionTotalHours")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("CostsDescription")
+                        .HasColumnType("text");
+
+                    b.Property<decimal?>("DecimalHours")
+                        .HasColumnType("numeric");
+
+                    b.Property<Guid>("DriverId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("EndKilometers")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("ExtraKilometers")
+                        .HasColumnType("numeric");
+
+                    b.Property<Guid?>("HoursCodeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("HoursOptionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal?>("KilometerReimbursement")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateTime>("LastModifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastModifiedBy")
+                        .HasColumnType("text");
+
+                    b.Property<decimal?>("NightAllowance")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("NumberOfHours")
+                        .HasColumnType("numeric");
+
+                    b.Property<int?>("PeriodNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Remark")
+                        .HasColumnType("text");
+
+                    b.Property<TimeSpan?>("RestCalculated")
+                        .HasColumnType("interval");
+
+                    b.Property<Guid>("RideId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("SaturdayHours")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("StandOver")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("StartKilometers")
+                        .HasColumnType("numeric");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SubmittedBy")
+                        .HasColumnType("text");
+
+                    b.Property<decimal?>("SundayHolidayHours")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("TaxFreeCompensation")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("Turnover")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("VacationHoursEarned")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("VariousCompensation")
+                        .HasColumnType("numeric");
+
+                    b.Property<int?>("WeekNrInPeriod")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("WeekNumber")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CharterId");
+
+                    b.HasIndex("DriverId");
+
+                    b.HasIndex("HoursCodeId");
+
+                    b.HasIndex("HoursOptionId");
+
+                    b.HasIndex("RideId", "DriverId")
+                        .IsUnique();
+
+                    b.ToTable("RideDriverExecutions");
+                });
+
+            modelBuilder.Entity("TruckManagement.Entities.RideDriverExecutionComment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Comment")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RideDriverExecutionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RideDriverExecutionId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("RideDriverExecutionComments");
+                });
+
+            modelBuilder.Entity("TruckManagement.Entities.RideDriverExecutionDispute", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ClosedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DriverId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ResolutionNotes")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ResolutionType")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ResolvedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ResolvedById")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("RideDriverExecutionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DriverId");
+
+                    b.HasIndex("ResolvedById");
+
+                    b.HasIndex("RideDriverExecutionId");
+
+                    b.ToTable("RideDriverExecutionDisputes");
+                });
+
+            modelBuilder.Entity("TruckManagement.Entities.RideDriverExecutionDisputeComment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AuthorUserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DisputeId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorUserId");
+
+                    b.HasIndex("DisputeId");
+
+                    b.ToTable("RideDriverExecutionDisputeComments");
+                });
+
+            modelBuilder.Entity("TruckManagement.Entities.RideDriverExecutionFile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<byte[]>("FileData")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("FileSize")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("RideDriverExecutionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UploadedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UploadedBy")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RideDriverExecutionId");
+
+                    b.ToTable("RideDriverExecutionFiles");
+                });
+
+            modelBuilder.Entity("TruckManagement.Entities.RidePeriodApproval", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DriverId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DriverPdfPath")
+                        .HasColumnType("text");
+
+                    b.Property<string>("DriverSignatureData")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("DriverSignedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DriverSignedIp")
+                        .HasColumnType("text");
+
+                    b.Property<string>("DriverSignedUserAgent")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("FromDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("PeriodNr")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("ToDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal?>("TotalCompensation")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("TotalHours")
+                        .HasColumnType("numeric");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DriverId", "Year", "PeriodNr")
+                        .IsUnique();
+
+                    b.ToTable("RidePeriodApprovals");
                 });
 
             modelBuilder.Entity("TruckManagement.Entities.Surcharge", b =>
@@ -1294,6 +1981,40 @@ namespace TruckManagement.Migrations
                     b.HasIndex("CompanyId");
 
                     b.ToTable("Surcharges");
+                });
+
+            modelBuilder.Entity("TruckManagement.Entities.TruckDailyAvailability", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("AvailableHours")
+                        .HasColumnType("numeric");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("TruckId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("TruckId", "Date")
+                        .IsUnique();
+
+                    b.ToTable("TruckDailyAvailabilities");
                 });
 
             modelBuilder.Entity("TruckManagement.Entities.Unit", b =>
@@ -1479,6 +2200,25 @@ namespace TruckManagement.Migrations
                     b.Navigation("Company");
                 });
 
+            modelBuilder.Entity("TruckManagement.Entities.ClientCapacityTemplate", b =>
+                {
+                    b.HasOne("TruckManagement.Entities.Client", "Client")
+                        .WithMany()
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TruckManagement.Entities.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Client");
+
+                    b.Navigation("Company");
+                });
+
             modelBuilder.Entity("TruckManagement.Entities.ContactPerson", b =>
                 {
                     b.HasOne("TruckManagement.Entities.ApplicationUser", "User")
@@ -1547,6 +2287,51 @@ namespace TruckManagement.Migrations
                         .HasForeignKey("TruckManagement.Entities.DriverCompensationSettings", "DriverId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Driver");
+                });
+
+            modelBuilder.Entity("TruckManagement.Entities.DriverContractVersion", b =>
+                {
+                    b.HasOne("TruckManagement.Entities.Driver", "Driver")
+                        .WithMany()
+                        .HasForeignKey("DriverId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TruckManagement.Entities.EmployeeContract", "EmployeeContract")
+                        .WithMany()
+                        .HasForeignKey("EmployeeContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TruckManagement.Entities.ApplicationUser", "GeneratedByUser")
+                        .WithMany()
+                        .HasForeignKey("GeneratedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Driver");
+
+                    b.Navigation("EmployeeContract");
+
+                    b.Navigation("GeneratedByUser");
+                });
+
+            modelBuilder.Entity("TruckManagement.Entities.DriverDailyAvailability", b =>
+                {
+                    b.HasOne("TruckManagement.Entities.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TruckManagement.Entities.Driver", "Driver")
+                        .WithMany()
+                        .HasForeignKey("DriverId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Company");
 
                     b.Navigation("Driver");
                 });
@@ -1749,13 +2534,166 @@ namespace TruckManagement.Migrations
 
             modelBuilder.Entity("TruckManagement.Entities.Ride", b =>
                 {
+                    b.HasOne("TruckManagement.Entities.Client", "Client")
+                        .WithMany()
+                        .HasForeignKey("ClientId");
+
                     b.HasOne("TruckManagement.Entities.Company", "Company")
                         .WithMany()
                         .HasForeignKey("CompanyId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("TruckManagement.Entities.Car", "Truck")
+                        .WithMany()
+                        .HasForeignKey("TruckId");
+
+                    b.Navigation("Client");
+
                     b.Navigation("Company");
+
+                    b.Navigation("Truck");
+                });
+
+            modelBuilder.Entity("TruckManagement.Entities.RideDriverAssignment", b =>
+                {
+                    b.HasOne("TruckManagement.Entities.Driver", "Driver")
+                        .WithMany()
+                        .HasForeignKey("DriverId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TruckManagement.Entities.Ride", "Ride")
+                        .WithMany("DriverAssignments")
+                        .HasForeignKey("RideId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Driver");
+
+                    b.Navigation("Ride");
+                });
+
+            modelBuilder.Entity("TruckManagement.Entities.RideDriverExecution", b =>
+                {
+                    b.HasOne("TruckManagement.Entities.Charter", "Charter")
+                        .WithMany()
+                        .HasForeignKey("CharterId");
+
+                    b.HasOne("TruckManagement.Entities.Driver", "Driver")
+                        .WithMany()
+                        .HasForeignKey("DriverId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TruckManagement.Entities.HoursCode", "HoursCode")
+                        .WithMany()
+                        .HasForeignKey("HoursCodeId");
+
+                    b.HasOne("TruckManagement.Entities.HoursOption", "HoursOption")
+                        .WithMany()
+                        .HasForeignKey("HoursOptionId");
+
+                    b.HasOne("TruckManagement.Entities.Ride", "Ride")
+                        .WithMany("DriverExecutions")
+                        .HasForeignKey("RideId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Charter");
+
+                    b.Navigation("Driver");
+
+                    b.Navigation("HoursCode");
+
+                    b.Navigation("HoursOption");
+
+                    b.Navigation("Ride");
+                });
+
+            modelBuilder.Entity("TruckManagement.Entities.RideDriverExecutionComment", b =>
+                {
+                    b.HasOne("TruckManagement.Entities.RideDriverExecution", "RideDriverExecution")
+                        .WithMany("Comments")
+                        .HasForeignKey("RideDriverExecutionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TruckManagement.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RideDriverExecution");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("TruckManagement.Entities.RideDriverExecutionDispute", b =>
+                {
+                    b.HasOne("TruckManagement.Entities.Driver", "Driver")
+                        .WithMany()
+                        .HasForeignKey("DriverId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TruckManagement.Entities.ApplicationUser", "ResolvedBy")
+                        .WithMany()
+                        .HasForeignKey("ResolvedById");
+
+                    b.HasOne("TruckManagement.Entities.RideDriverExecution", "RideDriverExecution")
+                        .WithMany("Disputes")
+                        .HasForeignKey("RideDriverExecutionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Driver");
+
+                    b.Navigation("ResolvedBy");
+
+                    b.Navigation("RideDriverExecution");
+                });
+
+            modelBuilder.Entity("TruckManagement.Entities.RideDriverExecutionDisputeComment", b =>
+                {
+                    b.HasOne("TruckManagement.Entities.ApplicationUser", "Author")
+                        .WithMany()
+                        .HasForeignKey("AuthorUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TruckManagement.Entities.RideDriverExecutionDispute", "Dispute")
+                        .WithMany("Comments")
+                        .HasForeignKey("DisputeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Author");
+
+                    b.Navigation("Dispute");
+                });
+
+            modelBuilder.Entity("TruckManagement.Entities.RideDriverExecutionFile", b =>
+                {
+                    b.HasOne("TruckManagement.Entities.RideDriverExecution", "RideDriverExecution")
+                        .WithMany("Files")
+                        .HasForeignKey("RideDriverExecutionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RideDriverExecution");
+                });
+
+            modelBuilder.Entity("TruckManagement.Entities.RidePeriodApproval", b =>
+                {
+                    b.HasOne("TruckManagement.Entities.Driver", "Driver")
+                        .WithMany()
+                        .HasForeignKey("DriverId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Driver");
                 });
 
             modelBuilder.Entity("TruckManagement.Entities.Surcharge", b =>
@@ -1775,6 +2713,25 @@ namespace TruckManagement.Migrations
                     b.Navigation("Client");
 
                     b.Navigation("Company");
+                });
+
+            modelBuilder.Entity("TruckManagement.Entities.TruckDailyAvailability", b =>
+                {
+                    b.HasOne("TruckManagement.Entities.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TruckManagement.Entities.Car", "Truck")
+                        .WithMany()
+                        .HasForeignKey("TruckId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Company");
+
+                    b.Navigation("Truck");
                 });
 
             modelBuilder.Entity("TruckManagement.Entities.ApplicationUser", b =>
@@ -1853,7 +2810,25 @@ namespace TruckManagement.Migrations
 
             modelBuilder.Entity("TruckManagement.Entities.Ride", b =>
                 {
+                    b.Navigation("DriverAssignments");
+
+                    b.Navigation("DriverExecutions");
+
                     b.Navigation("PartRides");
+                });
+
+            modelBuilder.Entity("TruckManagement.Entities.RideDriverExecution", b =>
+                {
+                    b.Navigation("Comments");
+
+                    b.Navigation("Disputes");
+
+                    b.Navigation("Files");
+                });
+
+            modelBuilder.Entity("TruckManagement.Entities.RideDriverExecutionDispute", b =>
+                {
+                    b.Navigation("Comments");
                 });
 
             modelBuilder.Entity("TruckManagement.Entities.WeekApproval", b =>

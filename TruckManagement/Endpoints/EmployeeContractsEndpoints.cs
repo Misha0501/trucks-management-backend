@@ -115,13 +115,33 @@ namespace TruckManagement.Endpoints
                             companyGuid = parsedCompanyId;
                         }
 
+                        // 3.5) Check if BSN already exists
+                        if (!string.IsNullOrWhiteSpace(request.Bsn))
+                        {
+                            var existingBsn = await db.EmployeeContracts
+                                .AnyAsync(ec => ec.Bsn == request.Bsn);
+                            
+                            if (existingBsn)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "A contract with this BSN already exists.",
+                                    StatusCodes.Status400BadRequest
+                                );
+                            }
+                        }
+
                         // 4) Build the EmployeeContract entity
+                        var currentUserId = userManager.GetUserId(currentUser);
                         var contract = new EmployeeContract
                         {
                             Id = Guid.NewGuid(),
                             DriverId = driverGuid,
                             CompanyId = companyGuid,
                             ReleaseVersion = 1.0m,
+
+                            // Contract creation tracking
+                            CreatedAt = DateTime.UtcNow,
+                            CreatedByUserId = currentUserId,
 
                             NightHoursAllowed = request.NightHoursAllowed,
                             KilometersAllowanceAllowed = request.KilometersAllowanceAllowed,
@@ -134,6 +154,7 @@ namespace TruckManagement.Endpoints
                             EmployeeCity = request.EmployeeCity,
                             DateOfBirth = request.DateOfBirth,
                             Bsn = request.Bsn,
+                            Iban = request.Iban,
                             DateOfEmployment = request.DateOfEmployment,
                             LastWorkingDay = request.LastWorkingDay,
 
@@ -191,6 +212,7 @@ namespace TruckManagement.Endpoints
                             contract.EmployeeCity,
                             contract.DateOfBirth,
                             contract.Bsn,
+                            contract.Iban,
                             contract.DateOfEmployment,
                             contract.LastWorkingDay,
 
@@ -244,7 +266,7 @@ namespace TruckManagement.Endpoints
                     ClaimsPrincipal currentUser,
                     ApplicationDbContext db,
                     int pageNumber = 1,
-                    int pageSize = 10
+                    int pageSize = 1000
                 ) =>
                 {
                     try
@@ -343,7 +365,7 @@ namespace TruckManagement.Endpoints
 
                         // 8) Pagination
                         if (pageNumber < 1) pageNumber = 1;
-                        if (pageSize < 1) pageSize = 10;
+                        if (pageSize < 1) pageSize = 1000;
 
                         var totalCount = await query.CountAsync();
 
@@ -388,6 +410,7 @@ namespace TruckManagement.Endpoints
                                 c.EmployeeCity,
                                 c.DateOfBirth,
                                 c.Bsn,
+                                c.Iban,
                                 c.DateOfEmployment,
                                 c.LastWorkingDay,
                                 c.Function,
@@ -527,6 +550,7 @@ namespace TruckManagement.Endpoints
                             contract.EmployeeCity,
                             contract.DateOfBirth,
                             contract.Bsn,
+                            contract.Iban,
                             contract.DateOfEmployment,
                             contract.LastWorkingDay,
                             contract.Function,
@@ -760,6 +784,21 @@ namespace TruckManagement.Endpoints
                             }
                         }
 
+                        // 5.5) Check BSN uniqueness if being updated
+                        if (!string.IsNullOrWhiteSpace(request.Bsn) && request.Bsn != contract.Bsn)
+                        {
+                            var existingBsn = await db.EmployeeContracts
+                                .AnyAsync(ec => ec.Bsn == request.Bsn && ec.Id != contract.Id);
+                            
+                            if (existingBsn)
+                            {
+                                return ApiResponseFactory.Error(
+                                    "A contract with this BSN already exists.",
+                                    StatusCodes.Status400BadRequest
+                                );
+                            }
+                        }
+
                         // 6) Update the contract
                         contract.CompanyId = finalCompanyId;
                         contract.DriverId = finalDriverId;
@@ -775,6 +814,7 @@ namespace TruckManagement.Endpoints
                         contract.EmployeeCity = request.EmployeeCity;
                         contract.DateOfBirth = request.DateOfBirth;
                         contract.Bsn = request.Bsn;
+                        contract.Iban = request.Iban;
                         contract.DateOfEmployment = request.DateOfEmployment;
                         contract.LastWorkingDay = request.LastWorkingDay;
 
@@ -896,6 +936,7 @@ namespace TruckManagement.Endpoints
                             contract.EmployeeCity,
                             contract.DateOfBirth,
                             contract.Bsn,
+                            contract.Iban,
                             contract.DateOfEmployment,
                             contract.LastWorkingDay,
                             contract.Function,

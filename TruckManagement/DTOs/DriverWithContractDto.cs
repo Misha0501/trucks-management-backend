@@ -32,6 +32,7 @@ namespace TruckManagement.DTOs
         // Personal Details
         public DateTime? DateOfBirth { get; set; }
         public string? BSN { get; set; }
+        public string? IBAN { get; set; }
         
         // Employment Details
         public DateTime? DateOfEmployment { get; set; }
@@ -82,6 +83,11 @@ namespace TruckManagement.DTOs
         public string? AccessCode { get; set; }
         public DateTime? SignedAt { get; set; }
         public string? SignedFileName { get; set; }
+        
+        // Contract Creation Tracking (for document generation)
+        public DateTime? ContractCreatedAt { get; set; }
+        public string? ContractCreatedByUserId { get; set; }
+        public string? ContractCreatedByUserName { get; set; }
         
         // Driver Files
         public List<DriverFileDto> Files { get; set; } = new List<DriverFileDto>();

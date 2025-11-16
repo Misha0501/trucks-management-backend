@@ -7,6 +7,7 @@ using TruckManagement.Data;
 using TruckManagement.DTOs;
 using TruckManagement.Entities;
 using TruckManagement.Helpers;
+using TruckManagement.Interfaces;
 
 namespace TruckManagement.Endpoints;
 
@@ -263,7 +264,7 @@ public static class RideEndpoints
                 UserManager<ApplicationUser> userManager,
                 ClaimsPrincipal currentUser,
                 [FromQuery] int pageNumber = 1,
-                [FromQuery] int pageSize = 10
+                [FromQuery] int pageSize = 1000
             ) =>
             {
                 try
@@ -478,7 +479,8 @@ public static class RideEndpoints
                 string id,
                 ApplicationDbContext db,
                 UserManager<ApplicationUser> userManager,
-                ClaimsPrincipal currentUser
+                ClaimsPrincipal currentUser,
+                ITelegramNotificationService telegramService
             ) =>
             {
                 try
@@ -491,6 +493,7 @@ public static class RideEndpoints
 
                     var ride = await db.Rides
                         .Include(r => r.PartRides) // Check for related PartRides
+                        .Include(r => r.DriverAssignments) // Include drivers for notification
                         .FirstOrDefaultAsync(r => r.Id == rideGuid);
 
                     if (ride == null)
@@ -541,9 +544,26 @@ public static class RideEndpoints
                         );
                     }
 
+                    // Save driver IDs BEFORE deleting for notification
+                    var assignedDriverIds = ride.DriverAssignments.Select(da => da.DriverId).ToList();
+                    var isToday = ride.PlannedDate.HasValue && ride.PlannedDate.Value.Date == DateTime.UtcNow.Date;
+
                     // Delete the ride
                     db.Rides.Remove(ride);
                     await db.SaveChangesAsync();
+
+                    // Send Telegram notification to all assigned drivers (awaited with error handling)
+                    if (isToday && assignedDriverIds.Any())
+                    {
+                        try
+                        {
+                            await telegramService.NotifyDriversOnRideDeletedAsync(rideGuid, assignedDriverIds);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[Telegram] Notification failed: {ex.Message}");
+                        }
+                    }
 
                     return ApiResponseFactory.Success("Ride deleted successfully.", StatusCodes.Status200OK);
                 }

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Localization;
 using TruckManagement.Api.Endpoints;
 using TruckManagement.Endpoints;
 using TruckManagement.Extensions;
+using TruckManagement.Interfaces;
 using TruckManagement.Options;
 using TruckManagement.Routes;
 using TruckManagement.Seeding;
@@ -33,6 +34,17 @@ builder.Services.AddCors(options =>
     });
 });
 builder.Services.AddScoped<DriverCompensationService>();
+
+// Contract generation services
+builder.Services.AddScoped<IContractStorageService, LocalContractStorageService>();
+builder.Services.AddScoped<DriverContractPdfBuilder>();
+builder.Services.AddScoped<DriverContractService>();
+
+// Telegram notification services (Singleton because it's used in fire-and-forget scenarios)
+builder.Services.Configure<TelegramOptions>(
+    builder.Configuration.GetSection("Telegram"));
+builder.Services.AddSingleton<ITelegramNotificationService, TelegramNotificationService>();
+
 builder.Services.Configure<StorageOptions>(
     builder.Configuration.GetSection("Storage"));
 
@@ -111,5 +123,18 @@ app.MapDriverFilesEndpoints();
 app.MapDisputeEndpoints();
 app.MapWeekToSubmitEndpoints();
 app.MapReportEndpoints();
+app.MapCapacityTemplateEndpoints();
+app.MapWeeklyPlanningEndpoints();
+app.MapRideAssignmentEndpoints();
+app.MapDailyPlanningEndpoints();
+app.MapAvailabilityEndpoints();
+app.MapRideExecutionEndpoints();
+app.MapRideExecutionFileEndpoints();
+app.MapRideExecutionCommentEndpoints();
+app.MapRideExecutionDisputeEndpoints();
+app.MapRideWeekSubmissionEndpoints();
+app.MapRidePeriodEndpoints();
+app.MapTelegramEndpoints();
+app.MapTelegramTestEndpoints();
 
 app.Run();

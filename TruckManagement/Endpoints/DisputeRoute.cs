@@ -28,14 +28,14 @@ namespace TruckManagement.Endpoints
                     UserManager<ApplicationUser> userManager,
                     ClaimsPrincipal currentUser,
                     [FromQuery] int pageNumber = 1,
-                    [FromQuery] int pageSize = 10
+                    [FromQuery] int pageSize = 1000
                 ) =>
                 {
                     try
                     {
                         /* ---------- 1. parse & normalise query -------------------- */
                         if (pageNumber < 1) pageNumber = 1;
-                        if (pageSize < 1) pageSize = 10;
+                        if (pageSize < 1) pageSize = 1000;
 
                         var companyIdsRaw = http.Request.Query["companyIds"];
                         var companyGuids = GuidHelper.ParseGuids(companyIdsRaw, "companyIds");

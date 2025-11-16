@@ -31,12 +31,15 @@ public class VacationCalculator
             var age = year - contract.DateOfBirth.Value.Year;
             
             // Find appropriate vacation right based on age
+            var yearEndUtc = new DateTime(year, 12, 31, 23, 59, 59, DateTimeKind.Utc);
+            var yearStartUtc = new DateTime(year, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
             var vacationRight = await _db.VacationRights
                 .Where(vr => 
                     (vr.AgeFrom == null || age >= vr.AgeFrom) &&
                     (vr.AgeTo == null || age <= vr.AgeTo) &&
-                    vr.StartDate <= new DateTime(year, 12, 31) &&
-                    (vr.EndDate == null || vr.EndDate >= new DateTime(year, 1, 1)))
+                    vr.StartDate <= yearEndUtc &&
+                    (vr.EndDate == null || vr.EndDate >= yearStartUtc))
                 .OrderByDescending(vr => vr.StartDate)
                 .FirstOrDefaultAsync();
             
@@ -48,18 +51,30 @@ public class VacationCalculator
         
         var annualEntitlementHours = annualEntitlementDays * 8; // Convert to hours
         
-        // Calculate vacation hours from PartRides for the current year
-        var vacationHours = await _db.PartRides
+        // Calculate vacation hours from PartRides for the current year (legacy data)
+        var legacyVacationHours = await _db.PartRides
             .Where(pr => 
                 pr.DriverId == driverId && 
                 pr.Date.Year == year &&
                 pr.VacationHours.HasValue)
             .SumAsync(pr => pr.VacationHours ?? 0);
         
+        // Calculate vacation hours from RideDriverExecutions for the current year (new data)
+        var executionVacationHours = await _db.RideDriverExecutions
+            .Include(ex => ex.Ride)
+            .Where(ex =>
+                ex.DriverId == driverId &&
+                ex.Ride.PlannedDate.HasValue &&
+                ex.Ride.PlannedDate.Value.Year == year &&
+                ex.VacationHoursEarned.HasValue)
+            .SumAsync(ex => ex.VacationHoursEarned ?? 0);
+        
+        var totalVacationHours = (double)executionVacationHours + legacyVacationHours;
+        
         // Positive hours = earned, negative hours = used
-        var hoursUsed = Math.Abs(Math.Min(0, vacationHours)); // Only negative values (used)
-        var hoursEarned = Math.Max(0, vacationHours); // Only positive values (earned)
-        var hoursRemaining = vacationHours; // Net balance
+        var hoursUsed = Math.Abs(Math.Min(0, totalVacationHours)); // Only negative values (used)
+        var hoursEarned = Math.Max(0, totalVacationHours); // Only positive values (earned)
+        var hoursRemaining = totalVacationHours; // Net balance
         
         return new VacationSection
         {

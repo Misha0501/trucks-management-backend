@@ -16,6 +16,9 @@ namespace TruckManagement.Seeding
             // 2) Apply any pending migrations
             await dbContext.Database.MigrateAsync();
 
+            // 2.5) Seed CAO lookup tables (pay scales and vacation days)
+            await CAODataSeeder.SeedCAODataAsync(dbContext);
+
             // 3) Seed roles (including "client")
             var roleManager = serviceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
             var roles = new[]
@@ -36,49 +39,18 @@ namespace TruckManagement.Seeding
                 {
                     Id = defaultCompanyId,
                     Name = "DefaultCompany",
+                    Address = "Herengracht 100",
+                    Postcode = "1015 BS",
+                    City = "Amsterdam",
+                    Country = "Netherlands",
+                    PhoneNumber = "+31 20 123 4567",
+                    Email = "info@defaultcompany.nl",
                     IsApproved = true
                 });
                 await dbContext.SaveChangesAsync();
             }
 
-            // 5) Seed additional companies
-            var companiesToSeed = new List<Company>
-            {
-                new Company
-                {
-                    Id = Guid.Parse("22222222-2222-2222-2222-222222222222"),
-                    Name = "SecondCompany",
-                    IsApproved = true
-                },
-                new Company
-                {
-                    Id = Guid.Parse("33333333-3333-3333-3333-333333333333"),
-                    Name = "ThirdCompany",
-                    IsApproved = true
-                },
-                new Company
-                {
-                    Id = Guid.Parse("44444444-4444-4444-4444-444444444444"),
-                    Name = "FourthCompany",
-                    IsApproved = true
-                },
-                new Company
-                {
-                    Id = Guid.Parse("55555555-5555-5555-5555-555555555555"),
-                    Name = "5 Global Express",
-                    IsApproved = true
-                }
-            };
-
-            foreach (var comp in companiesToSeed)
-            {
-                if (!dbContext.Companies.IgnoreQueryFilters().Any(c => c.Id == comp.Id))
-                {
-                    dbContext.Companies.Add(comp);
-                }
-            }
-
-            await dbContext.SaveChangesAsync();
+            // 5) No additional companies - only DefaultCompany
 
             // 6) Seed sample users
             var userManager = serviceProvider.GetRequiredService<UserManager<ApplicationUser>>();
@@ -157,7 +129,7 @@ namespace TruckManagement.Seeding
                 }
             }
 
-            // Example #3: A driver user
+            // Example #3: Driver users (Emily, Driver2, Driver3)
             const string driverEmail = "driver@example.com";
             var driverUser = await userManager.Users
                 .IgnoreQueryFilters()
@@ -178,6 +150,54 @@ namespace TruckManagement.Seeding
                 if (result.Succeeded)
                 {
                     await userManager.AddToRoleAsync(driverUser, "driver");
+                }
+            }
+
+            // Driver 2
+            const string driver2Email = "driver2@example.com";
+            var driver2User = await userManager.Users
+                .IgnoreQueryFilters()
+                .SingleOrDefaultAsync(u => u.NormalizedEmail == driver2Email.ToUpper());
+
+            if (driver2User == null)
+            {
+                driver2User = new ApplicationUser
+                {
+                    UserName = driver2Email,
+                    Email = driver2Email,
+                    FirstName = "Michael",
+                    LastName = "Driver",
+                    IsApproved = true,
+                };
+
+                var result = await userManager.CreateAsync(driver2User, "Driver@123");
+                if (result.Succeeded)
+                {
+                    await userManager.AddToRoleAsync(driver2User, "driver");
+                }
+            }
+
+            // Driver 3
+            const string driver3Email = "driver3@example.com";
+            var driver3User = await userManager.Users
+                .IgnoreQueryFilters()
+                .SingleOrDefaultAsync(u => u.NormalizedEmail == driver3Email.ToUpper());
+
+            if (driver3User == null)
+            {
+                driver3User = new ApplicationUser
+                {
+                    UserName = driver3Email,
+                    Email = driver3Email,
+                    FirstName = "Sarah",
+                    LastName = "Driver",
+                    IsApproved = true,
+                };
+
+                var result = await userManager.CreateAsync(driver3User, "Driver@123");
+                if (result.Succeeded)
+                {
+                    await userManager.AddToRoleAsync(driver3User, "driver");
                 }
             }
 
@@ -207,16 +227,38 @@ namespace TruckManagement.Seeding
 
             await dbContext.SaveChangesAsync();
 
-            // 7) Seed Driver for driverUser
+            // 7) Seed Driver entities for all driver users
             if (!dbContext.Drivers.IgnoreQueryFilters().Any(d => d.AspNetUserId == driverUser.Id))
             {
                 var driver = new Driver
                 {
                     Id = Guid.NewGuid(),
-                    AspNetUserId = driverUser.Id, // link to the "driver"
+                    AspNetUserId = driverUser.Id, // Emily Driver
                     CompanyId = defaultCompanyId,
                 };
                 dbContext.Drivers.Add(driver);
+            }
+
+            if (!dbContext.Drivers.IgnoreQueryFilters().Any(d => d.AspNetUserId == driver2User.Id))
+            {
+                var driver2 = new Driver
+                {
+                    Id = Guid.NewGuid(),
+                    AspNetUserId = driver2User.Id, // Michael Driver
+                    CompanyId = defaultCompanyId,
+                };
+                dbContext.Drivers.Add(driver2);
+            }
+
+            if (!dbContext.Drivers.IgnoreQueryFilters().Any(d => d.AspNetUserId == driver3User.Id))
+            {
+                var driver3 = new Driver
+                {
+                    Id = Guid.NewGuid(),
+                    AspNetUserId = driver3User.Id, // Sarah Driver
+                    CompanyId = defaultCompanyId,
+                };
+                dbContext.Drivers.Add(driver3);
             }
 
             // 8) Seed ContactPerson for customerUser
@@ -392,21 +434,6 @@ namespace TruckManagement.Seeding
                     Remark = "Strategic partner",
                     CompanyId = defaultCompanyId,
                     IsApproved = true,
-                },
-                new Client
-                {
-                    Id = Guid.Parse("78777777-7777-7777-7777-777777777777"),
-                    Name = "78 Express Solutions",
-                    Tav = "TAV-Express",
-                    Address = "300 Express Road",
-                    Postcode = "30003",
-                    City = "Den Haag",
-                    Country = "Netherlands",
-                    PhoneNumber = "555-0003",
-                    Email = "support@express.com",
-                    Remark = "Strategic partner",
-                    CompanyId = Guid.Parse("55555555-5555-5555-5555-555555555555"),
-                    IsApproved = true,
                 }
             };
 
@@ -468,13 +495,13 @@ namespace TruckManagement.Seeding
                     .FirstOrDefault(cp => cp.AspNetUserId == customerUser.Id);
                 if (customerContact != null && !dbContext.ContactPersonClientCompanies.IgnoreQueryFilters().Any(cpc =>
                         cpc.ContactPersonId == customerContact.Id &&
-                        cpc.CompanyId == Guid.Parse("22222222-2222-2222-2222-222222222222")))
+                        cpc.CompanyId == defaultCompanyId))
                 {
                     dbContext.ContactPersonClientCompanies.Add(new ContactPersonClientCompany
                     {
                         Id = Guid.NewGuid(),
                         ContactPersonId = customerContact.Id,
-                        CompanyId = Guid.Parse("22222222-2222-2222-2222-222222222222"),
+                        CompanyId = defaultCompanyId,
                         ClientId = null // Customers are only associated with companies, not clients
                     });
                 }
@@ -488,13 +515,13 @@ namespace TruckManagement.Seeding
                 if (customerAdminContact != null && !dbContext.ContactPersonClientCompanies.IgnoreQueryFilters().Any(
                         cpc =>
                             cpc.ContactPersonId == customerAdminContact.Id &&
-                            cpc.CompanyId == Guid.Parse("22222222-2222-2222-2222-222222222222")))
+                            cpc.CompanyId == defaultCompanyId))
                 {
                     dbContext.ContactPersonClientCompanies.Add(new ContactPersonClientCompany
                     {
                         Id = Guid.NewGuid(),
                         ContactPersonId = customerAdminContact.Id,
-                        CompanyId = Guid.Parse("22222222-2222-2222-2222-222222222222"),
+                        CompanyId = defaultCompanyId,
                         ClientId = null // Customer admins are only associated with companies
                     });
                 }

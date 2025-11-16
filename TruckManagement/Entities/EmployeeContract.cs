@@ -30,6 +30,7 @@ namespace TruckManagement.Entities
 
         public DateTime? DateOfBirth { get; set; }
         public string? Bsn { get; set; } = null!;
+        public string? Iban { get; set; } = null!;
         public DateTime? DateOfEmployment { get; set; }
         public DateTime? LastWorkingDay { get; set; }
 
@@ -74,5 +75,9 @@ namespace TruckManagement.Entities
         public string? SignedByIp { get; set; }
         public string? SignedUserAgent { get; set; }
         public string? SignatureText { get; set; }
+
+        // Contract creation tracking (for contract document generation)
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public string? CreatedByUserId { get; set; }
     }
 }

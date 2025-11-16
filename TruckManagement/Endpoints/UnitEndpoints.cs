@@ -66,7 +66,7 @@ public static class UnitRoutes
             async (
                 ApplicationDbContext db,
                 [FromQuery] int pageNumber = 1,
-                [FromQuery] int pageSize = 10
+                [FromQuery] int pageSize = 1000
             ) =>
             {
                 if (pageNumber < 1 || pageSize < 1)

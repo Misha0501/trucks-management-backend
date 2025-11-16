@@ -18,6 +18,8 @@ services:
       - Smtp__FromAddress=${SMTP_FROM_ADDRESS}
       - FrontEnd__ResetPasswordUrl=${FRONTEND_RESET_PASSWORD_URL}
       - Storage__BasePath=/app/storage
+      - Telegram__BotToken=${TELEGRAM_BOT_TOKEN}
+      - Telegram__BotUsername=VervoerManager_Driver_Bot
     volumes:
       - app_storage:/app/storage
     ports:
