@@ -1,5 +1,4 @@
 ﻿FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
-USER $APP_UID
 WORKDIR /app
 EXPOSE 8080
 EXPOSE 8081
@@ -20,4 +19,9 @@ RUN dotnet publish "TruckManagement.csproj" -c $BUILD_CONFIGURATION -o /app/publ
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+
+# Create storage directories with proper permissions
+RUN mkdir -p /app/storage/contracts /app/storage/tmp /app/storage/companies && \
+    chmod -R 777 /app/storage
+
 ENTRYPOINT ["dotnet", "TruckManagement.dll"]

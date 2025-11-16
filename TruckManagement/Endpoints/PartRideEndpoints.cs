@@ -164,7 +164,8 @@ public static class PartRideEndpoints
                         HoursCodeId: partRide.HoursCodeId.Value,
                         HoursOptionId: partRide.HoursOptionId,
                         ExtraKilometers: partRide.ExtraKilometers ?? 0,
-                        CorrectionTotalHours: partRide.CorrectionTotalHours);
+                        CorrectionTotalHours: partRide.CorrectionTotalHours,
+                        ContainerWaitingTime: null);
 
                     var result = await calculator.CalculateAsync(calcContext);
                     partRide.ApplyCalculated(result);
@@ -579,7 +580,8 @@ public static class PartRideEndpoints
                         HoursCodeId: existingPartRide.HoursCodeId.Value,
                         HoursOptionId: existingPartRide.HoursOptionId,
                         ExtraKilometers: existingPartRide.ExtraKilometers ?? 0,
-                        CorrectionTotalHours: existingPartRide.CorrectionTotalHours);
+                        CorrectionTotalHours: existingPartRide.CorrectionTotalHours,
+                        ContainerWaitingTime: null);
                     var result = await calculator.CalculateAsync(calcContext);
                     existingPartRide.ApplyCalculated(result);
 

@@ -78,6 +78,7 @@ namespace TruckManagement.DTOs
         public int? WeekNumber { get; set; }
         
         // Compensation Fields
+        public decimal? HourlyCompensation { get; set; }
         public decimal? NightAllowance { get; set; }
         public decimal? KilometerReimbursement { get; set; }
         public decimal? ConsignmentFee { get; set; }
@@ -87,6 +88,7 @@ namespace TruckManagement.DTOs
         public decimal? SaturdayHours { get; set; }
         public decimal? SundayHolidayHours { get; set; }
         public decimal? VacationHoursEarned { get; set; }
+        public decimal? ExceedingContainerWaitingTime { get; set; }
         
         // Status & References
         public RideDriverExecutionStatus Status { get; set; }

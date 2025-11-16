@@ -98,12 +98,14 @@ public static class RideWeekSubmissionEndpoints
                             ExecutionCount = g.Count(),
                             TotalHours = Math.Round(g.Sum(e => e.DecimalHours ?? 0), 2),
                             TotalCompensation = Math.Round(g.Sum(e => 
+                                (e.HourlyCompensation ?? 0) +
                                 (e.NightAllowance ?? 0) +
                                 (e.KilometerReimbursement ?? 0) +
                                 (e.ConsignmentFee ?? 0) +
                                 (e.VariousCompensation ?? 0) +
                                 (e.TaxFreeCompensation ?? 0)
                             ), 2),
+                            TotalExceedingContainerWaitingTime = Math.Round(g.Sum(e => e.ExceedingContainerWaitingTime ?? 0), 2),
                             // Check if this week has already been submitted
                             WeekStartDate = GetWeekStartDate(g.Key.Year, g.Key.WeekNumber)
                         })
@@ -453,9 +455,10 @@ public static class RideWeekSubmissionEndpoints
                             WeekCount = g.Count(),
                             SignedWeekCount = g.Count(w => w.Status == WeekApprovalStatus.Signed),
                             PendingWeekCount = g.Count(w => w.Status == WeekApprovalStatus.PendingDriver),
-                            HasPendingWeeks = g.Any(w => w.Status == WeekApprovalStatus.PendingDriver)
+                            HasPendingWeeks = g.Any(w => w.Status == WeekApprovalStatus.PendingDriver),
+                            IsFullySigned = g.All(w => w.Status == WeekApprovalStatus.Signed)
                         })
-                        .Where(p => p.HasPendingWeeks) // Only periods with pending weeks
+                        .Where(p => !p.IsFullySigned) // Include periods that are NOT fully signed (all 4 weeks)
                         .OrderByDescending(p => p.Year)
                         .ThenByDescending(p => p.PeriodNr)
                         .ToList();
@@ -551,22 +554,26 @@ public static class RideWeekSubmissionEndpoints
                         ActualEndTime = e.ActualEndTime?.ToString(@"hh\:mm"),
                         ActualRestTime = e.ActualRestTime?.ToString(@"hh\:mm"),
                         TotalHours = Math.Round(e.DecimalHours ?? 0, 2),
-                        Compensation = Math.Round(
+                        HourlyCompensation = Math.Round(e.HourlyCompensation ?? 0, 2),
+                        AdditionalCompensation = Math.Round(
                             (e.NightAllowance ?? 0) +
                             (e.KilometerReimbursement ?? 0) +
                             (e.ConsignmentFee ?? 0) +
                             (e.VariousCompensation ?? 0) +
                             (e.TaxFreeCompensation ?? 0), 2),
+                        ExceedingContainerWaitingTime = Math.Round(e.ExceedingContainerWaitingTime ?? 0, 2),
                         HoursCodeName = e.HoursCode?.Name
                     }).ToList();
 
                     var totalHours = Math.Round(executions.Sum(e => e.DecimalHours ?? 0), 2);
                     var totalCompensation = Math.Round(executions.Sum(e =>
+                        (e.HourlyCompensation ?? 0) +
                         (e.NightAllowance ?? 0) +
                         (e.KilometerReimbursement ?? 0) +
                         (e.ConsignmentFee ?? 0) +
                         (e.VariousCompensation ?? 0) +
                         (e.TaxFreeCompensation ?? 0)), 2);
+                    var totalExceedingContainerWaitingTime = Math.Round(executions.Sum(e => e.ExceedingContainerWaitingTime ?? 0), 2);
 
                     return ApiResponseFactory.Success(new
                     {
@@ -576,6 +583,7 @@ public static class RideWeekSubmissionEndpoints
                         Status = (int)weekApproval.Status,
                         TotalHours = totalHours,
                         TotalCompensation = totalCompensation,
+                        TotalExceedingContainerWaitingTime = totalExceedingContainerWaitingTime,
                         AdminAllowedAt = weekApproval.AdminAllowedAt,
                         Executions = executionDetails
                     });
