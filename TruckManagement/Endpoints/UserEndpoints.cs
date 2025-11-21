@@ -358,7 +358,7 @@ public static class UserEndpoints
                 HttpContext httpContext
             ) =>
             {
-                // 1) Get the user’s ID from JWT claims (e.g., "sub")
+                // 1) Get the user's ID from JWT claims (e.g., "sub")
                 //    The GenerateJwtToken typically sets user.Id in JwtRegisteredClaimNames.Sub
                 var userId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
                 if (string.IsNullOrEmpty(userId))
@@ -1686,6 +1686,130 @@ public static class UserEndpoints
                     );
                 }
             });
+
+        // GET /customeradmins => Paginated list of customer admin users
+        app.MapGet("/customeradmins",
+            [Authorize(Roles = "globalAdmin")]
+            async (
+                ApplicationDbContext db,
+                UserManager<ApplicationUser> userManager,
+                [FromQuery] int pageNumber = 1,
+                [FromQuery] int pageSize = 1000,
+                [FromQuery] string? search = null
+            ) =>
+            {
+                try
+                {
+                    // Get all users with customerAdmin role
+                    var customerAdminRole = await db.Roles
+                        .FirstOrDefaultAsync(r => r.Name == "customerAdmin");
+
+                    if (customerAdminRole == null)
+                    {
+                        return ApiResponseFactory.Error(
+                            "CustomerAdmin role not found in the system.",
+                            StatusCodes.Status500InternalServerError
+                        );
+                    }
+
+                    // Query users who have the customerAdmin role
+                    var customerAdminUserIds = await db.UserRoles
+                        .Where(ur => ur.RoleId == customerAdminRole.Id)
+                        .Select(ur => ur.UserId)
+                        .ToListAsync();
+
+                    // Build the query for customer admin users
+                    IQueryable<ApplicationUser> query = db.Users
+                        .Where(u => customerAdminUserIds.Contains(u.Id))
+                        .AsNoTracking();
+
+                    // Apply search filter if provided
+                    if (!string.IsNullOrWhiteSpace(search))
+                    {
+                        var searchLower = search.ToLower();
+                        query = query.Where(u =>
+                            u.Email.ToLower().Contains(searchLower) ||
+                            u.FirstName.ToLower().Contains(searchLower) ||
+                            u.LastName.ToLower().Contains(searchLower)
+                        );
+                    }
+
+                    // Get total count for pagination
+                    var totalCount = await query.CountAsync();
+                    var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+
+                    // Apply pagination and get results
+                    var customerAdmins = await query
+                        .OrderBy(u => u.Email)
+                        .Skip((pageNumber - 1) * pageSize)
+                        .Take(pageSize)
+                        .Select(u => new
+                        {
+                            u.Id,
+                            u.Email,
+                            u.FirstName,
+                            u.LastName,
+                            u.Address,
+                            u.PhoneNumber,
+                            u.Postcode,
+                            u.City,
+                            u.Country,
+                            u.Remark,
+                            Roles = (from ur in db.UserRoles
+                                join r in db.Roles on ur.RoleId equals r.Id
+                                where ur.UserId == u.Id
+                                select r.Name).ToList(),
+                            
+                            ContactPersonInfo = (from cp in db.ContactPersons
+                                where cp.AspNetUserId == u.Id
+                                select new
+                                {
+                                    ContactPersonId = cp.Id,
+                                    AssociatedCompanies = (from cpc in db.ContactPersonClientCompanies
+                                        join c in db.Companies on cpc.CompanyId equals c.Id
+                                        where cpc.ContactPersonId == cp.Id && cpc.CompanyId.HasValue
+                                        select new
+                                        {
+                                            c.Id,
+                                            c.Name
+                                        }).Distinct().ToList(),
+                                    AssociatedClients = (from cpc in db.ContactPersonClientCompanies
+                                        join cl in db.Clients on cpc.ClientId equals cl.Id
+                                        where cpc.ContactPersonId == cp.Id && cpc.ClientId.HasValue
+                                        select new
+                                        {
+                                            cl.Id,
+                                            cl.Name
+                                        }).Distinct().ToList()
+                                }).FirstOrDefault()
+                        })
+                        .ToListAsync();
+
+                    // Build response data
+                    var responseData = new
+                    {
+                        TotalCount = totalCount,
+                        TotalPages = totalPages,
+                        PageNumber = pageNumber,
+                        PageSize = pageSize,
+                        Data = customerAdmins
+                    };
+
+                    return ApiResponseFactory.Success(responseData, StatusCodes.Status200OK);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Error] An error occurred while fetching customer admins.");
+                    Console.WriteLine($"[Error] Exception Message: {ex.Message}");
+                    Console.WriteLine($"[Error] Stack Trace: {ex.StackTrace}");
+
+                    return ApiResponseFactory.Error(
+                        "An unexpected error occurred while fetching customer admins.",
+                        StatusCodes.Status500InternalServerError
+                    );
+                }
+            });
+
         return app;
     }
 }
