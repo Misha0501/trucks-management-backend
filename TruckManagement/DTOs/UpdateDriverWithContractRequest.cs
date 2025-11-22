@@ -68,6 +68,9 @@ namespace TruckManagement.DTOs
         // Car Assignment
         public string? CarId { get; set; }
         
+        // Used By Companies (Many-to-Many)
+        public List<string>? UsedByCompanyIds { get; set; }
+        
         // File Management
         public List<UploadFileRequest>? NewUploads { get; set; }
         public List<Guid>? FileIdsToDelete { get; set; }

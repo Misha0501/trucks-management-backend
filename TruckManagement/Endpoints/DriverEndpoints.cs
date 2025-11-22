@@ -706,6 +706,45 @@ namespace TruckManagement.Endpoints
                             }
                         }
 
+                        // 7.5. Update "Used By" Companies (Many-to-Many)
+                        if (request.UsedByCompanyIds != null)
+                        {
+                            // Load existing relationships
+                            var existingUsedBy = await db.DriverUsedByCompanies
+                                .Where(duc => duc.DriverId == driverId)
+                                .ToListAsync();
+
+                            // Clear existing relationships
+                            db.DriverUsedByCompanies.RemoveRange(existingUsedBy);
+
+                            // Add new relationships if any
+                            if (request.UsedByCompanyIds.Any())
+                            {
+                                var usedByCompanyGuids = request.UsedByCompanyIds
+                                    .Where(id => Guid.TryParse(id, out _))
+                                    .Select(id => Guid.Parse(id))
+                                    .ToList();
+
+                                // Validate that all companies exist
+                                var validCompanies = await db.Companies
+                                    .Where(c => usedByCompanyGuids.Contains(c.Id) && !c.IsDeleted)
+                                    .Select(c => c.Id)
+                                    .ToListAsync();
+
+                                foreach (var companyId in validCompanies)
+                                {
+                                    db.DriverUsedByCompanies.Add(new DriverUsedByCompany
+                                    {
+                                        Id = Guid.NewGuid(),
+                                        DriverId = driverId,
+                                        CompanyId = companyId
+                                    });
+                                }
+                            }
+                            // If UsedByCompanyIds is empty list, all relationships are cleared (already done above)
+                        }
+                        // If UsedByCompanyIds is null, don't touch the relationships
+
                         // 8. Update or create EmployeeContract
                         var contract = await db.EmployeeContracts.FirstOrDefaultAsync(c => c.DriverId == driver.Id);
                         bool isNewContract = false;
@@ -859,6 +898,8 @@ namespace TruckManagement.Endpoints
                             .Include(d => d.Company)
                             .Include(d => d.Car)
                             .Include(d => d.Files)
+                            .Include(d => d.UsedByCompanies)
+                                .ThenInclude(duc => duc.Company)
                             .FirstOrDefaultAsync(d => d.Id == driverId);
 
                         var updatedContract = await db.EmployeeContracts
@@ -958,6 +999,15 @@ namespace TruckManagement.Endpoints
                                 ContentType = f.ContentType,
                                 UploadedAt = f.UploadedAt
                             }).ToList(),
+
+                            // Used By Companies
+                            UsedByCompanies = updatedDriver.UsedByCompanies
+                                .Select(duc => new CompanySimpleDto
+                                {
+                                    Id = duc.Company.Id,
+                                    Name = duc.Company.Name
+                                })
+                                .ToList(),
 
                             // Timestamps
                             CreatedAt = updatedContract?.DateOfEmployment ?? DateTime.UtcNow
