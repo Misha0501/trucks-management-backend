@@ -311,6 +311,8 @@ namespace TruckManagement.Routes
                         PhoneNumber = c.PhoneNumber,
                         Email = c.Email,
                         Remark = c.Remark,
+                        Kvk = c.Kvk,
+                        Btw = c.Btw,
                         IsApproved = c.IsApproved,
                         Company = new CompanyDto
                         {
@@ -421,6 +423,8 @@ namespace TruckManagement.Routes
                             newClient.PhoneNumber,
                             newClient.Email,
                             newClient.Remark,
+                            newClient.Kvk,
+                            newClient.Btw,
                             newClient.CompanyId,
                             newClient.IsApproved
                         }, StatusCodes.Status201Created);
@@ -682,6 +686,8 @@ namespace TruckManagement.Routes
                             client.PhoneNumber,
                             client.Email,
                             client.Remark,
+                            client.Kvk,
+                            client.Btw,
                             client.CompanyId
                         });
                     }
