@@ -116,6 +116,8 @@ public static class CompanyEndpoints
                         PhoneNumber = c.PhoneNumber,
                         Email = c.Email,
                         Remark = c.Remark,
+                        Kvk = c.Kvk,
+                        Btw = c.Btw,
                         IsApproved = c.IsApproved,
                         Drivers = c.Drivers.Select(d => new DriverDto
                         {
@@ -256,6 +258,8 @@ public static class CompanyEndpoints
                     company.PhoneNumber,
                     company.Email,
                     company.Remark,
+                    company.Kvk,
+                    company.Btw,
                     company.IsApproved,
                     company.IsDeleted,
                     Drivers = drivers,
@@ -326,6 +330,8 @@ public static class CompanyEndpoints
                         PhoneNumber = request.PhoneNumber,
                         Email = request.Email,
                         Remark = request.Remark,
+                        Kvk = request.Kvk,
+                        Btw = request.Btw,
                         IsApproved = isGlobalAdmin || isCustomerAdmin // Both get auto-approval
                     };
 
@@ -362,6 +368,8 @@ public static class CompanyEndpoints
                         PhoneNumber = newCompany.PhoneNumber,
                         Email = newCompany.Email,
                         Remark = newCompany.Remark,
+                        Kvk = newCompany.Kvk,
+                        Btw = newCompany.Btw,
                         IsApproved = newCompany.IsApproved,
                         Drivers = new List<DriverDto>() // New company has no drivers yet
                     };
@@ -457,6 +465,8 @@ public static class CompanyEndpoints
                 existing.PhoneNumber = request.PhoneNumber;
                 existing.Email = request.Email;
                 existing.Remark = request.Remark;
+                existing.Kvk = request.Kvk;
+                existing.Btw = request.Btw;
 
                 await db.SaveChangesAsync();
 
@@ -484,6 +494,8 @@ public static class CompanyEndpoints
                     PhoneNumber = updatedCompany.PhoneNumber,
                     Email = updatedCompany.Email,
                     Remark = updatedCompany.Remark,
+                    Kvk = updatedCompany.Kvk,
+                    Btw = updatedCompany.Btw,
                     IsApproved = updatedCompany.IsApproved,
                     Drivers = updatedCompany.Drivers
                         .Where(d => d.User != null) // ✅ Filter out drivers with null users

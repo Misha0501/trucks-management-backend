@@ -1171,13 +1171,13 @@ public static class UserEndpoints
                         driverEntity.CarId = null;
                     }
 
-                    // 12. Save changes to the database
+                    // 13. Save changes to the database
                     await db.SaveChangesAsync();
 
-                    // 13. Commit the transaction
+                    // 14. Commit the transaction
                     await transaction.CommitAsync();
 
-                    // 14. Retrieve updated driver information for the response
+                    // 15. Retrieve updated driver information for the response
                     var updatedDriver = await db.Drivers
                         .Include(d => d.Company)
                         .Include(d => d.Car)
@@ -1197,7 +1197,7 @@ public static class UserEndpoints
                             CarRegistrationDate = updatedDriver.Car?.RegistrationDate
                         };
 
-                    // 15. Return success response
+                    // 16. Return success response
                     return ApiResponseFactory.Success(driverInfo, StatusCodes.Status200OK);
                 }
                 catch (Exception ex)
