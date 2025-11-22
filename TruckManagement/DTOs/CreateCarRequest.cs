@@ -5,8 +5,13 @@ namespace TruckManagement.DTOs
         public string LicensePlate { get; set; } = string.Empty;
         public int? VehicleYear { get; set; }
         public DateOnly? RegistrationDate { get; set; }
+        public DateOnly? LeasingStartDate { get; set; }
+        public DateOnly? LeasingEndDate { get; set; }
         public string? Remark { get; set; }
         public string CompanyId { get; set; } = string.Empty;
         public List<UploadFileRequest>? NewUploads { get; set; }
+        
+        // Companies that can use this car
+        public List<string>? UsedByCompanyIds { get; set; }
     }
 }

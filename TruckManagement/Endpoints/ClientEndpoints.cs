@@ -147,6 +147,8 @@ namespace TruckManagement.Routes
                             PhoneNumber = c.PhoneNumber,
                             Email = c.Email,
                             Remark = c.Remark,
+                            Kvk = c.Kvk,
+                            Btw = c.Btw,
                             IsApproved = c.IsApproved,
                             LastWorkday = c.PartRides
                                 .OrderByDescending(pr => pr.Date)
@@ -397,6 +399,8 @@ namespace TruckManagement.Routes
                             PhoneNumber = request.PhoneNumber,
                             Email = request.Email,
                             Remark = request.Remark,
+                            Kvk = request.Kvk,
+                            Btw = request.Btw,
                             CompanyId = request.CompanyId,
                             IsApproved = isGlobalAdmin || isCustomerAdmin
                         };
@@ -645,6 +649,8 @@ namespace TruckManagement.Routes
                         client.PhoneNumber = request.PhoneNumber;
                         client.Email = request.Email;
                         client.Remark = request.Remark;
+                        client.Kvk = request.Kvk;
+                        client.Btw = request.Btw;
 
                         // Update CompanyId if provided
                         if (request.CompanyId.HasValue && request.CompanyId.Value != client.CompanyId)

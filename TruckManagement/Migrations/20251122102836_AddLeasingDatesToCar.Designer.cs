@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TruckManagement.Data;
@@ -11,9 +12,11 @@ using TruckManagement.Data;
 namespace TruckManagement.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251122102836_AddLeasingDatesToCar")]
+    partial class AddLeasingDatesToCar
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -471,28 +474,6 @@ namespace TruckManagement.Migrations
                     b.ToTable("CarFiles");
                 });
 
-            modelBuilder.Entity("TruckManagement.Entities.CarUsedByCompany", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CarId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CompanyId");
-
-                    b.HasIndex("CarId", "CompanyId")
-                        .IsUnique();
-
-                    b.ToTable("CarUsedByCompanies");
-                });
-
             modelBuilder.Entity("TruckManagement.Entities.Charter", b =>
                 {
                     b.Property<Guid>("Id")
@@ -530,9 +511,6 @@ namespace TruckManagement.Migrations
                     b.Property<string>("Address")
                         .HasColumnType("text");
 
-                    b.Property<string>("Btw")
-                        .HasColumnType("text");
-
                     b.Property<string>("City")
                         .HasColumnType("text");
 
@@ -550,9 +528,6 @@ namespace TruckManagement.Migrations
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
-
-                    b.Property<string>("Kvk")
-                        .HasColumnType("text");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -643,9 +618,6 @@ namespace TruckManagement.Migrations
                     b.Property<string>("Address")
                         .HasColumnType("text");
 
-                    b.Property<string>("Btw")
-                        .HasColumnType("text");
-
                     b.Property<string>("City")
                         .HasColumnType("text");
 
@@ -660,9 +632,6 @@ namespace TruckManagement.Migrations
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
-
-                    b.Property<string>("Kvk")
-                        .HasColumnType("text");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -2216,25 +2185,6 @@ namespace TruckManagement.Migrations
                     b.Navigation("Car");
                 });
 
-            modelBuilder.Entity("TruckManagement.Entities.CarUsedByCompany", b =>
-                {
-                    b.HasOne("TruckManagement.Entities.Car", "Car")
-                        .WithMany("UsedByCompanies")
-                        .HasForeignKey("CarId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("TruckManagement.Entities.Company", "Company")
-                        .WithMany("CarsUsedByThisCompany")
-                        .HasForeignKey("CompanyId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Car");
-
-                    b.Navigation("Company");
-                });
-
             modelBuilder.Entity("TruckManagement.Entities.Charter", b =>
                 {
                     b.HasOne("TruckManagement.Entities.Client", "Client")
@@ -2811,8 +2761,6 @@ namespace TruckManagement.Migrations
                     b.Navigation("Driver");
 
                     b.Navigation("Files");
-
-                    b.Navigation("UsedByCompanies");
                 });
 
             modelBuilder.Entity("TruckManagement.Entities.Client", b =>
@@ -2824,8 +2772,6 @@ namespace TruckManagement.Migrations
 
             modelBuilder.Entity("TruckManagement.Entities.Company", b =>
                 {
-                    b.Navigation("CarsUsedByThisCompany");
-
                     b.Navigation("Clients");
 
                     b.Navigation("ContactPersonClientCompanies");

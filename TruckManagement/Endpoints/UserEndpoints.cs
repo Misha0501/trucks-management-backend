@@ -1152,13 +1152,15 @@ public static class UserEndpoints
                             return ApiResponseFactory.Error("You can only assign cars from your associated companies.",
                                 StatusCodes.Status403Forbidden);
 
-                        // Check if the car is already assigned to another driver
+                        // Check if the car is already assigned to another driver (excluding the current driver)
                         var existingDriverForCar = await db.Drivers
                             .FirstOrDefaultAsync(d => d.CarId == newCarId && d.Id != driverEntity.Id && !d.IsDeleted);
                         
                         if (existingDriverForCar != null)
-                            return ApiResponseFactory.Error("Car is already assigned to another driver.",
-                                StatusCodes.Status400BadRequest);
+                        {
+                            // Unassign the car from the previous driver (allow reassignment)
+                            existingDriverForCar.CarId = null;
+                        }
 
                         // Update the Driver's CarId
                         driverEntity.CarId = newCarId;
@@ -1169,13 +1171,13 @@ public static class UserEndpoints
                         driverEntity.CarId = null;
                     }
 
-                    // 12. Save changes to the database
+                    // 13. Save changes to the database
                     await db.SaveChangesAsync();
 
-                    // 13. Commit the transaction
+                    // 14. Commit the transaction
                     await transaction.CommitAsync();
 
-                    // 14. Retrieve updated driver information for the response
+                    // 15. Retrieve updated driver information for the response
                     var updatedDriver = await db.Drivers
                         .Include(d => d.Company)
                         .Include(d => d.Car)
@@ -1195,7 +1197,7 @@ public static class UserEndpoints
                             CarRegistrationDate = updatedDriver.Car?.RegistrationDate
                         };
 
-                    // 15. Return success response
+                    // 16. Return success response
                     return ApiResponseFactory.Success(driverInfo, StatusCodes.Status200OK);
                 }
                 catch (Exception ex)

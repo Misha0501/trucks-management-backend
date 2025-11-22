@@ -4,6 +4,7 @@ namespace TruckManagement.DTOs
     {
         public string? CompanyId { get; set; }
         public string? CarId { get; set; }
+        
         // Add more driver-specific fields as necessary
     }
 }

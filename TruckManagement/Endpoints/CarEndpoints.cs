@@ -115,12 +115,37 @@ namespace TruckManagement.Endpoints
                             LicensePlate = request.LicensePlate,
                             VehicleYear = request.VehicleYear,
                             RegistrationDate = request.RegistrationDate,
+                            LeasingStartDate = request.LeasingStartDate,
+                            LeasingEndDate = request.LeasingEndDate,
                             Remark = request.Remark,
                             CompanyId = companyGuid
                         };
 
                         db.Cars.Add(car);
                         await db.SaveChangesAsync();
+
+                        // Handle "Used by" companies
+                        if (request.UsedByCompanyIds != null && request.UsedByCompanyIds.Any())
+                        {
+                            foreach (var companyIdStr in request.UsedByCompanyIds)
+                            {
+                                if (Guid.TryParse(companyIdStr, out var usedByCompanyGuid))
+                                {
+                                    // Verify company exists
+                                    var companyExists = await db.Companies.AnyAsync(c => c.Id == usedByCompanyGuid);
+                                    if (companyExists)
+                                    {
+                                        db.CarUsedByCompanies.Add(new CarUsedByCompany
+                                        {
+                                            Id = Guid.NewGuid(),
+                                            CarId = car.Id,
+                                            CompanyId = usedByCompanyGuid
+                                        });
+                                    }
+                                }
+                            }
+                            await db.SaveChangesAsync();
+                        }
 
                         // Handle file uploads
                         var newUploads = request.NewUploads ?? new List<UploadFileRequest>();
@@ -137,9 +162,11 @@ namespace TruckManagement.Endpoints
 
                         await transaction.CommitAsync();
 
-                        // Load car with files for response
+                        // Load car with files and used-by companies for response
                         var createdCar = await db.Cars
                             .Include(c => c.Files)
+                            .Include(c => c.UsedByCompanies)
+                                .ThenInclude(uc => uc.Company)
                             .FirstOrDefaultAsync(c => c.Id == car.Id);
 
                         var responseData = new CarDto
@@ -148,6 +175,8 @@ namespace TruckManagement.Endpoints
                             LicensePlate = createdCar.LicensePlate,
                             VehicleYear = createdCar.VehicleYear,
                             RegistrationDate = createdCar.RegistrationDate,
+                            LeasingStartDate = createdCar.LeasingStartDate,
+                            LeasingEndDate = createdCar.LeasingEndDate,
                             Remark = createdCar.Remark,
                             CompanyId = createdCar.CompanyId,
                             Files = createdCar.Files.Select(f => new CarFileDto
@@ -157,6 +186,11 @@ namespace TruckManagement.Endpoints
                                 OriginalFileName = f.OriginalFileName,
                                 ContentType = f.ContentType,
                                 UploadedAt = f.UploadedAt
+                            }).ToList(),
+                            UsedByCompanies = createdCar.UsedByCompanies.Select(uc => new CompanySimpleDto
+                            {
+                                Id = uc.Company.Id,
+                                Name = uc.Company.Name
                             }).ToList()
                         };
 
@@ -272,6 +306,8 @@ namespace TruckManagement.Endpoints
                             .Include(c => c.Files)
                             .Include(c => c.Driver)
                                 .ThenInclude(d => d.User)
+                            .Include(c => c.UsedByCompanies)
+                                .ThenInclude(uc => uc.Company)
                             .OrderBy(c => c.LicensePlate)
                             .Skip((pageNumber - 1) * pageSize)
                             .Take(pageSize)
@@ -281,6 +317,8 @@ namespace TruckManagement.Endpoints
                                 LicensePlate = c.LicensePlate,
                                 VehicleYear = c.VehicleYear,
                                 RegistrationDate = c.RegistrationDate,
+                                LeasingStartDate = c.LeasingStartDate,
+                                LeasingEndDate = c.LeasingEndDate,
                                 Remark = c.Remark,
                                 CompanyId = c.CompanyId,
                                 DriverId = c.Driver != null ? c.Driver.Id : null,
@@ -294,6 +332,11 @@ namespace TruckManagement.Endpoints
                                     OriginalFileName = f.OriginalFileName,
                                     ContentType = f.ContentType,
                                     UploadedAt = f.UploadedAt
+                                }).ToList(),
+                                UsedByCompanies = c.UsedByCompanies.Select(uc => new CompanySimpleDto
+                                {
+                                    Id = uc.Company.Id,
+                                    Name = uc.Company.Name
                                 }).ToList()
                             })
                             .ToListAsync();
@@ -442,9 +485,51 @@ namespace TruckManagement.Endpoints
                             car.RegistrationDate = request.RegistrationDate;
                         }
 
+                        if (request.LeasingStartDate.HasValue)
+                        {
+                            car.LeasingStartDate = request.LeasingStartDate;
+                        }
+
+                        if (request.LeasingEndDate.HasValue)
+                        {
+                            car.LeasingEndDate = request.LeasingEndDate;
+                        }
+
                         if (!string.IsNullOrWhiteSpace(request.Remark))
                         {
                             car.Remark = request.Remark;
+                        }
+
+                        // Handle "Used by" companies update (null = don't update, empty = clear all, list = replace)
+                        if (request.UsedByCompanyIds != null)
+                        {
+                            // Remove all existing associations
+                            var existingUsages = await db.CarUsedByCompanies
+                                .Where(cuc => cuc.CarId == car.Id)
+                                .ToListAsync();
+                            db.CarUsedByCompanies.RemoveRange(existingUsages);
+                            
+                            // Add new associations
+                            if (request.UsedByCompanyIds.Any())
+                            {
+                                foreach (var companyIdStr in request.UsedByCompanyIds)
+                                {
+                                    if (Guid.TryParse(companyIdStr, out var usedByCompanyGuid))
+                                    {
+                                        // Verify company exists
+                                        var companyExists = await db.Companies.AnyAsync(c => c.Id == usedByCompanyGuid);
+                                        if (companyExists)
+                                        {
+                                            db.CarUsedByCompanies.Add(new CarUsedByCompany
+                                            {
+                                                Id = Guid.NewGuid(),
+                                                CarId = car.Id,
+                                                CompanyId = usedByCompanyGuid
+                                            });
+                                        }
+                                    }
+                                }
+                            }
                         }
 
                         // Handle file operations
@@ -469,9 +554,11 @@ namespace TruckManagement.Endpoints
                         await db.SaveChangesAsync();
                         await transaction.CommitAsync();
 
-                        // Load updated car with files for response
+                        // Load updated car with files and used-by companies for response
                         var updatedCar = await db.Cars
                             .Include(c => c.Files)
+                            .Include(c => c.UsedByCompanies)
+                                .ThenInclude(uc => uc.Company)
                             .FirstOrDefaultAsync(c => c.Id == car.Id);
 
                         var responseData = new CarDto
@@ -480,6 +567,8 @@ namespace TruckManagement.Endpoints
                             LicensePlate = updatedCar.LicensePlate,
                             VehicleYear = updatedCar.VehicleYear,
                             RegistrationDate = updatedCar.RegistrationDate,
+                            LeasingStartDate = updatedCar.LeasingStartDate,
+                            LeasingEndDate = updatedCar.LeasingEndDate,
                             Remark = updatedCar.Remark,
                             CompanyId = updatedCar.CompanyId,
                             Files = updatedCar.Files.Select(f => new CarFileDto
@@ -489,6 +578,11 @@ namespace TruckManagement.Endpoints
                                 OriginalFileName = f.OriginalFileName,
                                 ContentType = f.ContentType,
                                 UploadedAt = f.UploadedAt
+                            }).ToList(),
+                            UsedByCompanies = updatedCar.UsedByCompanies.Select(uc => new CompanySimpleDto
+                            {
+                                Id = uc.Company.Id,
+                                Name = uc.Company.Name
                             }).ToList()
                         };
 
@@ -671,6 +765,8 @@ namespace TruckManagement.Endpoints
                             .Include(c => c.Files)
                             .Include(c => c.Driver)
                                 .ThenInclude(d => d.User)
+                            .Include(c => c.UsedByCompanies)
+                                .ThenInclude(uc => uc.Company)
                             .FirstOrDefaultAsync(c => c.Id == carGuid);
 
                         if (car == null)
@@ -684,6 +780,8 @@ namespace TruckManagement.Endpoints
                             LicensePlate = car.LicensePlate,
                             VehicleYear = car.VehicleYear,
                             RegistrationDate = car.RegistrationDate,
+                            LeasingStartDate = car.LeasingStartDate,
+                            LeasingEndDate = car.LeasingEndDate,
                             Remark = car.Remark,
                             CompanyId = car.CompanyId,
                             DriverId = car.Driver?.Id,
@@ -710,6 +808,11 @@ namespace TruckManagement.Endpoints
                                 OriginalFileName = f.OriginalFileName,
                                 ContentType = f.ContentType,
                                 UploadedAt = f.UploadedAt
+                            }).ToList(),
+                            UsedByCompanies = car.UsedByCompanies.Select(uc => new CompanySimpleDto
+                            {
+                                Id = uc.Company.Id,
+                                Name = uc.Company.Name
                             }).ToList()
                         };
 
