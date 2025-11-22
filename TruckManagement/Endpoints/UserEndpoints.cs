@@ -1152,13 +1152,15 @@ public static class UserEndpoints
                             return ApiResponseFactory.Error("You can only assign cars from your associated companies.",
                                 StatusCodes.Status403Forbidden);
 
-                        // Check if the car is already assigned to another driver
+                        // Check if the car is already assigned to another driver (excluding the current driver)
                         var existingDriverForCar = await db.Drivers
                             .FirstOrDefaultAsync(d => d.CarId == newCarId && d.Id != driverEntity.Id && !d.IsDeleted);
                         
                         if (existingDriverForCar != null)
-                            return ApiResponseFactory.Error("Car is already assigned to another driver.",
-                                StatusCodes.Status400BadRequest);
+                        {
+                            // Unassign the car from the previous driver (allow reassignment)
+                            existingDriverForCar.CarId = null;
+                        }
 
                         // Update the Driver's CarId
                         driverEntity.CarId = newCarId;
