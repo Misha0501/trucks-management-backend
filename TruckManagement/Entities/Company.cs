@@ -24,5 +24,6 @@ namespace TruckManagement.Entities
         public ICollection<Driver> Drivers { get; set; } = new List<Driver>();
         public ICollection<ContactPersonClientCompany> ContactPersonClientCompanies { get; set; } = new List<ContactPersonClientCompany>();
         public ICollection<CarUsedByCompany> CarsUsedByThisCompany { get; set; } = new List<CarUsedByCompany>();
+        public ICollection<DriverUsedByCompany> DriversUsedByThisCompany { get; set; } = new List<DriverUsedByCompany>();
     }
 }

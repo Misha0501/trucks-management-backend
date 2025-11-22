@@ -68,5 +68,8 @@ namespace TruckManagement.DTOs
         
         // File Uploads
         public List<UploadFileRequest>? NewUploads { get; set; }
+        
+        // Companies that can use this driver
+        public List<string>? UsedByCompanyIds { get; set; }
     }
 } 

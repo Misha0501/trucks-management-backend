@@ -92,6 +92,9 @@ namespace TruckManagement.DTOs
         // Driver Files
         public List<DriverFileDto> Files { get; set; } = new List<DriverFileDto>();
         
+        // Companies that can use this driver
+        public List<CompanySimpleDto> UsedByCompanies { get; set; } = new List<CompanySimpleDto>();
+        
         // Timestamps
         public DateTime CreatedAt { get; set; }
     }

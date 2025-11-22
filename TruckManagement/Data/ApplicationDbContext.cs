@@ -22,6 +22,7 @@ namespace TruckManagement.Data
         public DbSet<CarFile> CarFiles { get; set; } = default!;
         public DbSet<CarUsedByCompany> CarUsedByCompanies { get; set; } = default!;
         public DbSet<DriverFile> DriverFiles { get; set; } = default!;
+        public DbSet<DriverUsedByCompany> DriverUsedByCompanies { get; set; } = default!;
         public DbSet<Ride> Rides { get; set; }
         public DbSet<Charter> Charters { get; set; }
         public DbSet<PartRide> PartRides { get; set; }
@@ -116,6 +117,24 @@ namespace TruckManagement.Data
             // Unique constraint: A car can only be "used by" a company once
             builder.Entity<CarUsedByCompany>()
                 .HasIndex(cuc => new { cuc.CarId, cuc.CompanyId })
+                .IsUnique();
+
+            // Driver ↔ DriverUsedByCompany ↔ Company (Many-to-Many)
+            builder.Entity<DriverUsedByCompany>()
+                .HasOne(duc => duc.Driver)
+                .WithMany(d => d.UsedByCompanies)
+                .HasForeignKey(duc => duc.DriverId)
+                .OnDelete(DeleteBehavior.Cascade); // When driver is deleted, remove all usage records
+
+            builder.Entity<DriverUsedByCompany>()
+                .HasOne(duc => duc.Company)
+                .WithMany(c => c.DriversUsedByThisCompany)
+                .HasForeignKey(duc => duc.CompanyId)
+                .OnDelete(DeleteBehavior.Cascade); // When company is deleted, remove all driver usage records
+
+            // Unique constraint: A driver can only be "used by" a company once
+            builder.Entity<DriverUsedByCompany>()
+                .HasIndex(duc => new { duc.DriverId, duc.CompanyId })
                 .IsUnique();
 
             // ContactPerson ↔ ContactPersonClientCompany (One-to-Many)

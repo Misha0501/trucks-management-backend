@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace TruckManagement.Entities
 {
@@ -19,6 +20,10 @@ namespace TruckManagement.Entities
         public DriverCompensationSettings DriverCompensationSettings { get; set; } = default!;
         
         public ICollection<DriverFile> Files { get; set; } = new List<DriverFile>();
+        
+        // Many-to-many: Companies that can use this driver
+        [JsonIgnore] // Prevents circular references in API responses
+        public ICollection<DriverUsedByCompany> UsedByCompanies { get; set; } = new List<DriverUsedByCompany>();
 
         // Telegram notification fields
         /// <summary>

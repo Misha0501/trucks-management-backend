@@ -14,5 +14,8 @@ namespace TruckManagement.DTOs
         public int? CarVehicleYear { get; set; }
         public DateOnly? CarRegistrationDate { get; set; }
         public string? CarRemark { get; set; }
+        
+        // Companies that can use this driver
+        public List<CompanySimpleDto> UsedByCompanies { get; set; } = new List<CompanySimpleDto>();
     }
 }
