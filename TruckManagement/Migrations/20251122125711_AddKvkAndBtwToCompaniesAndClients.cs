@@ -11,8 +11,8 @@ namespace TruckManagement.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropTable(
-                name: "DriverUsedByCompanies");
+            // Drop table only if it exists (safe for servers that never had it)
+            migrationBuilder.Sql(@"DROP TABLE IF EXISTS ""DriverUsedByCompanies"";");
 
             migrationBuilder.AddColumn<string>(
                 name: "Btw",
