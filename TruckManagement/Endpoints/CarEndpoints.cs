@@ -115,6 +115,8 @@ namespace TruckManagement.Endpoints
                             LicensePlate = request.LicensePlate,
                             VehicleYear = request.VehicleYear,
                             RegistrationDate = request.RegistrationDate,
+                            LeasingStartDate = request.LeasingStartDate,
+                            LeasingEndDate = request.LeasingEndDate,
                             Remark = request.Remark,
                             CompanyId = companyGuid
                         };
@@ -148,6 +150,8 @@ namespace TruckManagement.Endpoints
                             LicensePlate = createdCar.LicensePlate,
                             VehicleYear = createdCar.VehicleYear,
                             RegistrationDate = createdCar.RegistrationDate,
+                            LeasingStartDate = createdCar.LeasingStartDate,
+                            LeasingEndDate = createdCar.LeasingEndDate,
                             Remark = createdCar.Remark,
                             CompanyId = createdCar.CompanyId,
                             Files = createdCar.Files.Select(f => new CarFileDto
@@ -281,6 +285,8 @@ namespace TruckManagement.Endpoints
                                 LicensePlate = c.LicensePlate,
                                 VehicleYear = c.VehicleYear,
                                 RegistrationDate = c.RegistrationDate,
+                                LeasingStartDate = c.LeasingStartDate,
+                                LeasingEndDate = c.LeasingEndDate,
                                 Remark = c.Remark,
                                 CompanyId = c.CompanyId,
                                 DriverId = c.Driver != null ? c.Driver.Id : null,
@@ -442,6 +448,16 @@ namespace TruckManagement.Endpoints
                             car.RegistrationDate = request.RegistrationDate;
                         }
 
+                        if (request.LeasingStartDate.HasValue)
+                        {
+                            car.LeasingStartDate = request.LeasingStartDate;
+                        }
+
+                        if (request.LeasingEndDate.HasValue)
+                        {
+                            car.LeasingEndDate = request.LeasingEndDate;
+                        }
+
                         if (!string.IsNullOrWhiteSpace(request.Remark))
                         {
                             car.Remark = request.Remark;
@@ -480,6 +496,8 @@ namespace TruckManagement.Endpoints
                             LicensePlate = updatedCar.LicensePlate,
                             VehicleYear = updatedCar.VehicleYear,
                             RegistrationDate = updatedCar.RegistrationDate,
+                            LeasingStartDate = updatedCar.LeasingStartDate,
+                            LeasingEndDate = updatedCar.LeasingEndDate,
                             Remark = updatedCar.Remark,
                             CompanyId = updatedCar.CompanyId,
                             Files = updatedCar.Files.Select(f => new CarFileDto
@@ -684,6 +702,8 @@ namespace TruckManagement.Endpoints
                             LicensePlate = car.LicensePlate,
                             VehicleYear = car.VehicleYear,
                             RegistrationDate = car.RegistrationDate,
+                            LeasingStartDate = car.LeasingStartDate,
+                            LeasingEndDate = car.LeasingEndDate,
                             Remark = car.Remark,
                             CompanyId = car.CompanyId,
                             DriverId = car.Driver?.Id,

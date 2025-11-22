@@ -8,6 +8,8 @@ namespace TruckManagement.Entities
         public string LicensePlate { get; set; } = default!;
         public int? VehicleYear { get; set; }
         public DateOnly? RegistrationDate { get; set; }
+        public DateOnly? LeasingStartDate { get; set; }
+        public DateOnly? LeasingEndDate { get; set; }
         public string? Remark { get; set; }
 
         public Guid CompanyId { get; set; }
