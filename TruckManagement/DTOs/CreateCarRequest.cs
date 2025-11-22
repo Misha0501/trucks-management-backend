@@ -10,5 +10,8 @@ namespace TruckManagement.DTOs
         public string? Remark { get; set; }
         public string CompanyId { get; set; } = string.Empty;
         public List<UploadFileRequest>? NewUploads { get; set; }
+        
+        // Companies that can use this car
+        public List<string>? UsedByCompanyIds { get; set; }
     }
 }

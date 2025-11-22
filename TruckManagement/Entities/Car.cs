@@ -21,5 +21,9 @@ namespace TruckManagement.Entities
         
         // Navigation property for car documents
         public ICollection<CarFile> Files { get; set; } = new List<CarFile>();
+        
+        // Many-to-many: Companies that can use this car
+        [JsonIgnore] // Prevents circular references in API responses
+        public ICollection<CarUsedByCompany> UsedByCompanies { get; set; } = new List<CarUsedByCompany>();
     }
 }

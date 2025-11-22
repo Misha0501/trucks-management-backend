@@ -20,6 +20,7 @@ namespace TruckManagement.Data
         public DbSet<Unit> Units { get; set; }
         public DbSet<Car> Cars { get; set; }
         public DbSet<CarFile> CarFiles { get; set; } = default!;
+        public DbSet<CarUsedByCompany> CarUsedByCompanies { get; set; } = default!;
     public DbSet<DriverFile> DriverFiles { get; set; } = default!;
         public DbSet<Ride> Rides { get; set; }
         public DbSet<Charter> Charters { get; set; }
@@ -98,6 +99,24 @@ namespace TruckManagement.Data
                 .WithOne(c => c.Driver)
                 .HasForeignKey<Driver>(d => d.CarId)
                 .OnDelete(DeleteBehavior.SetNull); // When car is deleted, set driver's CarId to null
+
+            // Car ↔ CarUsedByCompany ↔ Company (Many-to-Many)
+            builder.Entity<CarUsedByCompany>()
+                .HasOne(cuc => cuc.Car)
+                .WithMany(c => c.UsedByCompanies)
+                .HasForeignKey(cuc => cuc.CarId)
+                .OnDelete(DeleteBehavior.Cascade); // When car is deleted, remove all usage records
+
+            builder.Entity<CarUsedByCompany>()
+                .HasOne(cuc => cuc.Company)
+                .WithMany(c => c.CarsUsedByThisCompany)
+                .HasForeignKey(cuc => cuc.CompanyId)
+                .OnDelete(DeleteBehavior.Cascade); // When company is deleted, remove all car usage records
+
+            // Unique constraint: A car can only be "used by" a company once
+            builder.Entity<CarUsedByCompany>()
+                .HasIndex(cuc => new { cuc.CarId, cuc.CompanyId })
+                .IsUnique();
 
             // ContactPerson ↔ ContactPersonClientCompany (One-to-Many)
             builder.Entity<ContactPersonClientCompany>()

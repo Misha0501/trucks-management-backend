@@ -18,6 +18,15 @@ namespace TruckManagement.DTOs
         public string? DriverFirstName { get; set; }
         public string? DriverLastName { get; set; }
         public string? DriverEmail { get; set; }
+        
+        // Companies that can use this car
+        public List<CompanySimpleDto> UsedByCompanies { get; set; } = new List<CompanySimpleDto>();
+    }
+    
+    public class CompanySimpleDto
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = default!;
     }
 
     public class CarFileDto
