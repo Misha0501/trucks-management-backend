@@ -1171,6 +1171,42 @@ public static class UserEndpoints
                         driverEntity.CarId = null;
                     }
 
+                    // 12.5. Handle "Used by" companies update (null = don't update, empty = clear all, list = replace)
+                    if (req.UsedByCompanyIds != null)
+                    {
+                        // Remove all existing associations
+                        var existingUsages = await db.DriverUsedByCompanies
+                            .Where(duc => duc.DriverId == driverEntity.Id)
+                            .ToListAsync();
+                        db.DriverUsedByCompanies.RemoveRange(existingUsages);
+                        
+                        // Add new associations
+                        if (req.UsedByCompanyIds.Any())
+                        {
+                            foreach (var companyIdStr in req.UsedByCompanyIds)
+                            {
+                                if (Guid.TryParse(companyIdStr, out var usedByCompanyGuid))
+                                {
+                                    // Verify company exists
+                                    var companyExists = await db.Companies.AnyAsync(c => c.Id == usedByCompanyGuid);
+                                    if (companyExists)
+                                    {
+                                        // If customer admin, ensure they can only assign to their own companies
+                                        if (isCustomerAdmin && !customerAdminCompanyIds.Contains(usedByCompanyGuid))
+                                            continue; // Skip companies not managed by this admin
+                                        
+                                        db.DriverUsedByCompanies.Add(new DriverUsedByCompany
+                                        {
+                                            Id = Guid.NewGuid(),
+                                            DriverId = driverEntity.Id,
+                                            CompanyId = usedByCompanyGuid
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // 13. Save changes to the database
                     await db.SaveChangesAsync();
 
@@ -1181,6 +1217,8 @@ public static class UserEndpoints
                     var updatedDriver = await db.Drivers
                         .Include(d => d.Company)
                         .Include(d => d.Car)
+                        .Include(d => d.UsedByCompanies)
+                            .ThenInclude(uc => uc.Company)
                         .AsNoTracking()
                         .FirstOrDefaultAsync(d => d.AspNetUserId == targetUser.Id);
 
@@ -1194,7 +1232,12 @@ public static class UserEndpoints
                             CarId = updatedDriver.CarId,
                             CarLicensePlate = updatedDriver.Car?.LicensePlate,
                             CarVehicleYear = updatedDriver.Car?.VehicleYear,
-                            CarRegistrationDate = updatedDriver.Car?.RegistrationDate
+                            CarRegistrationDate = updatedDriver.Car?.RegistrationDate,
+                            UsedByCompanies = updatedDriver.UsedByCompanies.Select(uc => new
+                            {
+                                Id = uc.Company.Id,
+                                Name = uc.Company.Name
+                            }).ToList()
                         };
 
                     // 16. Return success response

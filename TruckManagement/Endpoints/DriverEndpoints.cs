@@ -245,6 +245,29 @@ namespace TruckManagement.Endpoints
                         // 10. Save all changes
                         await db.SaveChangesAsync();
 
+                        // 10.5. Handle "Used by" companies
+                        if (request.UsedByCompanyIds != null && request.UsedByCompanyIds.Any())
+                        {
+                            foreach (var companyIdStr in request.UsedByCompanyIds)
+                            {
+                                if (Guid.TryParse(companyIdStr, out var usedByCompanyGuid))
+                                {
+                                    // Verify company exists
+                                    var companyExists = await db.Companies.AnyAsync(c => c.Id == usedByCompanyGuid);
+                                    if (companyExists)
+                                    {
+                                        db.DriverUsedByCompanies.Add(new DriverUsedByCompany
+                                        {
+                                            Id = Guid.NewGuid(),
+                                            DriverId = driver.Id,
+                                            CompanyId = usedByCompanyGuid
+                                        });
+                                    }
+                                }
+                            }
+                            await db.SaveChangesAsync();
+                        }
+
                         // 11. Handle file uploads
                         var newUploads = request.NewUploads ?? new List<UploadFileRequest>();
                         if (newUploads.Any())
@@ -331,6 +354,8 @@ namespace TruckManagement.Endpoints
                             .Include(d => d.Company)
                             .Include(d => d.Car)
                             .Include(d => d.Files)
+                            .Include(d => d.UsedByCompanies)
+                                .ThenInclude(uc => uc.Company)
                             .Where(d => d.Id == driverId && !d.IsDeleted);
 
                         // Authorization check for non-global admins
@@ -489,6 +514,13 @@ namespace TruckManagement.Endpoints
                                 OriginalFileName = f.OriginalFileName,
                                 ContentType = f.ContentType,
                                 UploadedAt = f.UploadedAt
+                            }).ToList(),
+
+                            // Companies that can use this driver
+                            UsedByCompanies = driver.UsedByCompanies.Select(uc => new CompanySimpleDto
+                            {
+                                Id = uc.Company.Id,
+                                Name = uc.Company.Name
                             }).ToList(),
 
                             // Timestamps - using a reasonable default since we don't track creation time
@@ -1622,6 +1654,8 @@ namespace TruckManagement.Endpoints
                                 .Include(d => d.Company)
                                 .Include(d => d.Car)
                                 .Include(d => d.User)
+                                .Include(d => d.UsedByCompanies)
+                                    .ThenInclude(uc => uc.Company)
                                 .OrderBy(d => d.User.Email)
                                 .Skip((pageNumber - 1) * pageSize)
                                 .Take(pageSize)
@@ -1640,7 +1674,12 @@ namespace TruckManagement.Endpoints
                                         d.User.Email,
                                         d.User.FirstName,
                                         d.User.LastName
-                                    }
+                                    },
+                                    UsedByCompanies = d.UsedByCompanies.Select(uc => new
+                                    {
+                                        Id = uc.Company.Id,
+                                        Name = uc.Company.Name
+                                    }).ToList()
                                 })
                                 .ToListAsync();
 
@@ -1679,6 +1718,8 @@ namespace TruckManagement.Endpoints
                             .Include(d => d.Company)
                             .Include(d => d.Car)
                             .Include(d => d.User)
+                            .Include(d => d.UsedByCompanies)
+                                .ThenInclude(uc => uc.Company)
                             .Where(d => associatedCompanyIds.Contains(d.CompanyId ?? Guid.Empty))
                             .OrderBy(d => d.User.Email)
                             .Skip((pageNumber - 1) * pageSize)
@@ -1698,7 +1739,12 @@ namespace TruckManagement.Endpoints
                                     d.User.Email,
                                     d.User.FirstName,
                                     d.User.LastName
-                                }
+                                },
+                                UsedByCompanies = d.UsedByCompanies.Select(uc => new
+                                {
+                                    Id = uc.Company.Id,
+                                    Name = uc.Company.Name
+                                }).ToList()
                             })
                             .ToListAsync();
 
