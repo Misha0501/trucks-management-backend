@@ -31,6 +31,12 @@ namespace TruckManagement.Seeding
                 }
             }
 
+            // ============================================================
+            // TEST DATA - COMMENTED OUT FOR PRODUCTION
+            // Uncomment below if you need test data for development
+            // ============================================================
+            
+            /*
             // 4) Seed the default company if it doesn't exist
             var defaultCompanyId = Guid.Parse("11111111-1111-1111-1111-111111111111");
             if (!dbContext.Companies.IgnoreQueryFilters().Any(c => c.Id == defaultCompanyId))
@@ -51,6 +57,7 @@ namespace TruckManagement.Seeding
             }
 
             // 5) No additional companies - only DefaultCompany
+            */
 
             // 6) Seed sample users
             var userManager = serviceProvider.GetRequiredService<UserManager<ApplicationUser>>();
@@ -81,6 +88,7 @@ namespace TruckManagement.Seeding
                 }
             }
 
+            /*
             // Example #2: A customer user
             const string customerEmail = "customer@example.com";
             var customerUser = await userManager.Users
@@ -306,8 +314,12 @@ namespace TruckManagement.Seeding
             }
 
             await dbContext.SaveChangesAsync();
+            */
+            // ============================================================
+            // END TEST DATA - Test Users, Drivers, Contact Persons
+            // ============================================================
 
-            // 2) Seed HoursOptions
+            // 9) Seed HoursOptions
             var hoursOptionsToSeed = new List<HoursOption>
             {
                 new HoursOption
@@ -386,8 +398,8 @@ namespace TruckManagement.Seeding
 
             await dbContext.SaveChangesAsync();
 
-
-            // 11) Seed Clients with hardcoded and memorable IDs
+            /*
+            // 11) Seed Clients with hardcoded and memorable IDs (COMMENTED OUT - Test Data)
             var clientsToSeed = new List<Client>
             {
                 new Client
@@ -528,8 +540,13 @@ namespace TruckManagement.Seeding
             }
 
             await dbContext.SaveChangesAsync();
+            */
+            // ============================================================
+            // END TEST DATA - Users, Drivers, Contact Persons, Clients
+            // ============================================================
 
-            // 14) Seed Rates with fixed GUIDs
+            /*
+            // 14) Seed Rates with fixed GUIDs (COMMENTED OUT - Test Data)
             if (!dbContext.Rates.IgnoreQueryFilters().Any())
             {
                 var rate1 = new Rate
@@ -570,6 +587,7 @@ namespace TruckManagement.Seeding
                 };
                 dbContext.Surcharges.AddRange(surcharge1, surcharge2);
             }
+            */
 
             // 16) Seed Units with fixed GUIDs
             if (!dbContext.Units.IgnoreQueryFilters().Any())
@@ -589,6 +607,7 @@ namespace TruckManagement.Seeding
 
             await dbContext.SaveChangesAsync();
 
+            /*
             // 17) Seed Cars with fixed GUIDs
             if (!dbContext.Cars.IgnoreQueryFilters().Any())
             {
@@ -818,6 +837,10 @@ namespace TruckManagement.Seeding
             
             // 23) Seed signed weeks and periods for report testing
             await SeedSignedWeeksTestData(dbContext, seededDriverEntity);
+            */
+            // ============================================================
+            // END TEST DATA
+            // ============================================================
             
             await CaoSeeder.SeedAsync(dbContext);
             
