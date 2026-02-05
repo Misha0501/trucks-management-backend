@@ -1,4 +1,4 @@
-name: Deploy Backend to Plesk Server with Docker Compose
+name: Deploy Backend to AWS Lightsail with Docker Compose
 
 on:
   push:
@@ -35,7 +35,7 @@ jobs:
           rsync -av --progress \
             --exclude=".git" \
             --exclude=".idea" \
-            . ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:/var/www/vhosts/${{ secrets.SERVER_DOMAIN }}/
+            . ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:/var/www/backend/
 
       - name: Rebuild and Restart Docker Containers
         run: |
@@ -46,7 +46,7 @@ jobs:
           sudo chmod -R 777 /var/www/storage/signed-contracts &&
             
           # ② redeploy the stack
-          cd /var/www/vhosts/${{ secrets.SERVER_DOMAIN }}/ && \
+          cd /var/www/backend/ && \
           docker compose down --remove-orphans  && \
           docker compose build --no-cache && \
           docker compose up -d
