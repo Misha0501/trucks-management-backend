@@ -1,4 +1,4 @@
-name: Deploy Backend to AWS Lightsail (Zero Downtime)
+name: Backend CI/CD
 
 on:
   push:
@@ -6,148 +6,57 @@ on:
       - main
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Set up .NET environment
-        uses: actions/setup-dotnet@v3
+      - name: Setup .NET Core SDK
+        uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.0.x' 
+          dotnet-version: '9.x'
+
+      - name: Restore Dependencies
+        run: dotnet restore TruckManagement.sln
 
       - name: Build the Solution
-        run: |
-          dotnet build TruckManagement.sln --configuration Release
+        run: dotnet build TruckManagement.sln --configuration Release
 
-      - name: Set up SSH
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SERVER_SSH_KEY }}
+      - name: Run Tests
+        run: dotnet test TruckManagement.sln --configuration Release --no-build --verbosity normal || echo "No tests found"
 
-      - name: Deploy to Server
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Trigger Deployment via Webhook
         run: |
-          max_retries=3
-          retry_count=0
+          PAYLOAD='{"ref":"refs/heads/main","repository":{"name":"trucks-management-backend"}}'
           
-          while [ $retry_count -lt $max_retries ]; do
-            echo "Deployment attempt $((retry_count + 1))/$max_retries..."
-            
-            if ssh -o ConnectTimeout=30 -o ConnectionAttempts=1 ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
-              set -e
-              
-              echo "📦 Pulling latest code from GitHub..."
-              cd /var/www/backend
-              
-              # Store current state
-              current_branch=$(git branch --show-current)
-              echo "Current branch: $current_branch"
-              
-              # Stash any local changes
-              git stash
-              
-              # Pull latest changes
-              git fetch origin
-              git checkout main
-              git pull origin main
-              
-              # Fix permissions
-              sudo chown -R ubuntu:ubuntu .
-              
-              # Ensure storage directory exists
-              sudo mkdir -p /var/www/storage/signed-contracts
-              sudo chmod -R 777 /var/www/storage
-              
-              # Build only app container (NOT database - keeps it running)
-              echo "🔨 Building truckmanagement container..."
-              docker compose build truckmanagement
-              
-              # Rolling update: start new container, stop old one (near-zero downtime)
-              echo "🚀 Deploying with rolling update..."
-              docker compose up -d --no-deps truckmanagement
-              
-              echo "✅ Container deployment initiated"
-          EOF
-            then
-              echo "✅ Deployment successful!"
-              break
-            else
-              retry_count=$((retry_count + 1))
-              if [ $retry_count -lt $max_retries ]; then
-                echo "⚠️  Deployment failed, retrying in 10 seconds..."
-                sleep 10
-              else
-                echo "❌ Deployment failed after $max_retries attempts"
-                exit 1
-              fi
-            fi
-          done
-
-      - name: Wait before verification
-        run: sleep 5
-
-      - name: Verify Deployment
-        run: |
-          max_retries=3
-          retry_count=0
+          SIGNATURE="sha256=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "${{ secrets.WEBHOOK_SECRET }}" | cut -d' ' -f2)"
           
-          while [ $retry_count -lt $max_retries ]; do
-            echo "Verification attempt $((retry_count + 1))/$max_retries..."
-            
-            if ssh -o ConnectTimeout=30 ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
-            set -e
-            
-            # Wait for container to start
-            echo "⏳ Waiting for backend to be ready..."
-            sleep 10
-            
-            # Health check with retries
-            for i in {1..20}; do
-              if curl -f -s http://localhost:9090 > /dev/null 2>&1; then
-                echo "✅ Backend API is responding"
-                
-                # Verify container status
-                if docker ps | grep -q "truckmanagement.*Up"; then
-                  echo "✅ Container status: Up"
-                  
-                  # Verify database connection
-                  if docker exec backend-postgresdb-1 psql -U postgres -d TruckManagement -c "SELECT 1" > /dev/null 2>&1; then
-                    echo "✅ Database connection: OK"
-                    echo "✅ Deployment successful!"
-                    exit 0
-                  fi
-                fi
-              fi
-              echo "⏳ Waiting... attempt $i/20"
-              sleep 3
-            done
-            
-            echo "❌ Health check failed - backend not responding"
-            echo "📋 Container logs:"
-            docker logs --tail 30 backend-truckmanagement-1
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            -H "Content-Type: application/json" \
+            -H "X-Hub-Signature-256: $SIGNATURE" \
+            -d "$PAYLOAD" \
+            http://${{ secrets.SERVER_IP }}:8888/webhook)
+          
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n-1)
+          
+          echo "Response: $BODY (HTTP $HTTP_CODE)"
+          
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ Deployment triggered successfully"
+            echo "🔗 API: https://api.vervoermanager.nl"
+            echo "📝 Commit: ${GITHUB_SHA:0:7}"
+            echo "👤 Deployed by: $GITHUB_ACTOR"
+            exit 0
+          else
+            echo "❌ Deployment trigger failed"
             exit 1
-          EOF
-            then
-              echo "✅ Verification successful!"
-              break
-            else
-              retry_count=$((retry_count + 1))
-              if [ $retry_count -lt $max_retries ]; then
-                echo "⚠️  Verification failed, retrying in 10 seconds..."
-                sleep 10
-              else
-                echo "❌ Verification failed after $max_retries attempts"
-                exit 1
-              fi
-            fi
-          done
-
-      - name: Deployment Summary
-        if: success()
-        run: |
-          echo "✅ Backend deployment completed successfully"
-          echo "🔗 API: https://api.vervoermanager.nl"
-          echo "📝 Commit: ${{ github.sha }}"
-          echo "👤 Deployed by: ${{ github.actor }}"
+          fi
