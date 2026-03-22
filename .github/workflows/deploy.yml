@@ -27,10 +27,19 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SERVER_SSH_KEY }}
 
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "Host ${{ secrets.SERVER_IP }}" >> ~/.ssh/config
+          echo "  StrictHostKeyChecking accept-new" >> ~/.ssh/config
+          echo "  UserKnownHostsFile ~/.ssh/known_hosts" >> ~/.ssh/config
+          echo "  ServerAliveInterval 60" >> ~/.ssh/config
+          echo "  ServerAliveCountMax 10" >> ~/.ssh/config
+          chmod 600 ~/.ssh/config
+
       - name: Deploy Files with rsync
         run: |
           rsync -av --progress \
-            -e "ssh -o StrictHostKeyChecking=accept-new" \
             --exclude=".git" \
             --exclude=".idea" \
             . ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:/var/www/backend/
@@ -40,7 +49,7 @@ jobs:
 
       - name: Rebuild and Restart Docker Containers (Zero Downtime)
         run: |
-          ssh -o StrictHostKeyChecking=accept-new ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
             set -e
             
             cd /var/www/backend
@@ -65,7 +74,7 @@ jobs:
 
       - name: Verify Deployment
         run: |
-          ssh -o StrictHostKeyChecking=accept-new ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
             set -e
             
             # Wait for container to start
