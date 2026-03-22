@@ -37,22 +37,36 @@ jobs:
           echo "  ServerAliveCountMax 10" >> ~/.ssh/config
           chmod 600 ~/.ssh/config
 
-      - name: Deploy Files with rsync
-        run: |
-          rsync -av --progress \
-            --exclude=".git" \
-            --exclude=".idea" \
-            . ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:/var/www/backend/
-
-      - name: Wait for SSH connections to stabilize
-        run: sleep 5
-
-      - name: Rebuild and Restart Docker Containers (Zero Downtime)
+      - name: Deploy and Build in Single SSH Session
         run: |
           ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
             set -e
             
+            echo "📦 Deploying files..."
             cd /var/www/backend
+            
+            # Create backup
+            sudo cp -r . ../backend-backup-$(date +%s) || true
+            
+            # Clean old files (keep important dirs)
+            sudo find . -maxdepth 1 -type f -delete
+            sudo rm -rf TruckManagement .github
+          EOF
+          
+          # Transfer files using tar over SSH (single connection)
+          tar czf - \
+            --exclude=".git" \
+            --exclude=".idea" \
+            --exclude="node_modules" \
+            . | ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} \
+            "cd /var/www/backend && sudo tar xzf -"
+          
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+            set -e
+            cd /var/www/backend
+            
+            # Fix permissions
+            sudo chown -R ubuntu:ubuntu .
             
             # Ensure storage directory exists
             sudo mkdir -p /var/www/storage/signed-contracts
