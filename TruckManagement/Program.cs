@@ -142,4 +142,6 @@ app.MapTelegramEndpoints();
 app.MapTelegramTestEndpoints();
 app.MapDriverInvoiceEndpoints();
 
+Console.WriteLine("🚀 Backend deployment test - Auto-deploy working!");
+
 app.Run();
