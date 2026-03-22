@@ -27,118 +27,29 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SERVER_SSH_KEY }}
 
-      - name: Deploy to Server
+      - name: Trigger Deployment on Server
         run: |
-          max_retries=3
+          max_retries=5
           retry_count=0
           
           while [ $retry_count -lt $max_retries ]; do
-            echo "Deployment attempt $((retry_count + 1))/$max_retries..."
+            echo "🚀 Deployment attempt $((retry_count + 1))/$max_retries..."
             
-            if ssh -o ConnectTimeout=30 -o ConnectionAttempts=1 ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
-              set -e
-              
-              echo "📦 Pulling latest code from GitHub..."
-              cd /var/www/backend
-              
-              # Store current state
-              current_branch=$(git branch --show-current)
-              echo "Current branch: $current_branch"
-              
-              # Stash any local changes
-              git stash
-              
-              # Pull latest changes
-              git fetch origin
-              git checkout main
-              git pull origin main
-              
-              # Fix permissions
-              sudo chown -R ubuntu:ubuntu .
-              
-              # Ensure storage directory exists
-              sudo mkdir -p /var/www/storage/signed-contracts
-              sudo chmod -R 777 /var/www/storage
-              
-              # Build only app container (NOT database - keeps it running)
-              echo "🔨 Building truckmanagement container..."
-              docker compose build truckmanagement
-              
-              # Rolling update: start new container, stop old one (near-zero downtime)
-              echo "🚀 Deploying with rolling update..."
-              docker compose up -d --no-deps truckmanagement
-              
-              echo "✅ Container deployment initiated"
-          EOF
-            then
-              echo "✅ Deployment successful!"
-              break
+            if ssh -o ConnectTimeout=60 -o ConnectionAttempts=1 -o ServerAliveInterval=30 \
+                   ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} \
+                   'sudo /usr/local/bin/deploy-backend' 2>&1; then
+              echo "✅ Deployment completed successfully!"
+              exit 0
             else
+              exit_code=$?
               retry_count=$((retry_count + 1))
+              
               if [ $retry_count -lt $max_retries ]; then
-                echo "⚠️  Deployment failed, retrying in 10 seconds..."
-                sleep 10
+                wait_time=$((10 + retry_count * 5))
+                echo "⚠️  Attempt failed with exit code $exit_code, waiting ${wait_time}s before retry..."
+                sleep $wait_time
               else
                 echo "❌ Deployment failed after $max_retries attempts"
-                exit 1
-              fi
-            fi
-          done
-
-      - name: Wait before verification
-        run: sleep 5
-
-      - name: Verify Deployment
-        run: |
-          max_retries=3
-          retry_count=0
-          
-          while [ $retry_count -lt $max_retries ]; do
-            echo "Verification attempt $((retry_count + 1))/$max_retries..."
-            
-            if ssh -o ConnectTimeout=30 ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
-            set -e
-            
-            # Wait for container to start
-            echo "⏳ Waiting for backend to be ready..."
-            sleep 10
-            
-            # Health check with retries
-            for i in {1..20}; do
-              if curl -f -s http://localhost:9090 > /dev/null 2>&1; then
-                echo "✅ Backend API is responding"
-                
-                # Verify container status
-                if docker ps | grep -q "truckmanagement.*Up"; then
-                  echo "✅ Container status: Up"
-                  
-                  # Verify database connection
-                  if docker exec backend-postgresdb-1 psql -U postgres -d TruckManagement -c "SELECT 1" > /dev/null 2>&1; then
-                    echo "✅ Database connection: OK"
-                    echo "✅ Deployment successful!"
-                    exit 0
-                  fi
-                fi
-              fi
-              echo "⏳ Waiting... attempt $i/20"
-              sleep 3
-            done
-            
-            echo "❌ Health check failed - backend not responding"
-            echo "📋 Container logs:"
-            docker logs --tail 30 backend-truckmanagement-1
-            exit 1
-          EOF
-            then
-              echo "✅ Verification successful!"
-              break
-            else
-              retry_count=$((retry_count + 1))
-              if [ $retry_count -lt $max_retries ]; then
-                echo "⚠️  Verification failed, retrying in 10 seconds..."
-                sleep 10
-              else
-                echo "❌ Verification failed after $max_retries attempts"
                 exit 1
               fi
             fi
