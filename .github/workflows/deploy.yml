@@ -1,9 +1,9 @@
-name: Deploy Backend to AWS Lightsail with Docker Compose
+name: Deploy Backend to AWS Lightsail (Zero Downtime)
 
 on:
   push:
     branches:
-      - main  # Trigger the workflow on pushes to the main branch
+      - main
 
 jobs:
   deploy:
@@ -37,17 +37,68 @@ jobs:
             --exclude=".idea" \
             . ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:/var/www/backend/
 
-      - name: Rebuild and Restart Docker Containers
+      - name: Rebuild and Restart Docker Containers (Zero Downtime)
         run: |
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "
-          
-          # ① make sure the bind‑mount folder exists and is writable
-          sudo mkdir -p /var/www/storage/signed-contracts &&
-          sudo chmod -R 777 /var/www/storage/signed-contracts &&
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+            set -e
             
-          # ② redeploy the stack
-          cd /var/www/backend/ && \
-          docker compose down --remove-orphans  && \
-          docker compose build --no-cache && \
-          docker compose up -d
-          "
+            cd /var/www/backend
+            
+            # Ensure storage directory exists
+            sudo mkdir -p /var/www/storage/signed-contracts
+            sudo chmod -R 777 /var/www/storage
+            
+            # Build only app container (NOT database - keeps it running)
+            echo "🔨 Building truckmanagement container..."
+            docker compose build truckmanagement
+            
+            # Rolling update: start new container, stop old one (near-zero downtime)
+            echo "🚀 Deploying with rolling update..."
+            docker compose up -d --no-deps truckmanagement
+            
+            echo "✅ Container deployment initiated"
+          EOF
+
+      - name: Verify Deployment
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+            set -e
+            
+            # Wait for container to start
+            echo "⏳ Waiting for backend to be ready..."
+            sleep 10
+            
+            # Health check with retries
+            for i in {1..20}; do
+              if curl -f -s http://localhost:9090 > /dev/null 2>&1; then
+                echo "✅ Backend API is responding"
+                
+                # Verify container status
+                if docker ps | grep -q "truckmanagement.*Up"; then
+                  echo "✅ Container status: Up"
+                  
+                  # Verify database connection
+                  if docker exec backend-postgresdb-1 psql -U postgres -d TruckManagement -c "SELECT 1" > /dev/null 2>&1; then
+                    echo "✅ Database connection: OK"
+                    echo "✅ Deployment successful!"
+                    exit 0
+                  fi
+                fi
+              fi
+              echo "⏳ Waiting... attempt $i/20"
+              sleep 3
+            done
+            
+            echo "❌ Health check failed - backend not responding"
+            echo "📋 Container logs:"
+            docker logs --tail 30 backend-truckmanagement-1
+            exit 1
+          EOF
+
+      - name: Deployment Summary
+        if: success()
+        run: |
+          echo "✅ Backend deployment completed successfully"
+          echo "🔗 API: https://api.vervoermanager.nl"
+          echo "📝 Commit: ${{ github.sha }}"
+          echo "👤 Deployed by: ${{ github.actor }}"

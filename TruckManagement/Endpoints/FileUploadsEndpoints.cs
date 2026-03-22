@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using TruckManagement.Helpers;
 
 // Where ApiResponseFactory is defined
@@ -8,7 +9,9 @@ namespace TruckManagement.Endpoints
     {
         public static void MapFileUploadsEndpoints(this WebApplication app)
         {
-            app.MapPost("/temporary-uploads", async (HttpRequest request, IWebHostEnvironment env, IConfiguration config) =>
+            app.MapPost("/temporary-uploads", 
+                [Authorize(Roles = "globalAdmin, customerAdmin, employer, customer, customerAccountant, driver")]
+                async (HttpRequest request, IWebHostEnvironment env, IConfiguration config) =>
             {
                 if (!request.HasFormContentType)
                     return ApiResponseFactory.Error("Invalid content type. Expected multipart/form-data.");
