@@ -1,7 +1,10 @@
-name: Backend CI/CD
+name: Backend Build Validation
 
 on:
   push:
+    branches:
+      - main
+  pull_request:
     branches:
       - main
 
@@ -27,12 +30,8 @@ jobs:
       - name: Run Tests
         run: dotnet test TruckManagement.sln --configuration Release --no-build --verbosity normal || echo "No tests found"
       
-      - name: Build Complete
+      - name: Build Successful
+        if: success()
         run: |
-          echo "✅ Build and tests passed"
+          echo "✅ Build validation passed"
           echo "📝 Commit: ${GITHUB_SHA:0:7}"
-          echo "👤 By: $GITHUB_ACTOR"
-          echo ""
-          echo "🚀 Deployment happens automatically via server cron job"
-          echo "⏱️  Server checks for new commits every 2 minutes"
-          echo "📊 Expected deployment: within 2-3 minutes"
