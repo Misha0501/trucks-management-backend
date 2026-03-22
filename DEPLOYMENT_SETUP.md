@@ -2,49 +2,47 @@
 
 ## Overview
 
-The backend uses a webhook-based deployment system. When code is pushed to `main`, GitHub sends a webhook to the server, which triggers an automatic deployment.
+The backend uses an **automatic polling deployment system**. A cron job on the server checks for new commits every 2 minutes and automatically deploys them.
 
-## Setup Instructions
+## How It Works
 
-### 1. GitHub Webhook Configuration
+1. **Push to `main`** → Triggers GitHub Actions build validation
+2. **Server cron job** → Checks for new commits every 2 minutes
+3. **Auto-deploy** → Pulls code, rebuilds Docker, zero-downtime restart
+4. **Health check** → Validates deployment success
 
-Go to: **https://github.com/Misha0501/trucks-management-backend/settings/hooks/new**
+## Deployment Timeline
 
-Configure as follows:
+- **Maximum delay**: 2 minutes after push to `main`
+- **Typical delay**: 30-120 seconds
+- **Build time**: ~60 seconds (Docker + .NET)
 
-- **Payload URL**: `http://3.73.183.137:8888/webhook`
-- **Content type**: `application/json`
-- **Secret**: `fcae34deb6f5f179040d971245e71a064f33ec758210d0215589a3ce00c0ba54`
-- **Which events**: Select "Just the push event"
-- **Active**: ✓ (checked)
+## Check Deployment Status
 
-Click "Add webhook".
-
-### 2. Verify Setup
-
-After adding the webhook, push a commit to `main`. You should see:
-
-1. GitHub sends webhook to server
-2. Server logs show deployment starting
-3. Server pulls latest code, rebuilds Docker image, restarts container
-4. Health check validates deployment
-
-### 3. Check Deployment Logs
-
-To view deployment logs on the server:
-
+### View deployment logs:
 ```bash
 ssh ubuntu@3.73.183.137
-sudo journalctl -u webhook-deploy.service -f
+tail -f /var/log/auto-deploy.log
+```
+
+### Check if deployment is active:
+```bash
+ssh ubuntu@3.73.183.137
+ps aux | grep deploy-backend
+```
+
+### View recent deployments:
+```bash
+ssh ubuntu@3.73.183.137
+cat /var/log/auto-deploy.log | tail -50
 ```
 
 ## System Components
 
-### Webhook Server
-- **Service**: `webhook-deploy.service`
-- **Location**: `/usr/local/bin/webhook-server.py`
-- **Port**: 8888
-- **Status**: `sudo systemctl status webhook-deploy.service`
+### Auto-Deploy Checker
+- **Cron schedule**: Every 2 minutes (`*/2 * * * *`)
+- **Script**: `/usr/local/bin/auto-deploy-checker`
+- **Log file**: `/var/log/auto-deploy.log`
 
 ### Deployment Script
 - **Location**: `/usr/local/bin/deploy-backend`
@@ -53,38 +51,39 @@ sudo journalctl -u webhook-deploy.service -f
 
 ### GitHub Actions
 - **Workflow**: `.github/workflows/deploy.yml`
-- **Function**: Build validation only (no longer deploys directly)
+- **Function**: Build validation only
 - **Triggers on**: Push to `main`
 
 ## Troubleshooting
 
-### Check if webhook is running
-```bash
-curl http://3.73.183.137:8888/health
-# Should return: OK
-```
-
-### View recent deployments
-```bash
-ssh ubuntu@3.73.183.137
-sudo journalctl -u webhook-deploy.service -n 100
-```
-
-### Manual deployment
+### Force immediate deployment
 ```bash
 ssh ubuntu@3.73.183.137
 sudo /usr/local/bin/deploy-backend
 ```
 
-### Restart webhook service
+### Check cron job
 ```bash
 ssh ubuntu@3.73.183.137
-sudo systemctl restart webhook-deploy.service
+crontab -l | grep auto-deploy
+```
+
+### View live deployment
+```bash
+ssh ubuntu@3.73.183.137
+tail -f /var/log/auto-deploy.log
+```
+
+### Check container status
+```bash
+ssh ubuntu@3.73.183.137
+docker ps | grep truck
+docker logs backend-truckmanagement-1 --tail 50
 ```
 
 ## Security
 
-- Webhook validates HMAC-SHA256 signature
 - Deploy script runs with specific sudo permissions
-- Only `main` branch pushes trigger deployment
-- Firewall allows port 8888 for webhook
+- Only `main` branch is monitored
+- Git operations use SSH key authentication
+- No external network dependencies

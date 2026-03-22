@@ -33,5 +33,6 @@ jobs:
           echo "📝 Commit: ${GITHUB_SHA:0:7}"
           echo "👤 By: $GITHUB_ACTOR"
           echo ""
-          echo "ℹ️  Deployment is triggered by GitHub webhook (not this workflow)"
-          echo "🔗 Configure at: https://github.com/${{ github.repository }}/settings/hooks"
+          echo "🚀 Deployment happens automatically via server cron job"
+          echo "⏱️  Server checks for new commits every 2 minutes"
+          echo "📊 Expected deployment: within 2-3 minutes"
