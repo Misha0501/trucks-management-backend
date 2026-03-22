@@ -27,68 +27,76 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SERVER_SSH_KEY }}
 
-      - name: Configure SSH
+      - name: Deploy to Server
         run: |
-          mkdir -p ~/.ssh
-          echo "Host ${{ secrets.SERVER_IP }}" >> ~/.ssh/config
-          echo "  StrictHostKeyChecking accept-new" >> ~/.ssh/config
-          echo "  UserKnownHostsFile ~/.ssh/known_hosts" >> ~/.ssh/config
-          echo "  ServerAliveInterval 60" >> ~/.ssh/config
-          echo "  ServerAliveCountMax 10" >> ~/.ssh/config
-          chmod 600 ~/.ssh/config
-
-      - name: Deploy and Build in Single SSH Session
-        run: |
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
-            set -e
-            
-            echo "📦 Deploying files..."
-            cd /var/www/backend
-            
-            # Create backup
-            sudo cp -r . ../backend-backup-$(date +%s) || true
-            
-            # Clean old files (keep important dirs)
-            sudo find . -maxdepth 1 -type f -delete
-            sudo rm -rf TruckManagement .github
-          EOF
+          max_retries=3
+          retry_count=0
           
-          # Transfer files using tar over SSH (single connection)
-          tar czf - \
-            --exclude=".git" \
-            --exclude=".idea" \
-            --exclude="node_modules" \
-            . | ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} \
-            "cd /var/www/backend && sudo tar xzf -"
-          
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
-            set -e
-            cd /var/www/backend
+          while [ $retry_count -lt $max_retries ]; do
+            echo "Deployment attempt $((retry_count + 1))/$max_retries..."
             
-            # Fix permissions
-            sudo chown -R ubuntu:ubuntu .
-            
-            # Ensure storage directory exists
-            sudo mkdir -p /var/www/storage/signed-contracts
-            sudo chmod -R 777 /var/www/storage
-            
-            # Build only app container (NOT database - keeps it running)
-            echo "🔨 Building truckmanagement container..."
-            docker compose build truckmanagement
-            
-            # Rolling update: start new container, stop old one (near-zero downtime)
-            echo "🚀 Deploying with rolling update..."
-            docker compose up -d --no-deps truckmanagement
-            
-            echo "✅ Container deployment initiated"
+            if ssh -o ConnectTimeout=30 -o ConnectionAttempts=1 ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+              set -e
+              
+              echo "📦 Pulling latest code from GitHub..."
+              cd /var/www/backend
+              
+              # Store current state
+              current_branch=$(git branch --show-current)
+              echo "Current branch: $current_branch"
+              
+              # Stash any local changes
+              git stash
+              
+              # Pull latest changes
+              git fetch origin
+              git checkout main
+              git pull origin main
+              
+              # Fix permissions
+              sudo chown -R ubuntu:ubuntu .
+              
+              # Ensure storage directory exists
+              sudo mkdir -p /var/www/storage/signed-contracts
+              sudo chmod -R 777 /var/www/storage
+              
+              # Build only app container (NOT database - keeps it running)
+              echo "🔨 Building truckmanagement container..."
+              docker compose build truckmanagement
+              
+              # Rolling update: start new container, stop old one (near-zero downtime)
+              echo "🚀 Deploying with rolling update..."
+              docker compose up -d --no-deps truckmanagement
+              
+              echo "✅ Container deployment initiated"
           EOF
+            then
+              echo "✅ Deployment successful!"
+              break
+            else
+              retry_count=$((retry_count + 1))
+              if [ $retry_count -lt $max_retries ]; then
+                echo "⚠️  Deployment failed, retrying in 10 seconds..."
+                sleep 10
+              else
+                echo "❌ Deployment failed after $max_retries attempts"
+                exit 1
+              fi
+            fi
+          done
 
       - name: Wait before verification
         run: sleep 5
 
       - name: Verify Deployment
         run: |
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+          max_retries=3
+          retry_count=0
+          
+          while [ $retry_count -lt $max_retries ]; do
+            echo "Verification attempt $((retry_count + 1))/$max_retries..."
+            
+            if ssh -o ConnectTimeout=30 ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
             set -e
             
             # Wait for container to start
@@ -121,6 +129,20 @@ jobs:
             docker logs --tail 30 backend-truckmanagement-1
             exit 1
           EOF
+            then
+              echo "✅ Verification successful!"
+              break
+            else
+              retry_count=$((retry_count + 1))
+              if [ $retry_count -lt $max_retries ]; then
+                echo "⚠️  Verification failed, retrying in 10 seconds..."
+                sleep 10
+              else
+                echo "❌ Verification failed after $max_retries attempts"
+                exit 1
+              fi
+            fi
+          done
 
       - name: Deployment Summary
         if: success()
