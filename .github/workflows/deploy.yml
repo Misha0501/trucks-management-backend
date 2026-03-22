@@ -35,6 +35,9 @@ jobs:
             --exclude=".idea" \
             . ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:/var/www/backend/
 
+      - name: Wait for SSH connections to stabilize
+        run: sleep 5
+
       - name: Rebuild and Restart Docker Containers (Zero Downtime)
         run: |
           ssh -o StrictHostKeyChecking=accept-new ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
@@ -56,6 +59,9 @@ jobs:
             
             echo "✅ Container deployment initiated"
           EOF
+
+      - name: Wait before verification
+        run: sleep 5
 
       - name: Verify Deployment
         run: |
