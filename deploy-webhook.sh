@@ -8,6 +8,13 @@ cd /var/www/backend
 # Pull latest changes from main
 echo "📦 Pulling latest code from GitHub..."
 git fetch origin
+
+# Stash any local changes
+if ! git diff-index --quiet HEAD --; then
+  echo "💾 Stashing local changes..."
+  git stash
+fi
+
 git checkout main
 git pull origin main
 
