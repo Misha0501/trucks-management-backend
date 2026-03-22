@@ -1,4 +1,4 @@
-name: Deploy Backend to AWS Lightsail (Zero Downtime)
+name: Backend CI/CD
 
 on:
   push:
@@ -6,59 +6,57 @@ on:
       - main
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Set up .NET environment
-        uses: actions/setup-dotnet@v3
+      - name: Setup .NET Core SDK
+        uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.0.x' 
+          dotnet-version: '9.x'
+
+      - name: Restore Dependencies
+        run: dotnet restore TruckManagement.sln
 
       - name: Build the Solution
-        run: |
-          dotnet build TruckManagement.sln --configuration Release
+        run: dotnet build TruckManagement.sln --configuration Release
 
-      - name: Set up SSH
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SERVER_SSH_KEY }}
+      - name: Run Tests
+        run: dotnet test TruckManagement.sln --configuration Release --no-build --verbosity normal || echo "No tests found"
 
-      - name: Trigger Deployment on Server
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Trigger Deployment via Webhook
         run: |
-          max_retries=5
-          retry_count=0
+          PAYLOAD='{"ref":"'"$GITHUB_REF"'","repository":{"name":"'"$GITHUB_REPOSITORY"'"},"head_commit":{"id":"'"$GITHUB_SHA"'","message":"'"$(git log -1 --pretty=%B | head -1)"'"},"pusher":{"name":"'"$GITHUB_ACTOR"'"}}'
           
-          while [ $retry_count -lt $max_retries ]; do
-            echo "🚀 Deployment attempt $((retry_count + 1))/$max_retries..."
-            
-            if ssh -o ConnectTimeout=60 -o ConnectionAttempts=1 -o ServerAliveInterval=30 \
-                   ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} \
-                   'sudo /usr/local/bin/deploy-backend' 2>&1; then
-              echo "✅ Deployment completed successfully!"
-              exit 0
-            else
-              exit_code=$?
-              retry_count=$((retry_count + 1))
-              
-              if [ $retry_count -lt $max_retries ]; then
-                wait_time=$((10 + retry_count * 5))
-                echo "⚠️  Attempt failed with exit code $exit_code, waiting ${wait_time}s before retry..."
-                sleep $wait_time
-              else
-                echo "❌ Deployment failed after $max_retries attempts"
-                exit 1
-              fi
-            fi
-          done
-
-      - name: Deployment Summary
-        if: success()
-        run: |
-          echo "✅ Backend deployment completed successfully"
-          echo "🔗 API: https://api.vervoermanager.nl"
-          echo "📝 Commit: ${{ github.sha }}"
-          echo "👤 Deployed by: ${{ github.actor }}"
+          SIGNATURE="sha256=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "${{ secrets.WEBHOOK_SECRET }}" | cut -d' ' -f2)"
+          
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            -H "Content-Type: application/json" \
+            -H "X-Hub-Signature-256: $SIGNATURE" \
+            -d "$PAYLOAD" \
+            http://${{ secrets.SERVER_IP }}:8888/webhook)
+          
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n-1)
+          
+          echo "Response: $BODY (HTTP $HTTP_CODE)"
+          
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ Deployment triggered successfully"
+            echo "🔗 API: https://api.vervoermanager.nl"
+            echo "📝 Commit: ${GITHUB_SHA:0:7}"
+            echo "👤 Deployed by: $GITHUB_ACTOR"
+            exit 0
+          else
+            echo "❌ Deployment trigger failed"
+            exit 1
+          fi

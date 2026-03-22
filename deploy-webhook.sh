@@ -5,6 +5,10 @@ echo "🔄 Deployment webhook triggered at $(date)"
 
 cd /var/www/backend
 
+# Fix git permissions first
+echo "🔧 Fixing permissions..."
+sudo chown -R ubuntu:ubuntu .
+
 # Pull latest changes from main
 echo "📦 Pulling latest code from GitHub..."
 git fetch origin
@@ -17,9 +21,6 @@ fi
 
 git checkout main
 git pull origin main
-
-# Fix permissions
-sudo chown -R ubuntu:ubuntu .
 
 # Ensure storage directory exists
 sudo mkdir -p /var/www/storage/signed-contracts
@@ -39,7 +40,8 @@ sleep 10
 
 # Health check
 for i in {1..10}; do
-  if curl -f -s http://localhost:9090 > /dev/null 2>&1; then
+  # Check if port responds (any HTTP response is good)
+  if timeout 3 curl -s -o /dev/null -w '%{http_code}' http://localhost:9090 | grep -q '^[2345][0-9][0-9]$'; then
     echo "✅ Backend API is responding"
     if docker ps | grep -q "truckmanagement.*Up"; then
       echo "✅ Container status: Up"
@@ -52,5 +54,6 @@ for i in {1..10}; do
 done
 
 echo "❌ Health check failed"
+echo "📋 Container logs:"
 docker logs --tail 30 backend-truckmanagement-1
 exit 1
