@@ -1,7 +1,10 @@
-name: Backend CI/CD
+name: Backend Build Validation
 
 on:
   push:
+    branches:
+      - main
+  pull_request:
     branches:
       - main
 
@@ -26,37 +29,9 @@ jobs:
 
       - name: Run Tests
         run: dotnet test TruckManagement.sln --configuration Release --no-build --verbosity normal || echo "No tests found"
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.ref == 'refs/heads/main'
-    
-    steps:
-      - name: Trigger Deployment via Webhook
+      
+      - name: Build Successful
+        if: success()
         run: |
-          PAYLOAD='{"ref":"refs/heads/main","repository":{"name":"trucks-management-backend"}}'
-          
-          SIGNATURE="sha256=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "${{ secrets.WEBHOOK_SECRET }}" | cut -d' ' -f2)"
-          
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-            -H "Content-Type: application/json" \
-            -H "X-Hub-Signature-256: $SIGNATURE" \
-            -d "$PAYLOAD" \
-            http://${{ secrets.SERVER_IP }}:8888/webhook)
-          
-          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-          BODY=$(echo "$RESPONSE" | head -n-1)
-          
-          echo "Response: $BODY (HTTP $HTTP_CODE)"
-          
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "✅ Deployment triggered successfully"
-            echo "🔗 API: https://api.vervoermanager.nl"
-            echo "📝 Commit: ${GITHUB_SHA:0:7}"
-            echo "👤 Deployed by: $GITHUB_ACTOR"
-            exit 0
-          else
-            echo "❌ Deployment trigger failed"
-            exit 1
-          fi
+          echo "✅ Build validation passed"
+          echo "📝 Commit: ${GITHUB_SHA:0:7}"
