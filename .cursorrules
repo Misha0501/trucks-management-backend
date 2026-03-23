@@ -1,0 +1,39 @@
+# VervoerManager Backend – Cursor Rules
+
+## Onboarding
+
+When starting work on this project:
+
+1. **Read `CONTEXT.md`** – Project identity, quick reference.
+2. **Read `docs/INDEX.md`** – Full documentation map.
+3. **Read `docs/BACKEND_GUIDE.md`** – Full technical overview (folder structure, middleware, endpoints).
+4. **For feature work**: Read the relevant `docs/features/<FEATURE>.md` (e.g. `docs/features/DRIVERS.md`).
+5. **For API work**: Read `docs/api/CONTRACT.md` and `docs/api/ENDPOINTS.md` (includes endpoint → file mapping).
+6. **For auth work**: Read `docs/auth/FLOW.md`.
+7. **For schema/data**: Read `docs/data/SCHEMA.md` and `docs/data/ENTITIES.md`.
+8. **For services/DI**: Read `docs/core/SERVICES.md`.
+9. **For middleware**: Read `docs/core/MIDDLEWARE.md`.
+10. **For DbContext/seeding**: Read `docs/core/DATABASE.md`.
+
+## When Adding or Changing Features
+
+After implementing a feature or significant behavior change:
+
+1. **Update or create** `docs/features/<FEATURE>.md` using the template in `docs/CONTRIBUTING_DOCS.md`.
+2. **Update** `docs/INDEX.md` if you added a new feature doc.
+3. **Update** `docs/api/ENDPOINTS.md` if you added new API endpoints.
+4. **Update** `docs/data/SCHEMA.md` or `docs/data/ENTITIES.md` if you changed entities.
+5. **Update** `docs/requirements/PHASE1_INDEX.md` in the **frontend repo** if the work maps to a Phase 1 requirement.
+6. **Commit** documentation changes together with code changes.
+7. **Run migrations** after schema changes: `dotnet ef database update`.
+
+## Documentation as Source of Truth
+
+This documentation is the source of truth for both the team and AI. Keep it accurate. When in doubt, prefer updating the docs over leaving them stale.
+
+## Key Conventions
+
+- Endpoints: `TruckManagement/Endpoints/*.cs`. Map in `Program.cs`.
+- Responses: Use `ApiResponseFactory.Success()` and `ApiResponseFactory.Error()`.
+- Entities: `TruckManagement/Entities/`. DTOs in `TruckManagement/DTOs/`.
+- Migrations: `dotnet ef migrations add <Name>` then `dotnet ef database update`.
